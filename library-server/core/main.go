@@ -302,6 +302,7 @@ func main() {
 	// una versión estable más; después se poda (kget/kiwixSem/proxy).
 	if engine := env("ZIM_ENGINE", "native"); engine != "kiwix" {
 		s.zimNative = newNativeZims(az)
+		az.native = s.zimNative // back-ref: exponer el job de indexado FTS en el listado
 		// Alta/baja de ZIM desde el Panel → invalidar el registro nativo (§23):
 		// cierra los archives desregistrados y reabre los nuevos a la próxima
 		// petición. Con kiwix este hook es nil (kiwix -M recarga solo).
@@ -386,6 +387,11 @@ func main() {
 	// Rutas de gestión de ZIM (az se creó arriba, junto al motor de descargas,
 	// para el auto-registro del catálogo).
 	az.registerRoutes(adminMux)
+	if s.zimNative != nil { // indexado full-text por ZIM (zim_fts_index.go), solo motor nativo
+		adminMux.HandleFunc("/api/admin/zim/index", s.zimNative.handleIndex)
+		adminMux.HandleFunc("/api/admin/zim/index/all", s.zimNative.handleIndexAll)
+		adminMux.HandleFunc("/api/admin/zim/index/cancel", s.zimNative.handleIndexCancel)
+	}
 	s.registerAdminTranslateRoutes(adminMux)              // modelos de traducción (proxy a translate-wrap)
 	newAdminCatalog(mgr, zimDir).registerRoutes(adminMux) // catálogo remoto de kiwix → descarga al pool
 	s.registerAdminUserRoutes(adminMux)                   // alta/baja de cuentas (auth.go)

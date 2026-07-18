@@ -101,6 +101,9 @@ export const registerZim = (file) => postJSON('/api/admin/zim/register', { file 
 export const unregisterZim = (id) => postJSON('/api/admin/zim/unregister', { id })
 export const setZimInteractive = (id, enabled, acknowledge = false) =>
   postJSON('/api/admin/zim/interactive', { id, enabled, acknowledge })
+export const indexZim = (file) => postJSON('/api/admin/zim/index', { file })
+export const indexAllZims = () => postJSON('/api/admin/zim/index/all', {})
+export const cancelZimIndex = () => postJSON('/api/admin/zim/index/cancel', {})
 
 // Catálogo remoto de Kiwix (Panel) — explorar y descargar al pool
 export const catalogCategories = () =>

@@ -96,6 +96,15 @@ func (s *shell) installProxy(target *url.URL) {
 		}
 		// Garantiza que ModifyResponse pueda inspeccionar el HTML de la SPA.
 		r.Header.Del("Accept-Encoding")
+		// Noumon es un producto LOCAL/LAN, no un servicio de internet detrás de un
+		// reverse-proxy (Caddy). El shell de escritorio es un proxy LOCAL de
+		// confianza: si dejamos que httputil inyecte X-Forwarded-For con la IP del
+		// WebView, el Core cree que el usuario es "remoto" y exige el código de
+		// configuración para crear el primer admin — auto-bloqueando la app en la
+		// propia máquina. Poner el header a nil le dice a ReverseProxy que NO lo
+		// añada, así requestIsLocal reconoce al usuario local. La protección real
+		// del alta remota sigue viva para un servidor detrás de un proxy de verdad.
+		r.Header["X-Forwarded-For"] = nil
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, _ error) {
 		http.Error(w, "Library Server no disponible", http.StatusServiceUnavailable)

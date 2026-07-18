@@ -26,6 +26,7 @@ type adminZim struct {
 	libraryXML string // ruta a library.xml
 	zimDir     string // carpeta de ZIMs del pool
 	store      *Store
+	native     *nativeZims // back-ref para exponer el job de indexado FTS en el listado
 
 	// onLibraryChange: se invoca tras una alta/baja exitosa en library.xml. El
 	// motor nativo lo usa para invalidar su registro de archives abiertos (§23).
@@ -80,6 +81,7 @@ type registeredZim struct {
 	Interactive bool   `json:"interactive"`
 	Official    bool   `json:"official"`
 	TrustStale  bool   `json:"trustStale,omitempty"`
+	Indexed     bool   `json:"indexed"` // hay índice full-text para el buscador (zim_fts_index.go)
 }
 
 type unregisteredZim struct {
@@ -124,7 +126,13 @@ func (a *adminZim) handleList(w http.ResponseWriter, r *http.Request) {
 			ID: b.ID, Title: b.Title, Name: b.Name, Language: b.Language,
 			File: file, Bytes: sz, Present: present, Interactive: trust.Interactive,
 			Official: trust.Official, TrustStale: trust.Stale,
+			Indexed: zimHasIndex(filepath.Join(a.zimDir, file)),
 		})
+	}
+
+	var indexJob *ftsIndexJob
+	if a.native != nil {
+		indexJob = a.native.indexJobCopy()
 	}
 
 	unregistered := make([]unregisteredZim, 0)
@@ -139,6 +147,7 @@ func (a *adminZim) handleList(w http.ResponseWriter, r *http.Request) {
 		"libraryXML":   a.libraryXML,
 		"registered":   registered,
 		"unregistered": unregistered,
+		"indexJob":     indexJob, // job de indexado FTS en curso (o null)
 	})
 }
 

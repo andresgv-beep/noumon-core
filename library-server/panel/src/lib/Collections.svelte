@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { getAdminZim, getCollections, registerZim, unregisterZim, setZimInteractive, getAccessMap, setAccess } from './api.js'
+  import { getAdminZim, getCollections, registerZim, unregisterZim, setZimInteractive, indexZim, indexAllZims, cancelZimIndex, getAccessMap, setAccess } from './api.js'
   import { bytes, num } from './fmt.js'
   import Downloaded from './Downloaded.svelte'
 
@@ -98,9 +98,42 @@
     }
   }
 
+  // ── Indexado full-text (buscador) ──────────────────────────────────────────
+  const indexJob = $derived(zim?.indexJob || null)
+  const indexing = $derived(indexJob?.status === 'indexing')
+  const pct = (j) => (j && j.total ? Math.min(100, Math.round((j.scanned / j.total) * 100)) : 0)
+
+  async function refreshZim() { try { zim = await getAdminZim() } catch {} }
+  // Mientras hay un job, refresca el estado (progreso) cada 1,5 s.
+  $effect(() => {
+    if (!indexing) return
+    const t = setInterval(refreshZim, 1500)
+    return () => clearInterval(t)
+  })
+
+  async function doIndex(z) {
+    busy = { ...busy, [`index:${z.file}`]: true }; flash = ''
+    try {
+      const r = await indexZim(z.file)
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'error')
+      flash = `Indexando: ${z.title || z.file}`; await refreshZim()
+    } catch (e) { flash = `No se pudo indexar: ${e.message}` } finally { busy = { ...busy, [`index:${z.file}`]: false } }
+  }
+  async function doIndexAll() {
+    busy = { ...busy, indexAll: true }; flash = ''
+    try {
+      const r = await indexAllZims()
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'error')
+      flash = d.count ? `Indexando ${d.count} colección(es)…` : 'Todo ya indexado'; await refreshZim()
+    } catch (e) { flash = `No se pudo indexar: ${e.message}` } finally { busy = { ...busy, indexAll: false } }
+  }
+  async function doCancelIndex() { try { await cancelZimIndex(); await refreshZim() } catch {} }
+
   const registered = $derived(zim?.registered || [])
   const unregistered = $derived(zim?.unregistered || [])
   const canManage = $derived(zim?.canManage ?? false)
+  const unindexedCount = $derived(registered.filter((z) => !z.indexed && z.present).length)
 </script>
 
 <div class="stabs">
@@ -115,8 +148,19 @@
   <span class="cnt"><b>{registered.length}</b> registradas · <b>{unregistered.length}</b> sin registrar</span>
   <span class="grow"></span>
   {#if flash}<span style="font-size:12px;color:var(--ink-mute)">{flash}</span>{/if}
+  <button class="btn" disabled={!canManage || indexing || unindexedCount === 0 || busy.indexAll} onclick={doIndexAll} title="Construye el índice de búsqueda full-text de todas las colecciones que aún no lo tienen">
+    {busy.indexAll ? '…' : `Indexar todos${unindexedCount ? ` (${unindexedCount})` : ''}`}
+  </button>
   <button class="btn" onclick={load} disabled={loading}>↻ Actualizar</button>
 </div>
+
+{#if indexing}
+  <div class="idx-banner">
+    <div class="idx-head"><b>Indexando búsqueda · «{indexJob.name}»</b><small>{num(indexJob.indexed)} artículos · {pct(indexJob)}%</small></div>
+    <div class="bar"><div class="fill" style="width:{pct(indexJob)}%"></div></div>
+    <button class="btn" onclick={doCancelIndex}>Cancelar</button>
+  </div>
+{/if}
 
 {#if error}
   <div class="empty"><div class="big">No se pudo leer la biblioteca</div>{error}</div>
@@ -185,6 +229,19 @@
               <small>Los ZIM añadidos manualmente no ejecutan scripts hasta que los autorices.</small>
             {/if}
           </div>
+          <div class="index-strip">
+            {#if z.indexed}
+              <span class="badge b-signal">búsqueda indexada</span>
+              <button class="chip" disabled={indexing || busy[`index:${z.file}`]} onclick={() => doIndex(z)}>Reindexar</button>
+            {:else if indexing && indexJob?.file === z.file}
+              <span class="idx-now">Indexando… {pct(indexJob)}%</span>
+            {:else}
+              <span class="interactive-state">Búsqueda: solo por título</span>
+              <button class="chip" disabled={!canManage || !z.present || indexing || busy[`index:${z.file}`]} onclick={() => doIndex(z)}>
+                {busy[`index:${z.file}`] ? '…' : 'Indexar búsqueda'}
+              </button>
+            {/if}
+          </div>
         </div>
         <button class="btn" disabled={!canManage || busy[z.id]} onclick={() => doUnregister(z)} style="margin-top:2px">
           {busy[z.id] ? '…' : 'Quitar'}
@@ -214,4 +271,12 @@
   .interactive-state { font-size:11.5px; color:var(--ink-faint); }
   .interactive-state.on { color:var(--signal); }
   .interactive-strip small { color:var(--ink-faint); font-size:11px; }
+  .index-strip { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .index-strip .chip { padding:3px 10px; font-size:11.5px; }
+  .idx-now { font-size:11.5px; color:var(--signal); }
+  .idx-banner { display:flex; align-items:center; gap:12px; margin:10px 0; padding:10px 14px; border:1px solid var(--line-bright); border-radius:10px; background:var(--window-bg); }
+  .idx-head { display:flex; flex-direction:column; gap:2px; min-width:180px; }
+  .idx-head small { color:var(--ink-faint); font-size:11px; }
+  .idx-banner .bar { flex:1; height:7px; border-radius:5px; background:var(--line); overflow:hidden; }
+  .idx-banner .fill { height:100%; background:var(--signal); transition:width .3s ease; }
 </style>

@@ -43,6 +43,13 @@ type nativeZims struct {
 	ftsMu  sync.Mutex
 	fts    map[string]ftsState // id público → índice abierto (solo positivos)
 	ftsErr map[string]string   // último error logueado por colección (dedup de log)
+
+	// Job de construcción de índice FTS (zim_fts_index.go): uno a la vez, con su
+	// propio mutex. idxQueue alimenta el modo "indexar todos".
+	idxMu     sync.Mutex
+	idxJob    *ftsIndexJob
+	idxCancel context.CancelFunc
+	idxQueue  []string
 }
 
 type nativeArchive struct {
