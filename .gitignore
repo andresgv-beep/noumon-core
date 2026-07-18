@@ -1,0 +1,33 @@
+**/node_modules/
+**/dist/
+**/*.exe
+**/*.test
+library-server/core/www-panel/
+library-server/core/data/
+library-server/data/
+*.db
+*.db-shm
+*.db-wal
+.env
+
+# cache de compilación de Go (se regenera; nunca al repo)
+**/.gocache/
+# carpetas temporales de trabajo
+**/.tmp-*/
+# workspace de Go: comodidad LOCAL (gopls/editor). Los builds usan cada go.mod
+# con su replace, no el workspace. Se regenera solo y ensuciaba el repo sin parar.
+go.work
+go.work.sum
+
+# artefactos de datos del motor (nunca al repo; se regeneran)
+**/*.zim
+**/*.tix
+**/*.bleve/
+**/*.zim.meta
+library-server/core/www-client/
+library-desktop/bin/
+library-server/release/
+.cache/
+
+# copias temporales de binarios
+*.exe~

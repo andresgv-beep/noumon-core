@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maps</title>
+<link rel="stylesheet" href="/maps/vendor/maplibre-gl.css">
+<style>
+  :root{ --accent:#7c6cf0; --accent-2:#9a8cff; --panel:#111117; --border:#23232e; --ink:#e9e9f0; --muted:#83838f; --overlay-width:360px; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body,#map{height:100%;width:100%}
+  body{font-family:-apple-system,"Segoe UI",system-ui,sans-serif;background:#0b0b0f;overflow:hidden}
+  /* Tema claro: re-mapea los tokens de la caja/hint (el mapa cambia por su estilo). */
+  body[data-flavor="light"]{background:#f4f5f8;--panel:#ffffff;--border:#e0e2ea;--ink:#1b1c24;--muted:#6a6b78;--accent-2:#6a58e0}
+  body[data-flavor="light"] .hint{background:rgba(255,255,255,.85);color:#6a6b78}
+  .search{position:absolute;top:16px;left:16px;z-index:12;width:var(--overlay-width);max-width:calc(100vw - 32px)}
+  .box{display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;background:var(--panel);border:1px solid var(--border);border-radius:13px;box-shadow:0 12px 32px -12px rgba(0,0,0,.6)}
+  .box svg{width:19px;height:19px;flex:none;stroke:var(--muted);stroke-width:1.7;fill:none;stroke-linecap:round}
+  .box input{flex:1;background:none;border:none;outline:none;color:var(--ink);font-size:15px}
+  .box input::placeholder{color:var(--muted)}
+  .box .brand{font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--accent-2);text-transform:uppercase;flex:none}
+  .side-panel{position:absolute;z-index:11;top:72px;left:16px;width:var(--overlay-width);max-width:calc(100vw - 32px);max-height:calc(100vh - 112px);overflow:auto;padding:18px;color:var(--ink);background:rgba(17,17,23,.96);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 42px -22px rgba(0,0,0,.55);scrollbar-width:none;-ms-overflow-style:none}
+  .side-panel::-webkit-scrollbar{display:none;width:0;height:0}
+  body[data-flavor="light"] .side-panel{background:rgba(255,255,255,.96)}
+  .side-panel[hidden]{display:none}.panel-label{font-size:10px;font-weight:750;letter-spacing:1.2px;text-transform:uppercase;color:var(--accent-2);margin-bottom:9px}
+  #results button,.nearby-item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 8px;background:none;border:none;border-radius:10px;color:var(--ink);cursor:pointer}
+  #results button+button,.nearby-item+.nearby-item{background-image:linear-gradient(90deg,transparent,rgba(130,130,145,.16),transparent);background-repeat:no-repeat;background-size:100% 1px}
+  #results button:hover,.nearby-item:hover{background:rgba(124,108,240,.08)}
+  .result-icon,.nearby-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:11px;background:rgba(124,108,240,.14);color:var(--accent-2);font-size:16px}
+  .result-copy,.nearby-copy{display:flex;min-width:0;flex-direction:column;gap:2px}.result-copy b,.nearby-copy b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:600}.result-copy small,.nearby-copy small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:var(--muted)}
+  .distance{font-size:11px;color:var(--muted);white-space:nowrap}#results .no-results{padding:9px 4px;color:var(--muted);font-size:12px;line-height:1.5}
+  .back{display:flex;align-items:center;gap:6px;margin:0 0 16px;padding:0;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer}.address{font-size:21px;line-height:1.18;font-weight:680;letter-spacing:-.3px}.address-context{margin-top:7px;color:var(--muted);font-size:12px;line-height:1.45}.approx{display:inline-block;margin-top:9px;padding:4px 8px;border-radius:8px;background:rgba(124,108,240,.12);color:var(--accent-2);font-size:10.5px}.approx[hidden]{display:none}
+  .nearby-head{display:flex;align-items:baseline;justify-content:space-between;margin-top:24px;margin-bottom:5px}.nearby-head h3{font-size:14px;font-weight:650}.nearby-head span{font-size:10.5px;color:var(--muted)}.nearby-empty{padding:12px 4px;color:var(--muted);font-size:12px}
+  @media(max-width:820px){.search{left:12px;max-width:calc(100vw - 24px)}.side-panel{top:72px;left:12px;max-width:calc(100vw - 24px);max-height:calc(100vh - 140px)}}
+  .hint{position:absolute;bottom:12px;left:16px;z-index:10;font-size:11.5px;color:var(--muted);background:rgba(17,17,23,.8);padding:5px 10px;border-radius:8px}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="search">
+  <div class="box">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+    <input id="q" placeholder="Busca una calle o lugar…" autocomplete="off" spellcheck="false">
+    <span class="brand">Maps</span>
+  </div>
+</div>
+<aside class="side-panel" id="sidePanel" hidden>
+  <section id="searchView"><div class="panel-label" id="resultsLabel">Resultados</div><div id="results"></div></section>
+  <section id="placeView" hidden>
+    <button class="back" id="backResults">&#8592; Volver a resultados</button>
+    <div class="panel-label" id="locationLabel">Ubicación</div><h2 class="address" id="address"></h2><p class="address-context" id="addressContext"></p>
+    <span class="approx" id="approx" hidden>Posición aproximada de la calle</span>
+    <div class="nearby-head"><h3 id="nearbyTitle">Cerca de aquí</h3><span id="nearbyOrder">ordenado por distancia</span></div><div id="nearby"></div>
+  </section>
+</aside>
+<div class="hint" id="hint">Cargando mapa…</div>
+
+<script src="/maps/vendor/maplibre-gl.js"></script>
+<script src="/maps/vendor/pmtiles.js"></script>
+<script>
+(async () => {
+  const requestedLang = new URLSearchParams(location.search).get('lang');
+  const lang = requestedLang === 'en' ? 'en' : 'es';
+  const messages = {
+    es: {
+      searchPlaceholder: 'Busca una calle o lugar…', results: 'Resultados', back: '← Volver a resultados',
+      location: 'Ubicación', approximate: 'Posición aproximada de la calle', nearby: 'Cerca de aquí',
+      distanceOrder: 'ordenado por distancia', loadingMap: 'Cargando mapa…',
+      noMap: 'No hay ningún mapa instalado. Descárgalo desde el Panel de Control.',
+      mapError: 'Error', noResults: 'Sin resultados. Comprueba que el buscador offline esté instalado.',
+      searchingNearby: 'Buscando lugares cercanos…', noNearby: 'No hay puntos de interés cercanos en este mapa.',
+      street: 'Calle', place: 'Localidad', postcode: 'Código postal', offline: 'offline',
+      categories: { restaurant:'Restaurante', cafe:'Cafetería', bar:'Bar', fuel:'Gasolinera', shop:'Comercio', health:'Salud', lodging:'Alojamiento', parking:'Aparcamiento', bank:'Banco', transport:'Transporte', culture:'Cultura y ocio', park:'Parque' }
+    },
+    en: {
+      searchPlaceholder: 'Search for a street or place…', results: 'Results', back: '← Back to results',
+      location: 'Location', approximate: 'Approximate street position', nearby: 'Nearby',
+      distanceOrder: 'sorted by distance', loadingMap: 'Loading map…',
+      noMap: 'No map is installed. Download one from Control Panel.',
+      mapError: 'Error', noResults: 'No results. Check that the offline search index is installed.',
+      searchingNearby: 'Searching for nearby places…', noNearby: 'No nearby points of interest on this map.',
+      street: 'Street', place: 'Place', postcode: 'Postcode', offline: 'offline',
+      categories: { restaurant:'Restaurant', cafe:'Café', bar:'Bar', fuel:'Fuel station', shop:'Shopping', health:'Health', lodging:'Lodging', parking:'Parking', bank:'Bank', transport:'Transport', culture:'Culture and leisure', park:'Park' }
+    }
+  };
+  const ui = messages[lang];
+  document.documentElement.lang = lang;
+  document.getElementById('q').placeholder = ui.searchPlaceholder;
+  document.getElementById('resultsLabel').textContent = ui.results;
+  document.getElementById('backResults').textContent = ui.back;
+  document.getElementById('locationLabel').textContent = ui.location;
+  document.getElementById('approx').textContent = ui.approximate;
+  document.getElementById('nearbyTitle').textContent = ui.nearby;
+  document.getElementById('nearbyOrder').textContent = ui.distanceOrder;
+  document.getElementById('hint').textContent = ui.loadingMap;
+
+  const protocol = new pmtiles.Protocol();
+  maplibregl.addProtocol('pmtiles', protocol.tile);
+
+  let active;
+  try { active = await (await fetch('/api/maps/config')).json(); } catch (e) {}
+  if (!active || !active.url) {
+    document.getElementById('hint').textContent = ui.noMap;
+    return;
+  }
+
+  // El mapa va SIEMPRE en claro (decisión de Andrés): resalta más dentro del shell
+  // oscuro de Noumon (mapa luminoso flotando) y en tema claro queda cohesionado,
+  // como un mapa normal. Se descartó el estilo oscuro del mapa.
+  const flavor = 'light';
+  document.body.dataset.flavor = flavor;
+  const layers = await (await fetch('/maps/style-' + flavor + '.json')).json();
+  const archiveMaxZoom = Math.max(0, Number(active.maxZoom) || 13);
+  // Algunas teselas urbanas z15 de Protomaps son demasiado complejas para el
+  // decodificador WebGL de WebView2 (Barcelona supera medio MB comprimida) y
+  // dejan un rectángulo gris. z14 conserva el detalle viario y es estable; se
+  // amplía después en el visor sin solicitar esas teselas problemáticas.
+  const renderMaxZoom = Math.min(14, archiveMaxZoom);
+  const style = {
+    version: 8,
+    glyphs: location.origin + '/maps/fonts/{fontstack}/{range}.pbf', // vendorizado (offline)
+    sprite: location.origin + '/maps/sprites/' + flavor,             // vendorizado (offline)
+    sources: {
+      // Core extrae cada tesela del PMTiles local. Evitamos rangos aleatorios
+      // de varios GB en WebView2 y el mismo endpoint sirve a toda la LAN.
+      protomaps: { type: 'vector', tiles: [location.origin + '/api/maps/tiles/' + encodeURIComponent(active.file) + '/{z}/{x}/{y}.mvt?v=9'], minzoom: 0, maxzoom: renderMaxZoom, attribution: '© OpenStreetMap · Protomaps · <a href="https://www.geonames.org/">GeoNames</a>' }
+    },
+    layers
+  };
+  // Las teselas terminan en renderMaxZoom, pero MapLibre puede ampliarlas de
+  // forma segura. Así el usuario llega a nivel de calle sin huecos.
+  const viewerMaxZoom = Math.min(20, renderMaxZoom + 5);
+  const map = new maplibregl.Map({
+    container: 'map', style, center: active.center || [0, 20],
+    zoom: Math.min(7, archiveMaxZoom), maxZoom: viewerMaxZoom,
+    hash: true, attributionControl: false
+  });
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+  window._map = map;
+
+  const hint = document.getElementById('hint');
+  map.on('load', () => { hint.textContent = active.name + ' · Protomaps + MapLibre (' + ui.offline + ')'; });
+  map.on('error', (e) => { hint.textContent = ui.mapError + ': ' + (e.error && e.error.message || 'map'); });
+
+  // ── Buscador → /api/maps/geocode (se conecta cuando el backend esté listo) ──
+  const q = document.getElementById('q'), results = document.getElementById('results');
+  const sidePanel = document.getElementById('sidePanel'), searchView = document.getElementById('searchView');
+  const placeView = document.getElementById('placeView'), nearby = document.getElementById('nearby');
+  let marker, poiMarker, timer, lastResults = [], searchController;
+  q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 250); });
+  q.addEventListener('keydown', e => { if (e.key === 'Enter' && lastResults[0]) go(lastResults[0]); if (e.key === 'Escape') closePanel(); });
+  document.getElementById('backResults').onclick = showResults;
+  async function search() {
+    const term = q.value.trim();
+    if (!term) { closePanel(); return; }
+    let list = [];
+    const bbox = Array.isArray(active.bbox) ? '&bbox=' + encodeURIComponent(active.bbox.join(',')) : '';
+    const mapFile = active.file ? '&map=' + encodeURIComponent(active.file) : '';
+    if (searchController) searchController.abort();
+    searchController = new AbortController();
+    try { list = await (await fetch('/api/maps/geocode?q=' + encodeURIComponent(term) + bbox + mapFile, { signal: searchController.signal })).json(); } catch (e) { if (e.name === 'AbortError') return; }
+    lastResults = rankSearchResults(Array.isArray(list) ? list : [], term);
+    results.innerHTML = '';
+    sidePanel.hidden = false; showResults();
+    if (lastResults.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'no-results';
+      empty.textContent = ui.noResults;
+      results.appendChild(empty);
+      return;
+    }
+    for (const r of lastResults.slice(0, 6)) {
+      const b = document.createElement('button');
+      b.innerHTML = '<span class="result-icon">&#9906;</span><span class="result-copy"><b></b><small></small></span><span></span>';
+      b.querySelector('b').textContent = displayAddress(r);
+      b.querySelector('small').textContent = r.context || kindLabel(r.kind);
+      b.onclick = () => go(r);
+      results.appendChild(b);
+    }
+  }
+  function rankSearchResults(list, term) {
+    const normalizedTerm = normalizeSearchText(term);
+    return list.map((result, index) => ({ result, index })).sort((a, b) => {
+      const aExact = normalizeSearchText(a.result.name) === normalizedTerm;
+      const bExact = normalizeSearchText(b.result.name) === normalizedTerm;
+      if (aExact !== bExact) return aExact ? -1 : 1;
+      const aPlace = String(a.result.kind || '').startsWith('place');
+      const bPlace = String(b.result.kind || '').startsWith('place');
+      if (aExact && aPlace !== bPlace) return aPlace ? -1 : 1;
+      return a.index - b.index;
+    }).map(entry => entry.result);
+  }
+  function normalizeSearchText(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  }
+  async function go(r) {
+    map.flyTo({ center: [r.lon, r.lat], zoom: Math.min(17, viewerMaxZoom) });
+    if (marker) marker.remove();
+    marker = new maplibregl.Marker({ color: '#7c6cf0' }).setLngLat([r.lon, r.lat]).addTo(map);
+    if (poiMarker) { poiMarker.remove(); poiMarker = null; }
+    q.value = displayAddress(r);
+    searchView.hidden = true; placeView.hidden = false; sidePanel.hidden = false;
+    document.getElementById('address').textContent = displayAddress(r);
+    document.getElementById('addressContext').textContent = [r.context, kindLabel(r.kind)].filter(Boolean).join(' · ');
+    document.getElementById('approx').hidden = !r.approximate;
+    nearby.innerHTML = '<div class="nearby-empty">' + ui.searchingNearby + '</div>';
+    let list = [];
+    try { list = await (await fetch('/api/maps/nearby?lat=' + r.lat + '&lon=' + r.lon + '&map=' + encodeURIComponent(active.file))).json(); } catch (e) {}
+    renderNearby(Array.isArray(list) ? list : []);
+  }
+  function displayAddress(r) { return r.name + (r.houseNumber ? ' ' + r.houseNumber : ''); }
+  function kindLabel(kind) { return String(kind || '').startsWith('street') ? ui.street : String(kind || '').startsWith('place') ? ui.place : kind === 'postcode' ? ui.postcode : ''; }
+  function showResults() { searchView.hidden = false; placeView.hidden = true; sidePanel.hidden = !q.value.trim(); }
+  function closePanel() { sidePanel.hidden = true; results.innerHTML = ''; lastResults = []; }
+  function renderNearby(list) {
+    nearby.innerHTML = '';
+    if (!list.length) { nearby.innerHTML = '<div class="nearby-empty">' + ui.noNearby + '</div>'; return; }
+    for (const p of list) {
+      const b = document.createElement('button'); b.className = 'nearby-item';
+      b.innerHTML = '<span class="nearby-icon"></span><span class="nearby-copy"><b></b><small></small></span><span class="distance"></span>';
+      b.querySelector('.nearby-icon').textContent = categoryIcon(p.categoryCode); b.querySelector('b').textContent = p.name;
+      b.querySelector('small').textContent = categoryLabel(p); b.querySelector('.distance').textContent = distanceLabel(p.distance);
+      b.onclick = () => focusNearby(p); nearby.appendChild(b);
+    }
+  }
+  function focusNearby(p) {
+    map.flyTo({ center: [p.lon, p.lat], zoom: Math.min(18, viewerMaxZoom) });
+    if (poiMarker) poiMarker.remove();
+    poiMarker = new maplibregl.Marker({ color: '#23b68c', scale: .85 }).setLngLat([p.lon, p.lat]).setPopup(new maplibregl.Popup({ offset: 18 }).setText(p.name + ' · ' + categoryLabel(p))).addTo(map).togglePopup();
+  }
+  function distanceLabel(m) { const value = (m / 1000).toFixed(1); return m < 1000 ? m + ' m' : (lang === 'es' ? value.replace('.', ',') : value) + ' km'; }
+  function categoryLabel(p) { return ui.categories[p.categoryCode] || p.category || ''; }
+  function categoryIcon(code) { return ({restaurant:'🍴',cafe:'☕',bar:'●',fuel:'⛽',shop:'▣',health:'✚',lodging:'⌂',parking:'P',bank:'€',transport:'↔',culture:'★',park:'♧'})[code] || '•'; }
+})();
+</script>
+</body>
+</html>
