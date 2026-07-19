@@ -272,14 +272,42 @@ Compilado y empaquetado en Linux amd64 real: `dpkg-deb -I`/`-c` correctos,
 `ldd` del binario sin librerías faltantes con solo las runtime de GTK/WebKit
 instaladas, y `desktop-file-validate` limpio.
 
+## Qué paquete va en cada máquina (chuleta)
+
+| Máquina | Paquete(s) | Notas |
+|---|---|---|
+| Raspberry Pi (servidor de la casa) | `noumon_arm64.deb` | Solo ese. Panel vía navegador (entrada de menú incluida). |
+| PC amd64 que hace de servidor | `noumon_amd64.deb` (+ `noumon-panel_amd64.deb` opcional) | El panel nativo solo administra el servicio LOCAL. |
+| PC amd64 solo lector | `noumon-client_amd64.deb` | Pide la IP del servidor al primer arranque. |
+
+Reglas que ya nos han mordido:
+
+- **La arquitectura importa**: `_amd64` = PC Intel/AMD, `_arm64` = Pi. apt en
+  la Pi rechaza un amd64 con "libgtk-3-0:amd64 no es instalable" — ese error
+  significa "paquete de otra máquina", no dependencias rotas.
+- **Instalar siempre con `sudo apt install ./paquete.deb` en terminal** (ruta
+  con `./` o absoluta). El instalador gráfico de Ubuntu (GNOME
+  Software/PackageKit) falla con deps alternativas (`… | …t64`), marca
+  "instalado" sin actualizar y cachea; si se quiere doble clic, instalar
+  `gdebi` y abrir con él.
+- Los tres scripts versionan con **fecha.hora** (`2026.07.19.2304`): dos
+  builds del mismo día nunca chocan y `apt` siempre ve la nueva como upgrade.
+- `noumon-panel` no lleva `.desktop` propio: la entrada de menú la pone el
+  paquete del servidor y usa la ventana nativa si está instalada, navegador si
+  no.
+
 ## Pendientes
 
-- Smoke test de instalación del cliente Linux (`dpkg -i` + abrir ventana y
-  conectar a un servidor) y build arm64 ejecutando
-  `scripts/make-client-linux.sh` en la propia Raspberry Pi.
-- Firma de código Windows (certificado) y repos apt propios.
+- Build arm64 del cliente y de la ventana del panel ejecutando
+  `make-client-linux.sh` / `make-panel-linux.sh` en la propia Raspberry Pi
+  (cgo/GTK no se cross-compila). El servidor arm64 ya está verificado en Pi
+  real.
+- Firma de código Windows (certificado) y repos apt propios (eliminaría el
+  reparto manual de .deb y las trampas del instalador gráfico).
 - Crear las GitHub Releases y subir los artefactos (`NoumonSetup-*.exe`,
-  `noumon_*.deb`, `noumon-client_*.deb` + sha256) para activar el camino
-  online de `install.sh`.
+  `noumon_*.deb`, `noumon-client_*.deb`, `noumon-panel_*.deb` + sha256) para
+  activar el camino online de `install.sh`.
+- Limpiar de `library-desktop/dist` las versiones intermedias; conservar la
+  última de cada paquete y los nombres estables.
 
 Al cerrar cada fase, actualizar este documento en el mismo commit.
