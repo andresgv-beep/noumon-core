@@ -23,6 +23,15 @@ export const setStorageRoot = (root) =>
     body: JSON.stringify({ contentRoot: root }),
   })
 
+// Red local — publicar la biblioteca en la LAN (network.go)
+export const getNetwork = () => getJSON('/api/admin/network')
+export const setLanAccess = (lanAccess) =>
+  getJSON('/api/admin/network', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lanAccess }),
+  })
+
 // Colecciones normalizadas (ZIM + contenido publicado)
 export const getCollections = () =>
   getJSON('/api/collections').then((d) => d.collections || [])

@@ -80,3 +80,31 @@ func TestTranslateEnvRespectsExplicitModelsDir(t *testing.T) {
 		t.Fatalf("no se respeto MODELS_DIR explicito:\n%s", joined)
 	}
 }
+
+func TestCoreEnvPublishesLanWhenConfigured(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("NOUMON_LIBRARY_DATA", base)
+	t.Setenv("POOL_ROOT", "")
+	t.Setenv("BIND", "")
+	if err := os.WriteFile(filepath.Join(base, "config.json"), []byte(`{"lanAccess":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join((&supervisor{}).coreEnv(), "\n")
+	if !strings.Contains(joined, "BIND=0.0.0.0") {
+		t.Fatalf("lanAccess no publico el servidor:\n%s", joined)
+	}
+}
+
+func TestCoreEnvOperatorBindWinsOverLanAccess(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("NOUMON_LIBRARY_DATA", base)
+	t.Setenv("POOL_ROOT", "")
+	t.Setenv("BIND", "192.168.1.5")
+	if err := os.WriteFile(filepath.Join(base, "config.json"), []byte(`{"lanAccess":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join((&supervisor{}).coreEnv(), "\n")
+	if strings.Contains(joined, "BIND=0.0.0.0") || !strings.Contains(joined, "BIND=192.168.1.5") {
+		t.Fatalf("el BIND del operador no gano:\n%s", joined)
+	}
+}

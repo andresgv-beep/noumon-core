@@ -8,6 +8,7 @@
   import Import from './lib/Import.svelte'
   import Users from './lib/Users.svelte'
   import Maps from './lib/Maps.svelte'
+  import Network from './lib/Network.svelte'
 
   let tab = $state('storage')
   let health = $state({ shim: '…', engine: '…' })
@@ -24,6 +25,7 @@
     { id: 'maps', label: 'Mapas', icon: 'M4 6l5-2 6 2 5-2v14l-5 2-6-2-5 2zM9 4v14M15 6v14' },
     { id: 'import', label: 'Importar', icon: 'M12 4v11M8 11l4 4 4-4M5 20h14' },
     { id: 'users', label: 'Usuarios', icon: 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20c0-3.3 2.7-5 6-5s6 1.7 6 5M17 8l2 2 3-3' },
+    { id: 'network', label: 'Red', icon: 'M12 20h.01M8.5 16.5a5 5 0 017 0M5 13a10 10 0 0114 0M2 9.5a15 15 0 0120 0' },
   ]
 
   async function loadHealth() {
@@ -135,6 +137,8 @@
           <Import />
         {:else if tab === 'users'}
           <Users me={me.user} />
+        {:else if tab === 'network'}
+          <Network />
         {/if}
       </div>
     {/if}
