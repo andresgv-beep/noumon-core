@@ -140,3 +140,54 @@ func TestSplashDaPasoADesconectadoTrasGracia(t *testing.T) {
 		t.Fatalf("fetch sin html: código %d, se esperaba 503", rec.Code)
 	}
 }
+
+func TestGatewayConvierteRedireccionesDeNavegacionEnMetaRefresh(t *testing.T) {
+	t.Parallel()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/content/wiki/" {
+			http.Redirect(w, r, "/content/wiki/A/Portada", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+	target, _ := url.Parse(upstream.URL)
+
+	s := &shell{remote: true}
+	s.installProxy(target)
+	s.configured.Store(true)
+	s.ready.Store(true)
+	server := httptest.NewServer(s)
+	defer server.Close()
+
+	// Navegación (Accept text/html): el webview no sigue 302 en el esquema
+	// propio, así que debe llegar 200 con meta refresh al destino.
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	request, _ := http.NewRequest(http.MethodGet, server.URL+"/content/wiki/", nil)
+	request.Header.Set("Accept", "text/html,application/xhtml+xml")
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; se esperaba 200 con meta refresh", response.StatusCode)
+	}
+	if !strings.Contains(string(body), `url=/content/wiki/A/Portada`) {
+		t.Fatalf("falta el destino en el meta refresh: %s", body)
+	}
+
+	// Un fetch (sin Accept html) conserva la redirección HTTP original.
+	request, _ = http.NewRequest(http.MethodGet, server.URL+"/content/wiki/", nil)
+	response, err = client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusFound || response.Header.Get("Location") == "" {
+		t.Fatalf("fetch: status = %d Location=%q; se esperaba 302 intacto", response.StatusCode, response.Header.Get("Location"))
+	}
+}

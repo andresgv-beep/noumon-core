@@ -9,7 +9,7 @@ library-server/
   translate-wrap/   motor opcional de traduccion
 
 engines/
-  zim-engine/       lector ZIM y full-text Bleve, modulo Go independiente
+  zim-engine/       lector ZIM y full-text SQLite FTS5, modulo Go independiente
 
 noumon/      cliente lector independiente
 docs/               decisiones y plan de separacion

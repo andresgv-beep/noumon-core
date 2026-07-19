@@ -193,6 +193,11 @@ noumon_<version>_arm64.deb (+ .sha256)   noumon_arm64.deb (nombre estable)
   `http://localhost:8090` y panel en `http://localhost:8090/panel/`. En la Pi
   ese es además el modo natural: la Pi sirve y el resto de dispositivos entran
   por el navegador.
+- Por defecto el servicio escucha solo en `127.0.0.1`. Para abrirlo a la casa
+  o aula: Panel → **Red** → "Publicar en la red local" (guarda `lanAccess` en
+  el `config.json` compartido; el supervisor relanza Core con `BIND=0.0.0.0`).
+  Un `BIND` fijado por entorno siempre gana sobre el Panel. Si el cortafuegos
+  está activo hay que permitir el puerto (`sudo ufw allow 8090/tcp`).
 
 ### install.sh
 
@@ -219,9 +224,10 @@ errores, usuario y unidad creados, `library-supervisor run` levanta core y
 colecciones es lo esperado; se levanta al registrar el primer ZIM.
 
 El mismo 2026-07-19 se generó el `.deb` arm64 con `make-server-linux.sh` desde
-Linux amd64: binarios verificados como ELF aarch64 estáticos, layout idéntico
-al del molde Windows más la entrada de menú del Panel. El smoke test en la
-Raspberry real queda pendiente.
+Linux amd64 (binarios ELF aarch64 estáticos, layout idéntico al molde Windows
+más la entrada de menú del Panel) y se instaló en una Raspberry Pi real:
+servicio funcionando y panel accesible desde el navegador de la Pi y desde
+otros equipos de la LAN.
 
 ## Fase 4 — Cliente de escritorio Linux (noumon-client_<arch>.deb)
 

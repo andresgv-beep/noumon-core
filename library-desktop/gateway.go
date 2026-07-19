@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -118,6 +119,33 @@ func (s *shell) installProxy(target *url.URL) {
 		http.Error(w, "Library Server no disponible", http.StatusServiceUnavailable)
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
+		// Los webview de Wails sirven la app por un esquema propio y NO siguen
+		// redirecciones HTTP en las navegaciones: pintan el cuerpo del 302
+		// ("Found.") tal cual. Ocurre p. ej. en la raíz de una colección ZIM,
+		// que redirige a su portada. Se convierte la redirección en una página
+		// mínima con meta refresh: el webview sí navega a la URL destino, y al
+		// llegar allí las rutas relativas del artículo funcionan igual que en
+		// un navegador. Solo para navegaciones (Accept: text/html); las
+		// llamadas fetch de la SPA conservan la redirección original.
+		if location := response.Header.Get("Location"); location != "" &&
+			response.StatusCode >= 300 && response.StatusCode < 400 &&
+			response.Request != nil &&
+			strings.Contains(response.Request.Header.Get("Accept"), "text/html") {
+			if response.Body != nil {
+				response.Body.Close()
+			}
+			target := template.HTMLEscapeString(location)
+			body := []byte(`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=` + target + `"><a href="` + target + `">Abriendo…</a>`)
+			response.StatusCode = http.StatusOK
+			response.Status = http.StatusText(http.StatusOK)
+			response.Header.Del("Location")
+			response.Header.Set("Content-Type", "text/html; charset=utf-8")
+			response.Header.Set("Cache-Control", "no-store")
+			response.Body = io.NopCloser(bytes.NewReader(body))
+			response.ContentLength = int64(len(body))
+			response.Header.Set("Content-Length", strconv.Itoa(len(body)))
+			return nil
+		}
 		if !isClientDocument(response) {
 			return nil
 		}
