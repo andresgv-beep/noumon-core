@@ -491,8 +491,12 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		// Defensa CSRF para cualquier mutación iniciada por navegador. Clientes de
 		// sistema/CLI sin Origin siguen funcionando; los orígenes remotos permitidos
-		// se declaran en CLIENT_ORIGINS.
-		if requestIsMutation(r) && !requestOriginAllowed(r) {
+		// se declaran en CLIENT_ORIGINS. Excepción: una petición autenticada SOLO por
+		// token explícito (Bearer o ?st=, sin cookie de sesión) es inmune a CSRF — el
+		// token no es ambiente, una web hostil no lo conoce ni lo puede adjuntar. Es
+		// lo que permite la subida DIRECTA al Core desde el webview de escritorio
+		// (Wails/WebView2 no reenvía el body del multipart por su proxy → MOMENTS-UPLOAD.md).
+		if requestIsMutation(r) && !requestOriginAllowed(r) && !requestTokenOnly(r) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "origen de la petición no permitido"})
 			return
 		}
@@ -509,6 +513,23 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Noumon-Token")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		} else if o := r.Header.Get("Origin"); o != "" && requestTokenOnly(r) {
+			// Subida directa al Core por token (webview de escritorio): reflejar el
+			// origen para que el JS lea la respuesta, SIN Allow-Credentials — la auth
+			// va por token, no por cookie, así que no se exponen credenciales de más.
+			w.Header().Set("Access-Control-Allow-Origin", o)
+			w.Header().Set("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Noumon-Token")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			// Private Network Access: Chromium/WebView2 puede exigir esta cabecera
+			// para dejar que un origen (wails.localhost) llegue a una dirección más
+			// privada (127.0.0.1). loopback→loopback no debería dispararlo, pero
+			// declararlo es inocuo y evita un bloqueo silencioso de la subida.
+			w.Header().Set("Access-Control-Allow-Private-Network", "true")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return
@@ -576,6 +597,26 @@ func requestOriginAllowed(r *http.Request) bool {
 		scheme = "https"
 	}
 	return strings.EqualFold(u.Scheme, scheme) && strings.EqualFold(u.Host, r.Host)
+}
+
+// requestTokenOnly indica que la petición se autentica SOLO por token explícito
+// (Bearer o ?st=) y NO trae cookie de sesión. Un token así lo adjunta el JS a
+// mano: una web hostil no lo conoce, así que la petición es inmune a CSRF. Se
+// exige la AUSENCIA de cookie de sesión a propósito: si viniera la cookie
+// (credencial ambiente), un ?st= basura no debe saltarse el check de Origin.
+// La subida directa al Core es cross-origin, así que no lleva la cookie del
+// Core y cae limpiamente en este carril.
+func requestTokenOnly(r *http.Request) bool {
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	bearer := len(auth) > 7 && strings.EqualFold(auth[:7], "Bearer ")
+	st := strings.TrimSpace(r.URL.Query().Get("st")) != ""
+	if !bearer && !st {
+		return false
+	}
+	if _, err := r.Cookie(sessionCookie); err == nil {
+		return false // hay cookie de sesión → no es "solo token"
+	}
+	return true
 }
 
 // mapDataHandler publica exclusivamente los archivos de teselas que consume

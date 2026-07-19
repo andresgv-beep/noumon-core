@@ -131,13 +131,33 @@ export const deleteMedia = (id) => postJSON('/api/admin/media/delete', { id })
 
 // Carga manual (Moments/Cabinet): multipart con fichero + metadatos + imágenes.
 // files: { file, cover, channel_avatar }. Devuelve la respuesta cruda.
-export function uploadContent(fields, files = {}, url = '/api/admin/upload') {
+export async function uploadContent(fields, files = {}, url = '/api/admin/upload') {
   const fd = new FormData()
   for (const [k, v] of Object.entries(fields)) {
     if (v != null && String(v).trim() !== '') fd.append(k, v)
   }
   for (const [k, f] of Object.entries(files)) {
     if (f) fd.append(k, f)
+  }
+  // En el shell de escritorio (Wails/WebView2) el webview NO reenvía el body del
+  // POST multipart por el AssetServer → una subida relativa llega VACÍA al Core
+  // (ficheros de 0 bytes: vídeos que no reproducen, avatares "no se pudo leer").
+  // Solución: subir DIRECTO al Core (URL absoluta = red real, con body). La cookie
+  // no cruza orígenes, así que autenticamos con un media-token de un solo uso
+  // (currentUser lo acepta como el mismo usuario admin). Ver MOMENTS-UPLOAD.md.
+  const core =
+    typeof window !== 'undefined' && window.__NOUMON_LIBRARY_SHELL__ ? window.__NOUMON_LIBRARY_CORE__ || '' : ''
+  if (core) {
+    const st = await getJSON('/api/auth/media-token', { method: 'POST' })
+      .then((d) => d.token)
+      .catch(() => '')
+    if (st) {
+      const base = String(core).replace(/\/+$/, '')
+      const direct = `${base}${url}?st=${encodeURIComponent(st)}`
+      return fetch(direct, { method: 'POST', body: fd }) // sin cookie: auth por token
+    }
+    // Sin token no arriesgamos una subida vacía: que falle claro y se reintente.
+    throw new Error('no se pudo autenticar la subida (media-token)')
   }
   return fetch(url, { method: 'POST', body: fd })
 }

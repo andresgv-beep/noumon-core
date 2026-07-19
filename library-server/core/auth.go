@@ -357,7 +357,14 @@ func mediaTokenFromRequest(r *http.Request) string {
 	// Lo usa el cliente solo para /media y /content. Contrato de auth §6.4.
 	mediaRead := (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
 		(strings.HasPrefix(r.URL.Path, "/media/") || strings.HasPrefix(r.URL.Path, "/content/"))
-	if mediaRead {
+	// Subida directa al Core desde el webview de escritorio (MOMENTS-UPLOAD.md): el
+	// POST multipart va a URL absoluta (cross-origin, sin cookie) y es "simple"
+	// (sin cabeceras custom → sin preflight), así que la única auth posible es el
+	// ?st=. Se acepta SOLO en los dos endpoints de subida — el media-token ya
+	// resuelve al usuario admin en currentUser, esto solo abre el carril de query.
+	uploadWrite := r.Method == http.MethodPost &&
+		(r.URL.Path == "/api/admin/upload" || r.URL.Path == "/api/admin/media/update")
+	if mediaRead || uploadWrite {
 		if st := r.URL.Query().Get("st"); st != "" {
 			return st
 		}
