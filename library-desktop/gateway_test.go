@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNormalizeRemoteTarget(t *testing.T) {
@@ -101,4 +102,41 @@ func mustBody(t *testing.T, address string) string {
 		t.Fatal(err)
 	}
 	return string(body)
+}
+
+func TestSplashDaPasoADesconectadoTrasGracia(t *testing.T) {
+	t.Parallel()
+	target, _ := url.Parse("http://127.0.0.1:1") // puerto cerrado: nunca conecta
+	s := &shell{remote: true}
+	s.configured.Store(true)
+	s.installProxy(target)
+
+	navigate := func() *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Accept", "text/html")
+		s.ServeHTTP(rec, req)
+		return rec
+	}
+
+	// Dentro de la ventana de gracia: splash de "Conectando con...".
+	s.bootStarted.Store(time.Now().UnixMilli())
+	if body := navigate().Body.String(); !strings.Contains(body, "Conectando con") {
+		t.Fatalf("se esperaba el splash, llego: %.120s", body)
+	}
+
+	// Agotada la gracia: página de desconexión con opción de cambiar servidor.
+	s.bootStarted.Store(time.Now().Add(-connectGrace - time.Second).UnixMilli())
+	body := navigate().Body.String()
+	if !strings.Contains(body, "Se ha perdido la conexi") || !strings.Contains(body, "Conectar a otro servidor") {
+		t.Fatalf("se esperaba la página de desconexión, llego: %.120s", body)
+	}
+
+	// Un fetch (sin Accept text/html) nunca recibe HTML con 200: el ping de la
+	// página de desconexión no debe confundir el splash con el servidor vivo.
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, healthPath, nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("fetch sin html: código %d, se esperaba 503", rec.Code)
+	}
 }

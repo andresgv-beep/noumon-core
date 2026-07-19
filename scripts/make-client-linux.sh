@@ -13,15 +13,18 @@
 # y Go >= 1.26.
 #
 # Uso:
-#   sh scripts/make-client-linux.sh              # version = fecha yyyy.MM.dd
+#   sh scripts/make-client-linux.sh              # version = yyyy.MM.dd.HHMM
 #   sh scripts/make-client-linux.sh 1.2.0        # version explicita
+#
+# La version por defecto incluye la hora: dos builds del mismo dia son
+# versiones distintas y apt no descarta la reinstalacion por "misma version".
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DESKTOP="$ROOT/library-desktop"
 DIST="$DESKTOP/dist"
 LINUX_ASSETS="$ROOT/scripts/linux"
-VERSION=${1:-$(date +%Y.%m.%d)}
+VERSION=${1:-$(date +%Y.%m.%d.%H%M)}
 
 case $(uname -m) in
   x86_64) ARCH=amd64 ;;
