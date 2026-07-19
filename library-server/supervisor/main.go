@@ -184,8 +184,16 @@ func (s *supervisor) coreEnv() []string {
 	extra := map[string]string{"LIBRARY_SUPERVISED": "1"}
 	stateRoot, stateErr := supervisorDataDir("data")
 	configPath, configErr := supervisorConfigPath()
+	var cfg supervisorConfig
 	if configErr == nil {
 		extra["NOUMON_LIBRARY_CONFIG"] = configPath
+		cfg, _ = readSupervisorConfig(configPath)
+	}
+
+	// "Publicar en la red local" del Panel. Un BIND del entorno del operador
+	// tiene la última palabra; sin él, lanAccess abre a toda la LAN.
+	if os.Getenv("BIND") == "" && cfg.LanAccess {
+		extra["BIND"] = "0.0.0.0"
 	}
 
 	// POOL_ROOT solo contiene biblioteca pesada. Las bases administrativas se
@@ -202,11 +210,9 @@ func (s *supervisor) coreEnv() []string {
 	} else {
 		root := stateRoot
 		provider := "host"
-		if configErr == nil {
-			if cfg, err := readSupervisorConfig(configPath); err == nil && cfg.ContentRoot != "" {
-				root = cfg.ContentRoot
-				provider = "configured"
-			}
+		if cfg.ContentRoot != "" {
+			root = cfg.ContentRoot
+			provider = "configured"
 		}
 		if root != "" {
 			extra["POOL_ROOT"] = root
@@ -219,8 +225,11 @@ func (s *supervisor) coreEnv() []string {
 	return mergeEnv(os.Environ(), extra)
 }
 
+// supervisorConfig refleja el config.json que escribe el Panel a través del
+// Core (storageConfig en core/storage.go): mismos campos, mismo fichero.
 type supervisorConfig struct {
 	ContentRoot string `json:"contentRoot"`
+	LanAccess   bool   `json:"lanAccess"`
 }
 
 func supervisorConfigPath() (string, error) {

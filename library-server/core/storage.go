@@ -45,8 +45,25 @@ type poolInfo struct {
 	sections          []sectionSpec
 }
 
+// storageConfig es el config.json compartido con el supervisor: cada campo lo
+// escribe el Panel y lo lee el supervisor al relanzar Core. Quien escriba debe
+// leer-modificar-guardar para no pisar los demás campos.
 type storageConfig struct {
 	ContentRoot string `json:"contentRoot"`
+	LanAccess   bool   `json:"lanAccess,omitempty"`
+}
+
+func readStorageConfig(path string) (storageConfig, error) {
+	var cfg storageConfig
+	if path == "" {
+		return cfg, os.ErrNotExist
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return cfg, err
+	}
+	err = json.Unmarshal(raw, &cfg)
+	return cfg, err
 }
 
 type storageVolume struct {
@@ -113,7 +130,9 @@ func (p *poolInfo) handleStorageRootUpdate(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	if err := writeStorageConfig(p.configPath, storageConfig{ContentRoot: root}); err != nil {
+	cfg, _ := readStorageConfig(p.configPath)
+	cfg.ContentRoot = root
+	if err := writeStorageConfig(p.configPath, cfg); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "no se pudo guardar la ubicacion: " + err.Error()})
 		return
 	}

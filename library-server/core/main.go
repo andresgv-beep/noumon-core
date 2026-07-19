@@ -384,6 +384,11 @@ func main() {
 	}
 	adminMux.HandleFunc("/api/storage", pool.handleStorage)
 
+	// Publicación en la red local (Panel → Red). Guarda lanAccess en el mismo
+	// config.json del pool; el supervisor lo convierte en BIND al reiniciar.
+	network := &networkInfo{configPath: os.Getenv("NOUMON_LIBRARY_CONFIG"), bind: bind, port: port}
+	adminMux.HandleFunc("/api/admin/network", network.handleNetwork)
+
 	// Rutas de gestión de ZIM (az se creó arriba, junto al motor de descargas,
 	// para el auto-registro del catálogo).
 	az.registerRoutes(adminMux)

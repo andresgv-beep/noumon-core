@@ -150,8 +150,27 @@ sh scripts/make-server-linux.sh 1.2.0 arm64  # versión explícita
 Toma las interfaces directamente de `noumon/dist`,
 `library-server/core/www-panel` y `library-server/core/maps-www`. Añade además
 una entrada de menú **"Noumon Panel de Control"** (icono del engranaje,
-`scripts/linux/noumon-panel.desktop`) que abre el panel en el navegador — útil
-cuando el servidor corre en una máquina con escritorio.
+`scripts/linux/noumon-panel.desktop`): si la ventana nativa del panel está
+instalada (paquete `noumon-panel`, abajo) la lanza; si no, abre el panel en el
+navegador.
+
+### Ventana nativa del Panel (noumon-panel_<arch>.deb)
+
+`scripts/make-panel-linux.sh` compila el equivalente Linux de
+`library-control-panel.exe`: el mismo shell Wails con
+`-X main.interfaceMode=panel` y modo local (proxy al servicio de systemd en
+`localhost:8090`; nunca arranca ni detiene el servicio). Igual que el cliente
+usa cgo + GTK/WebKit, así que se compila en la máquina destino (para arm64,
+en la Pi):
+
+```sh
+sudo apt install build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
+sh scripts/make-panel-linux.sh
+```
+
+Instala solo `/usr/bin/noumon-panel` (sin `.desktop` propio: la entrada del
+menú la pone el paquete del servidor y detecta la ventana al lanzarse).
+`Recommends: noumon` — sin el servicio local no hay nada que administrar.
 
 Resultado en `library-desktop\dist\`:
 
@@ -198,6 +217,11 @@ errores, usuario y unidad creados, `library-supervisor run` levanta core y
 `/api/health` responde `200` con motor nativo — en **amd64** y en **arm64**
 (emulado con QEMU). En una instalación virgen `engine:"down"` con 0
 colecciones es lo esperado; se levanta al registrar el primer ZIM.
+
+El mismo 2026-07-19 se generó el `.deb` arm64 con `make-server-linux.sh` desde
+Linux amd64: binarios verificados como ELF aarch64 estáticos, layout idéntico
+al del molde Windows más la entrada de menú del Panel. El smoke test en la
+Raspberry real queda pendiente.
 
 ## Fase 4 — Cliente de escritorio Linux (noumon-client_<arch>.deb)
 
