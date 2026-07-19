@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Noumon
+Comment=Biblioteca offline Noumon (cliente de escritorio)
+Comment[es]=Biblioteca offline Noumon (cliente de escritorio)
+Exec=/usr/bin/noumon-client
+Icon=noumon-client
+Terminal=false
+Categories=Education;

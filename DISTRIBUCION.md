@@ -178,25 +178,57 @@ errores, usuario y unidad creados, `library-supervisor run` levanta core y
 (emulado con QEMU). En una instalación virgen `engine:"down"` con 0
 colecciones es lo esperado; se levanta al registrar el primer ZIM.
 
+## Fase 4 — Cliente de escritorio Linux (noumon-client_<arch>.deb)
+
+La ventana nativa Wails necesita cgo + GTK/WebKit, así que **no se
+cross-compila** ni desde Windows ni entre arquitecturas: el script se ejecuta
+en una máquina Linux de la arquitectura destino (amd64 en un PC, arm64 en la
+Pi). Requisito único además de Go:
+
+```sh
+sudo apt install build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
+```
+
+Desde la raíz del repositorio:
+
+```sh
+sh scripts/make-client-linux.sh          # versión = fecha yyyy.MM.dd
+sh scripts/make-client-linux.sh 1.2.0    # versión explícita
+```
+
+Compila `noumon-client` en modo *gateway remoto* (tags `desktop production
+webkit2_41`, `-X main.distributionMode=remote`) y arma el paquete con el mismo
+`scripts/mkdeb` del servidor. Resultado en `library-desktop/dist/`:
+
+```text
+noumon-client_<version>_<arch>.deb (+ .sha256)   noumon-client_<arch>.deb (nombre estable)
+```
+
+### Qué instala el .deb del cliente
+
+- `/usr/bin/noumon-client` (binario autocontenido, sin recursos externos).
+- Entrada de menú (`scripts/linux/noumon-client.desktop`) e icono en
+  `/usr/share/pixmaps/noumon-client.png` (fuente: `icons/noumon_icon_client.png`).
+- `Depends: libgtk-3-0 | libgtk-3-0t64, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.1-0t64`.
+- Sin servicio ni scripts de mantenimiento: es solo la ventana. Al primer
+  arranque pide la URL del servidor y la guarda en
+  `~/.config/Noumon/gateway.json`; también respeta `NOUMON_LIBRARY_SERVER`.
+  Es un paquete **aparte** del servidor `noumon`; pueden convivir.
+
+### Verificación realizada (2026-07-19)
+
+Compilado y empaquetado en Linux amd64 real: `dpkg-deb -I`/`-c` correctos,
+`ldd` del binario sin librerías faltantes con solo las runtime de GTK/WebKit
+instaladas, y `desktop-file-validate` limpio.
+
 ## Pendientes
 
-- **Cliente de escritorio Linux (siguiente fase, en curso)**: compilar la
-  ventana nativa en Linux (Wails necesita cgo/GTK; no se cross-compila desde
-  Windows). No se detectó código Windows-only en `library-desktop`. Receta:
-
-  ```sh
-  sudo apt install build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
-  cd library-desktop
-  go build -tags 'desktop production webkit2_41' \
-    -ldflags '-X main.distributionMode=remote' -o noumon-client .
-  ```
-
-  Empaquetarlo como `.deb` **aparte** del servidor (`noumon-client_<arch>.deb`)
-  con entrada `.desktop` + icono, reutilizando `scripts/mkdeb` (Go puro, corre
-  igual en Linux). El cliente remoto pide la URL del servidor al primer
-  arranque y la guarda en `~/.config/Noumon/gateway.json`.
+- Smoke test de instalación del cliente Linux (`dpkg -i` + abrir ventana y
+  conectar a un servidor) y build arm64 ejecutando
+  `scripts/make-client-linux.sh` en la propia Raspberry Pi.
 - Firma de código Windows (certificado) y repos apt propios.
 - Crear las GitHub Releases y subir los artefactos (`NoumonSetup-*.exe`,
-  `noumon_*.deb` + sha256) para activar el camino online de `install.sh`.
+  `noumon_*.deb`, `noumon-client_*.deb` + sha256) para activar el camino
+  online de `install.sh`.
 
 Al cerrar cada fase, actualizar este documento en el mismo commit.
