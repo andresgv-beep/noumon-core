@@ -85,13 +85,33 @@ func (i *Index) Search(query string, limit int) ([]Hit, uint64, error) {
 	if limit <= 0 {
 		limit = 10
 	}
-	match := buildMatchQuery(i.lang, query)
-	if match == "" { // consulta sin ningún token (solo puntuación…)
+	if buildMatchQuery(i.lang, query, matchAnd) == "" { // sin ningún token (solo puntuación…)
 		return nil, 0, nil
 	}
+	origToks := analyzer.Tokenize(query)
+	stemToks := analyzer.Analyze(i.lang, query)
 
-	// Pesos bm25 por columna en el orden del esquema: title, body, title_st,
-	// body_st. Título ×3 en ambas formas.
+	// AND primero (precisión); si no casa nada, OR (rescate de recall). Para una
+	// consulta de un solo término AND==OR, así que no hay segunda pasada.
+	for _, mode := range [...]matchMode{matchAnd, matchOr} {
+		match := buildMatchQuery(i.lang, query, mode)
+		hits, total, err := i.runMatch(match, limit, origToks, stemToks)
+		if err != nil {
+			return nil, 0, err
+		}
+		if total > 0 || mode == matchOr {
+			return hits, total, nil
+		}
+	}
+	return nil, 0, nil
+}
+
+// runMatch ejecuta una expresión MATCH concreta: arma los hits (con snippet
+// propio si el índice guardó body) y el total de coincidencias.
+//
+// Pesos bm25 por columna en el orden del esquema: title, body, title_st,
+// body_st. Título ×3 en ambas formas.
+func (i *Index) runMatch(match string, limit int, origToks, stemToks []string) ([]Hit, uint64, error) {
 	rows, err := i.db.Query(`
 		SELECT d.path, d.title, COALESCE(d.body, ''), -bm25(fts, 3.0, 1.0, 3.0, 1.0) AS score
 		FROM fts JOIN docs d ON d.id = fts.rowid
@@ -102,9 +122,6 @@ func (i *Index) Search(query string, limit int) ([]Hit, uint64, error) {
 		return nil, 0, fmt.Errorf("fts match: %w", err)
 	}
 	defer rows.Close()
-
-	origToks := analyzer.Tokenize(query)
-	stemToks := analyzer.Analyze(i.lang, query)
 
 	hits := make([]Hit, 0, limit)
 	for rows.Next() {

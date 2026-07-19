@@ -95,6 +95,7 @@ func (s *Server) handleGlobalSearch(w http.ResponseWriter, r *http.Request) {
 			out = append(out, g)
 		}
 	}
+	out = filterByAllTerms(out, q)
 	sort.SliceStable(out, func(a, b int) bool {
 		if out[a].Results[0].Score != out[b].Results[0].Score {
 			return out[a].Results[0].Score > out[b].Results[0].Score
@@ -513,6 +514,75 @@ func adjacentSwapVariants(s string) []string {
 			seen[v] = true
 			out = append(out, v)
 		}
+	}
+	return out
+}
+
+// coversAllTokens: ¿el texto contiene TODAS las palabras significativas? Cada
+// token debe ser subcadena de ALGUNA palabra (así "historia" cubre "historias",
+// "napoleon" cubre "napoleón"). Deliberadamente NO usa tokenCoverage: su regla
+// inversa (Contains(tok, w)) daría "napoleon" por bueno ante palabras como
+// "león" u "óleo" — el falso positivo que colaba "Historias de Eevee".
+func coversAllTokens(sig []string, text string) bool {
+	if len(sig) == 0 {
+		return true
+	}
+	words := strings.Fields(normalizeText(text))
+	for _, t := range sig {
+		hit := false
+		for _, w := range words {
+			if strings.Contains(w, t) {
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			return false
+		}
+	}
+	return true
+}
+
+// filterByAllTerms deja solo los resultados que cubren TODAS las palabras
+// significativas de la consulta (en título+ruta+snippet), matando las
+// coincidencias parciales que colaban artículos con una sola palabra común:
+// "historia de napoleón" traía Pokémon con "historia" en el título pero sin
+// "napoleón". Complementa el AND del motor FTS (que ya recorta su lado) para
+// también podar el camino de sugerencias por título.
+//
+// queryTokens ya quita stopwords (de/la/el…), así que "historia de napoleón" →
+// {historia, napoleón}. Con <2 tokens significativos no se filtra (una palabra
+// no tiene "todas" que exigir). Fallback: si exigirlo vaciara TODOS los grupos,
+// se devuelven sin filtrar — nunca cero resultados donde antes había algo.
+func filterByAllTerms(groups []SearchGroup, q string) []SearchGroup {
+	sig := queryTokens(q)
+	if len(sig) < 2 {
+		return groups
+	}
+	covers := func(h SearchHit) bool {
+		return coversAllTokens(sig, h.Title+" "+strings.ReplaceAll(h.Path, "_", " ")+" "+h.Snippet)
+	}
+	out := make([]SearchGroup, 0, len(groups))
+	kept := 0
+	for _, g := range groups {
+		rs := make([]SearchHit, 0, len(g.Results))
+		for _, r := range g.Results {
+			if covers(r) {
+				rs = append(rs, r)
+			}
+		}
+		if len(rs) == 0 {
+			continue
+		}
+		g.Results = rs
+		if g.Total > len(rs) {
+			g.Total = len(rs) // no prometer más de lo que queda tras podar
+		}
+		out = append(out, g)
+		kept += len(rs)
+	}
+	if kept == 0 {
+		return groups // fallback: nada cubre todo → mejor parcial que vacío
 	}
 	return out
 }

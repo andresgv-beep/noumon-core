@@ -34,6 +34,25 @@
       checkingServer = false;
     }
   }
+
+  // Vaciar caché: borra las Cache Storage del service worker y fuerza su
+  // actualización, luego recarga en duro para traer todo fresco del servidor.
+  // Válvula de escape si el dispositivo enseña contenido o resultados viejos.
+  let clearing = $state(false);
+  async function clearCacheAndReload() {
+    clearing = true;
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.update()));
+      }
+    } catch (e) { /* recargamos igual */ }
+    location.reload();
+  }
 </script>
 
 <div class="view scroll">
@@ -125,6 +144,18 @@
             {#if i18n.locale === l.code}<Icon name="check" size={16} />{/if}
           </button>
         {/each}
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="srow">
+        <div class="sinfo">
+          <b>Vaciar caché</b>
+          <small>Borra los datos guardados en el dispositivo y recarga. Úsalo si ves resultados o contenido desactualizados.</small>
+        </div>
+        <button class="save" disabled={clearing} onclick={clearCacheAndReload}>
+          {clearing ? 'Vaciando…' : 'Vaciar y recargar'}
+        </button>
       </div>
     </section>
 

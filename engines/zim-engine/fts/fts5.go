@@ -93,36 +93,56 @@ func openReadDB(dir string) (*sql.DB, error) {
 	return db, nil
 }
 
-// buildMatchQuery arma la expresión MATCH: OR entre el grupo de columnas
-// originales (tokens tal cual; unicode61 los foldea por su cuenta) y el grupo
-// stemizado (tokens por el pipeline analyzer). Dentro de cada grupo los
-// términos van en OR — misma semántica que el MatchQuery de bleve, cuyo
-// operador por defecto es OR. Cada token viaja entre comillas dobles: para
-// FTS5 una cadena entrecomillada es SIEMPRE un término literal, así que la
-// sintaxis de consulta del usuario (AND, NOT, paréntesis, asteriscos) no puede
-// inyectarse ni romper el parser.
-func buildMatchQuery(lang, query string) string {
+// matchMode elige cómo se combinan los términos de la consulta entre sí.
+type matchMode int
+
+const (
+	matchAnd matchMode = iota // todos los términos (precisión) — el defecto
+	matchOr                   // cualquier término (recall) — solo como rescate
+)
+
+// buildMatchQuery arma la expresión MATCH. Cada término de la consulta se busca
+// en su forma ORIGINAL (columnas title/body; unicode61 foldea diacríticos por
+// su cuenta) O en su RAÍZ (columnas *_st, pipeline analyzer), y los términos se
+// combinan según mode.
+//
+// matchAnd (defecto): un documento debe contener CADA palabra. El OR puro de
+// antes (heredado del MatchQuery de bleve) traía cualquier cosa con UNA sola
+// palabra común: "historia de napoleón" devolvía todo lo que tuviera "historia".
+// Search cae a matchOr solo si el AND no casa nada, para no perder recall en
+// consultas cuyos términos no coexisten en ningún artículo.
+//
+// Cada token viaja entre comillas dobles: para FTS5 una cadena entrecomillada es
+// SIEMPRE un término literal, así que la sintaxis de consulta del usuario (AND,
+// NOT, paréntesis, asteriscos) no puede inyectarse ni romper el parser.
+func buildMatchQuery(lang, query string, mode matchMode) string {
 	orig := analyzer.Tokenize(query)
-	stem := analyzer.Analyze(lang, query)
+	if len(orig) == 0 {
+		return ""
+	}
+	stem := analyzer.Analyze(lang, query) // alineado 1:1 con orig (mismo Tokenize)
 
-	quote := func(toks []string) string {
-		qs := make([]string, 0, len(toks))
-		for _, t := range toks {
-			qs = append(qs, `"`+strings.ReplaceAll(t, `"`, `""`)+`"`)
+	quote := func(t string) string { return `"` + strings.ReplaceAll(t, `"`, `""`) + `"` }
+
+	// term(i): término i en original (title/body) con caída a su raíz en *_st si
+	// difiere (idioma sin stemmer o palabra ya en raíz ⇒ solo original).
+	term := func(i int) string {
+		o := `{title body}: ` + quote(orig[i])
+		if i < len(stem) && stem[i] != "" && stem[i] != orig[i] {
+			return `(` + o + ` OR {title_st body_st}: ` + quote(stem[i]) + `)`
 		}
-		return strings.Join(qs, " OR ")
+		return o
 	}
 
-	var parts []string
-	if len(orig) > 0 {
-		parts = append(parts, `{title body}: (`+quote(orig)+`)`)
+	sep := " AND "
+	if mode == matchOr {
+		sep = " OR "
 	}
-	// Solo añade el grupo stemizado si difiere: en consultas ya en raíz o de
-	// idioma sin stemmer sería el mismo grupo dos veces.
-	if len(stem) > 0 && strings.Join(stem, " ") != strings.Join(orig, " ") {
-		parts = append(parts, `{title_st body_st}: (`+quote(stem)+`)`)
+	parts := make([]string, len(orig))
+	for i := range orig {
+		parts[i] = term(i)
 	}
-	return strings.Join(parts, " OR ")
+	return strings.Join(parts, sep)
 }
 
 // ── Snippets ────────────────────────────────────────────────────────────────

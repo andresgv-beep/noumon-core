@@ -318,15 +318,30 @@ func (s *Server) handleItemSearch(media *mediaDeps) http.HandlerFunc {
 
 		results := []FederatedSearchResult{}
 
+		// Cobertura: con ≥2 palabras significativas, un resultado debe contenerlas
+		// TODAS (título+ruta+snippet) o se descarta — misma poda que la búsqueda
+		// global (filterByAllTerms), aquí sobre la lista federada plana. Sin esto
+		// "historia de napoleón" colaba artículos con solo "historia" (Pokémon).
+		sig := queryTokens(q)
 		user := s.currentUser(r)
 		libs, err := s.visibleLibs(user) // solo colecciones con acceso
 		if err == nil {
+			covered := make([]FederatedSearchResult, 0, len(libs)*8)
+			all := make([]FederatedSearchResult, 0, len(libs)*8)
 			for _, lib := range libs {
 				group := s.searchOne(lib, q, 8)
 				for _, hit := range group.Results {
-					results = append(results, zimSearchResult(lib, hit))
+					fr := zimSearchResult(lib, hit)
+					all = append(all, fr)
+					if len(sig) < 2 || coversAllTokens(sig, hit.Title+" "+strings.ReplaceAll(hit.Path, "_", " ")+" "+hit.Snippet) {
+						covered = append(covered, fr)
+					}
 				}
 			}
+			if len(sig) >= 2 && len(covered) == 0 {
+				covered = all // fallback: si nada cubre todo, mejor parcial que vacío
+			}
+			results = append(results, covered...)
 		}
 		if mediaResults, merr := media.search(q); merr == nil {
 			// La mitad ZIM iba filtrada; la de media no. El buscador enseñaba

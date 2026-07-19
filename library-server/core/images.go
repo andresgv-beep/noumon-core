@@ -69,7 +69,12 @@ func (s *Server) imageSearch(media *mediaDeps, w http.ResponseWriter, r *http.Re
 
 	// 2) Usar el mismo ranking que paginas. Intercalar por coleccion metia
 	// resultados debiles delante de la coincidencia principal.
-	var cands []imgCand
+	// Cobertura: con ≥2 palabras significativas cada candidato debe contenerlas
+	// TODAS (título+ruta+snippet), igual que la búsqueda de texto (items/global).
+	// Sin esto "historia de napoleón" llenaba Imágenes de artículos con solo
+	// "historia" (Pokémon). Fallback a todos si nada cubre.
+	sig := queryTokens(q)
+	var cands, allCands []imgCand
 	seen := map[string]bool{}
 	for _, g := range groups {
 		for _, h := range g.Results {
@@ -78,8 +83,15 @@ func (s *Server) imageSearch(media *mediaDeps, w http.ResponseWriter, r *http.Re
 				continue
 			}
 			seen[key] = true
-			cands = append(cands, imgCand{lib: g.Lib, book: g.Book, title: h.Title, path: h.Path, score: h.Score})
+			c := imgCand{lib: g.Lib, book: g.Book, title: h.Title, path: h.Path, score: h.Score}
+			allCands = append(allCands, c)
+			if len(sig) < 2 || coversAllTokens(sig, h.Title+" "+strings.ReplaceAll(h.Path, "_", " ")+" "+h.Snippet) {
+				cands = append(cands, c)
+			}
 		}
+	}
+	if len(sig) >= 2 && len(cands) == 0 {
+		cands = allCands
 	}
 	sort.SliceStable(cands, func(i, j int) bool { return cands[i].score > cands[j].score })
 	const maxImages = 36

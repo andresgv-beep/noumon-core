@@ -70,7 +70,13 @@ func (c *lruCache) set(key string, data []byte) {
 
 // writeCachedJSON escribe bytes JSON ya serializados (respuesta de cache o recién
 // generada) con la misma cabecera que writeJSON pero sin re-marshalar.
+//
+// "Cached" es la caché del SERVIDOR (searchCache): el CLIENTE no debe cachear.
+// no-store evita que el webview sirva de su caché HTTP una búsqueda vieja para
+// la misma URL — se veían resultados obsoletos tras reindexar o cambiar el
+// ranking aunque el servidor ya devolvía lo correcto.
 func writeCachedJSON(w http.ResponseWriter, data []byte) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.Write(data)
 }
