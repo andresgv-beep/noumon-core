@@ -17,6 +17,11 @@ const (
 	localCoreURL = "http://127.0.0.1:" + corePort
 	healthPath   = "/api/health"
 	bootTimeout  = 60 * time.Second
+	// connectGrace es cuánto tiempo se muestra el splash de "Conectando..."
+	// antes de rendirse y pasar a la página de desconexión, que permite
+	// reintentar o conectar con otro servidor. El reintento sigue vivo en
+	// segundo plano: si el servidor aparece, la página recarga sola.
+	connectGrace = 10 * time.Second
 )
 
 // distributionMode se fija a "remote" por ldflags en el build del cliente
@@ -33,6 +38,10 @@ type shell struct {
 	configured atomic.Bool
 	ready      atomic.Bool
 	booting    atomic.Bool
+	// bootStarted marca (en unix ms) cuándo empezó el intento de conexión en
+	// curso; 0 cuando no hay intento o ya estamos conectados. Gobierna el paso
+	// de splash a página de desconexión tras connectGrace.
+	bootStarted atomic.Int64
 }
 
 func newShell() (*shell, error) {
@@ -64,6 +73,17 @@ func (s *shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.ready.Load() {
 		s.startBoot()
+		// Las llamadas fetch (p. ej. el ping de /api/health de la página de
+		// desconexión) reciben un error plano, nunca HTML: si recibieran el
+		// splash con 200 creerían que el servidor ya responde.
+		if !strings.Contains(r.Header.Get("Accept"), "text/html") {
+			http.Error(w, "Library Server no disponible", http.StatusServiceUnavailable)
+			return
+		}
+		if started := s.bootStarted.Load(); started != 0 && time.Since(time.UnixMilli(started)) > connectGrace {
+			serveDisconnected(w, s.remote, s.targetString())
+			return
+		}
 		serveSplash(w, s.remote, s.targetString())
 		return
 	}
@@ -85,7 +105,14 @@ func (s *shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *shell) onStartup(_ context.Context) { s.startBoot() }
 
 func (s *shell) startBoot() {
-	if !s.configured.Load() || !s.booting.CompareAndSwap(false, true) {
+	if !s.configured.Load() {
+		return
+	}
+	// Solo el primer intento del episodio fija el instante de partida; los
+	// reintentos posteriores conservan el original para que connectGrace mida
+	// desde que el usuario empezó a esperar.
+	s.bootStarted.CompareAndSwap(0, time.Now().UnixMilli())
+	if !s.booting.CompareAndSwap(false, true) {
 		return
 	}
 	go func() {
@@ -98,6 +125,7 @@ func (s *shell) boot() {
 	if s.healthy() {
 		log.Printf("Library Server disponible en %s", s.targetString())
 		s.ready.Store(true)
+		s.bootStarted.Store(0)
 		return
 	}
 
@@ -107,6 +135,7 @@ func (s *shell) boot() {
 	for time.Now().Before(deadline) {
 		if s.healthy() {
 			s.ready.Store(true)
+			s.bootStarted.Store(0)
 			log.Print("Library Server listo; cargando lector")
 			return
 		}

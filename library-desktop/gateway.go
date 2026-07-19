@@ -211,6 +211,10 @@ func (s *shell) serveGatewayConfig(w http.ResponseWriter, r *http.Request) {
 	s.installProxy(target)
 	s.configured.Store(true)
 	s.ready.Store(false)
+	// Ventana de gracia nueva para el destino nuevo: que el usuario vea el
+	// splash otros connectGrace segundos antes de volver a la página de
+	// desconexión.
+	s.bootStarted.Store(0)
 	s.startBoot()
 	_ = json.NewEncoder(w).Encode(gatewayConfig{Target: target.String()})
 }
