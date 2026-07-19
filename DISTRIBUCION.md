@@ -180,8 +180,22 @@ colecciones es lo esperado; se levanta al registrar el primer ZIM.
 
 ## Pendientes
 
-- Firma de código Windows (certificado) y, si algún día se quiere, ventana
-  nativa Linux (Wails/webkit2gtk) y repos apt propios.
+- **Cliente de escritorio Linux (siguiente fase, en curso)**: compilar la
+  ventana nativa en Linux (Wails necesita cgo/GTK; no se cross-compila desde
+  Windows). No se detectó código Windows-only en `library-desktop`. Receta:
+
+  ```sh
+  sudo apt install build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
+  cd library-desktop
+  go build -tags 'desktop production webkit2_41' \
+    -ldflags '-X main.distributionMode=remote' -o noumon-client .
+  ```
+
+  Empaquetarlo como `.deb` **aparte** del servidor (`noumon-client_<arch>.deb`)
+  con entrada `.desktop` + icono, reutilizando `scripts/mkdeb` (Go puro, corre
+  igual en Linux). El cliente remoto pide la URL del servidor al primer
+  arranque y la guarda en `~/.config/Noumon/gateway.json`.
+- Firma de código Windows (certificado) y repos apt propios.
 - Crear las GitHub Releases y subir los artefactos (`NoumonSetup-*.exe`,
   `noumon_*.deb` + sha256) para activar el camino online de `install.sh`.
 
