@@ -132,7 +132,28 @@ Ambas salen del mismo molde. Desde la raíz del repositorio:
 Requiere `build.ps1 -Mode all-in-one` previo (las interfaces web se toman de
 `library-desktop\bin`). No necesita dpkg ni WSL: los binarios se cross-compilan
 con `CGO_ENABLED=0` (sin dependencia de libc) y el .deb lo arma `scripts\mkdeb`
-(Go puro). Resultado en `library-desktop\dist\`:
+(Go puro).
+
+Desde Linux el equivalente nativo es `scripts/make-server-linux.sh` (mismo
+molde, misma cross-compilación amd64/arm64 sin toolchain extra):
+
+```sh
+# interfaces web primero (una vez por cambio de UI):
+(cd noumon && corepack npm ci && corepack npm run build)
+(cd library-server/panel && corepack npm ci && corepack npm run build)
+# después el paquete:
+sh scripts/make-server-linux.sh              # amd64 + arm64, versión fecha.hora
+sh scripts/make-server-linux.sh arm64        # una sola arquitectura
+sh scripts/make-server-linux.sh 1.2.0 arm64  # versión explícita
+```
+
+Toma las interfaces directamente de `noumon/dist`,
+`library-server/core/www-panel` y `library-server/core/maps-www`. Añade además
+una entrada de menú **"Noumon Panel de Control"** (icono del engranaje,
+`scripts/linux/noumon-panel.desktop`) que abre el panel en el navegador — útil
+cuando el servidor corre en una máquina con escritorio.
+
+Resultado en `library-desktop\dist\`:
 
 ```text
 noumon_<version>_amd64.deb (+ .sha256)   noumon_amd64.deb (nombre estable)
