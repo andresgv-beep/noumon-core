@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -129,8 +130,9 @@ func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (i
 		lo, hi uint32
 	}
 	type chunkResult struct {
-		seq  int
-		docs []doc
+		seq   int
+		docs  []doc
+		links map[string]uint32 // enlaces entrantes vistos en este chunk (target→conteo)
 	}
 	jobs := make(chan job, workers)
 	results := make(chan chunkResult, workers)
@@ -147,6 +149,7 @@ func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (i
 			defer wg.Done()
 			for j := range jobs {
 				out := make([]doc, 0, 8)
+				chunkLinks := map[string]uint32{}
 				for i := j.lo; i < j.hi; i++ {
 					scanned.Add(1)
 					e, err := a.EntryAtIndex(i)
@@ -166,14 +169,20 @@ func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (i
 						failed.Add(1) // cluster ilegible, límite §16…
 						continue
 					}
-					body := extractText(rc)
+					body, hrefs := extractTextAndLinks(rc)
 					rc.Close()
 					if body == "" {
 						skipped.Add(1) // sin texto útil (vacías, solo-imagen): legítimo
 						continue
 					}
+					self := e.FullPath()
+					// Prior de enlaces: cada artículo cuenta UNA vez por destino
+					// (autoridad = nº de artículos que enlazan, no nº de enlaces).
+					for t := range resolveArticleLinks(self, hrefs) {
+						chunkLinks[t]++
+					}
 					title := e.Title()
-					out = append(out, doc{e.FullPath(), indexDoc{
+					out = append(out, doc{self, indexDoc{
 						Title:   title,
 						Body:    body,
 						TitleSt: strings.Join(analyzer.Analyze(lang, title), " "),
@@ -181,7 +190,7 @@ func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (i
 					}})
 				}
 				select {
-				case results <- chunkResult{j.seq, out}:
+				case results <- chunkResult{j.seq, out, chunkLinks}:
 				case <-ctx.Done():
 					return
 				}
@@ -216,10 +225,14 @@ func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (i
 	indexed, lastReport := 0, 0
 	next := 0
 	pending := map[int][]doc{}
+	linkCount := map[string]uint32{} // enlaces entrantes por artículo (prior §2)
 	var indexErr error
 consume:
 	for r := range results {
 		pending[r.seq] = r.docs
+		for t, n := range r.links {
+			linkCount[t] += n
+		}
 		for {
 			ds, ok := pending[next]
 			if !ok {
@@ -295,6 +308,12 @@ consume:
 		abort()
 		return indexed, err
 	}
+	// Prior de enlaces (§2): volcar el conteo entrante a docs.links. Los enlaces a
+	// redirects o a rutas no indexadas no casan ninguna fila docs y se ignoran.
+	if err := applyLinkCounts(db, linkCount); err != nil {
+		abort()
+		return indexed, fmt.Errorf("volcar prior de enlaces: %w", err)
+	}
 	if _, err := db.Exec(`INSERT INTO fts(fts) VALUES('optimize')`); err != nil {
 		abort()
 		return indexed, fmt.Errorf("optimize: %w", err)
@@ -321,6 +340,78 @@ consume:
 		opts.OnProgress(Progress{Scanned: total, Indexed: indexed, Total: total})
 	}
 	return indexed, nil
+}
+
+// resolveArticleLinks convierte los href crudos de un artículo en el conjunto de
+// rutas de artículo (namespace C) a las que apunta, SIN repetir (un artículo
+// cuenta una vez por destino). Los href son relativos y URL-encoded
+// ("Energ%C3%ADa_solar"); se resuelven contra la ruta del propio artículo con
+// net/url, que maneja "../", subdirectorios y el porcentaje-decodificado. Se
+// descartan enlaces externos, anclas (#…), y los que no caen en C/ o apuntan al
+// propio artículo.
+func resolveArticleLinks(self string, hrefs []string) map[string]struct{} {
+	if len(hrefs) == 0 {
+		return nil
+	}
+	base, err := url.Parse("/" + self) // "/C/Historia_de_Europa/Napoleón"
+	if err != nil {
+		return nil
+	}
+	out := make(map[string]struct{}, len(hrefs))
+	for _, h := range hrefs {
+		h = strings.TrimSpace(h)
+		if h == "" || h[0] == '#' {
+			continue
+		}
+		ref, err := url.Parse(h)
+		if err != nil || ref.Scheme != "" || ref.Host != "" {
+			continue // enlace externo o href inválido
+		}
+		p := strings.TrimPrefix(base.ResolveReference(ref).Path, "/")
+		if len(p) <= 2 || !strings.HasPrefix(p, "C/") || p == self {
+			continue // no es artículo, vacío, o enlace a sí mismo
+		}
+		out[p] = struct{}{}
+	}
+	return out
+}
+
+// applyLinkCounts vuelca el conteo de enlaces entrantes a docs.links en UNA
+// pasada: carga el mapa en una tabla temporal (PK por ruta) y hace un único
+// UPDATE con subquery correlacionada. Evita un UPDATE por fila (docs.path no
+// está indexado) y el escaneo cuadrático que eso implicaría.
+func applyLinkCounts(db *sql.DB, counts map[string]uint32) error {
+	if len(counts) == 0 {
+		return nil
+	}
+	if _, err := db.Exec(`CREATE TEMP TABLE lc(path TEXT PRIMARY KEY, n INTEGER NOT NULL)`); err != nil {
+		return err
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`INSERT OR IGNORE INTO lc(path, n) VALUES(?, ?)`)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	for p, n := range counts {
+		if _, err := stmt.Exec(p, int64(n)); err != nil {
+			stmt.Close()
+			tx.Rollback()
+			return err
+		}
+	}
+	stmt.Close()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`UPDATE docs SET links = COALESCE((SELECT n FROM lc WHERE lc.path = docs.path), 0)`); err != nil {
+		return err
+	}
+	_, err = db.Exec(`DROP TABLE lc`)
+	return err
 }
 
 // inserter agrupa las inserciones en transacciones de `batch` documentos con

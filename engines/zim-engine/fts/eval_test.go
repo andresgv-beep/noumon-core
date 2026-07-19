@@ -14,6 +14,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -140,6 +141,65 @@ func TestRelevanceEval(t *testing.T) {
 	}
 	if mrr < evalMinMRR {
 		t.Errorf("MRR=%.3f por debajo del umbral %.3f", mrr, evalMinMRR)
+	}
+}
+
+// TestLinkPriorBoostsAuthority aísla el prior de enlaces (§2): un artículo "hub"
+// muy enlazado desde el cuerpo de otros debe ganar a uno marginal que por bm25
+// solo le empataría o ganaría. Verifica que (a) el conteo de enlaces se puebla en
+// el Build y (b) el re-ranking los usa.
+func TestLinkPriorBoostsAuthority(t *testing.T) {
+	saved := linkPriorK
+	defer func() { linkPriorK = saved }()
+
+	// Dos artículos que casan "solar": el marginal lo menciona MÁS (bm25 mayor)
+	// pero nadie lo enlaza; el hub lo menciona menos pero recibe muchos enlaces.
+	entries := []mockEntry{
+		{"Panel_marginal", "Panel marginal", art("Panel solar solar solar de un caso muy poco común y marginal.")},
+		{"Central_hub", "Central", art("Una central de energía solar.")},
+	}
+	for i := 0; i < 40; i++ { // 40 artículos enlazan al hub (sin mencionar "solar")
+		n := strconv.Itoa(i)
+		entries = append(entries, mockEntry{"Ref" + n, "Ref " + n,
+			`<html><body><p>Documento de referencia. Ver <a href="Central_hub">la central</a>.</p></body></html>`})
+	}
+	var u [16]byte
+	u[0] = 0x55
+	a := mockArchive{uuid: u, entries: entries}
+
+	dir := filepath.Join(t.TempDir(), "idx")
+	if _, err := Build(context.Background(), a, dir, BuildOptions{Language: "es", StoreBody: true, BatchSize: 8}); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	idx, err := Open(dir, a)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer idx.Close()
+
+	linkPriorK = 0 // prior apagado: manda el bm25
+	off, _, err := idx.Search("solar", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkPriorK = 0.3 // prior fuerte: la autoridad debe imponerse
+	on, _, err := idx.Search("solar", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rOff := rankOf(off, "C/Central_hub")
+	rOn := rankOf(on, "C/Central_hub")
+	if rOff == 0 || rOn == 0 {
+		t.Fatalf("el hub debe aparecer en ambos: sin_prior=%d con_prior=%d", rOff, rOn)
+	}
+	// Sin prior el marginal (más 'solar') va delante; con prior el hub lo adelanta.
+	if rOn >= rOff {
+		t.Errorf("el prior debía mejorar el rango del hub: sin_prior=%d con_prior=%d", rOff, rOn)
+	}
+	if rankOf(on, "C/Central_hub") > rankOf(on, "C/Panel_marginal") {
+		t.Errorf("con prior el hub (%d) debía ir por delante del marginal (%d)",
+			rankOf(on, "C/Central_hub"), rankOf(on, "C/Panel_marginal"))
 	}
 }
 

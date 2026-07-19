@@ -3,10 +3,36 @@ package fts
 import (
 	"database/sql"
 	"fmt"
+	"math"
+	"os"
+	"sort"
+	"strconv"
 
 	"github.com/andresgv-beep/zim-engine/analyzer"
 	"github.com/andresgv-beep/zim-engine/zim"
 )
+
+// linkPriorK calibra el peso del prior de enlaces en el ranking final:
+//
+//	score = bm25 * (1 + linkPriorK * ln(1 + enlaces_entrantes))
+//
+// Con links=0 el factor es 1 (índices sin poblar rankean por bm25 puro, igual
+// que antes → compatible hacia atrás). Se afina con datos reales; ZIM_LINK_PRIOR_K
+// permite probar valores sin recompilar (el boost se aplica en la búsqueda, así
+// que se calibra sin reindexar). k=0 desactiva el prior.
+var linkPriorK = envFloat("ZIM_LINK_PRIOR_K", 0.08)
+
+func envFloat(key string, def float64) float64 {
+	if v, err := strconv.ParseFloat(os.Getenv(key), 64); err == nil && v >= 0 {
+		return v
+	}
+	return def
+}
+
+// candMultiplier: cuántos candidatos por bm25 se traen antes de re-rankear con el
+// prior. Un artículo muy enlazado puede subir desde algo más abajo de la lista
+// bm25, así que se sobre-lee y se recorta a `limit` tras aplicar el boost.
+const candMultiplier = 20
 
 // Hit: un resultado full-text. Path es el FullPath de la entrada ("C/Saturno"), que
 // el shim recorta a la ruta pública. Snippet ya viene resaltado con <mark>…</mark>
@@ -110,34 +136,61 @@ func (i *Index) Search(query string, limit int) ([]Hit, uint64, error) {
 // propio si el índice guardó body) y el total de coincidencias.
 //
 // Pesos bm25 por columna en el orden del esquema: title, body, title_st,
-// body_st. Título ×3 en ambas formas.
+// body_st. Título ×3 en ambas formas. Sobre el bm25 se aplica el prior de
+// enlaces (§2): se traen candMultiplier×limit candidatos por bm25, se re-rankean
+// por score·(1+k·ln(1+links)) y se recorta a limit. El re-ranking va en Go para
+// no depender de funciones matemáticas de SQLite (modernc no las trae siempre).
 func (i *Index) runMatch(match string, limit int, origToks, stemToks []string) ([]Hit, uint64, error) {
+	candLimit := limit * candMultiplier
+	if candLimit < 100 {
+		candLimit = 100
+	}
 	rows, err := i.db.Query(`
-		SELECT d.path, d.title, COALESCE(d.body, ''), -bm25(fts, 3.0, 1.0, 3.0, 1.0) AS score
+		SELECT d.path, d.title, COALESCE(d.body, ''), -bm25(fts, 3.0, 1.0, 3.0, 1.0) AS score, d.links
 		FROM fts JOIN docs d ON d.id = fts.rowid
 		WHERE fts MATCH ?
 		ORDER BY score DESC
-		LIMIT ?`, match, limit)
+		LIMIT ?`, match, candLimit)
 	if err != nil {
 		return nil, 0, fmt.Errorf("fts match: %w", err)
 	}
 	defer rows.Close()
 
-	hits := make([]Hit, 0, limit)
+	// Candidato: hit + su body (para el snippet, que se calcula solo para los que
+	// sobrevivan al recorte). El score ya lleva el boost de enlaces aplicado.
+	type cand struct {
+		h    Hit
+		body string
+	}
+	cands := make([]cand, 0, candLimit)
 	for rows.Next() {
 		var h Hit
 		var body string
-		if err := rows.Scan(&h.Path, &h.Title, &body, &h.Score); err != nil {
+		var links int64
+		if err := rows.Scan(&h.Path, &h.Title, &body, &h.Score, &links); err != nil {
 			return nil, 0, err
 		}
-		// Snippet propio sobre el body original almacenado (fts5.go). Sin
-		// StoreBody body viene vacío y el snippet queda "" — el shim lo rellena
-		// leyendo el .zim, mismo contrato que con bleve sin term vectors.
-		h.Snippet = makeSnippet(i.lang, body, origToks, stemToks)
-		hits = append(hits, h)
+		h.Score *= 1 + linkPriorK*math.Log(1+float64(links))
+		cands = append(cands, cand{h, body})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
+	}
+
+	// Re-ranking por el score ya potenciado; estable para que empates conserven el
+	// orden bm25 (que ya venía ordenado de SQL).
+	sort.SliceStable(cands, func(a, b int) bool { return cands[a].h.Score > cands[b].h.Score })
+	if len(cands) > limit {
+		cands = cands[:limit]
+	}
+
+	hits := make([]Hit, 0, len(cands))
+	for _, c := range cands {
+		// Snippet propio sobre el body original almacenado (fts5.go). Sin
+		// StoreBody body viene vacío y el snippet queda "" — el shim lo rellena
+		// leyendo el .zim, mismo contrato que con bleve sin term vectors.
+		c.h.Snippet = makeSnippet(i.lang, c.body, origToks, stemToks)
+		hits = append(hits, c.h)
 	}
 
 	// Total de coincidencias (no solo las devueltas), para el "N resultados" de

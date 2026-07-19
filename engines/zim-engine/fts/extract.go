@@ -66,9 +66,20 @@ func isBlock(a atom.Atom) bool {
 // del ZIM (e.Title()), la misma fuente que usa el TitleIndex del suggest — una
 // sola fuente de verdad, y el FTS y el suggest no pueden discrepar.
 func extractText(r io.Reader) (body string) {
+	body, _ = extractTextAndLinks(r)
+	return body
+}
+
+// extractTextAndLinks devuelve, además del cuerpo, los href de los enlaces <a>
+// que aparecen DENTRO del contenido (los de nav/footer/referencias no cuentan:
+// skipNode ya poda ese subárbol antes de llegar aquí). Es la materia prima del
+// prior de enlaces (MEJORAS-BUSQUEDA.md §2): un artículo muy enlazado desde el
+// cuerpo de otros es más "autoridad". Los href van crudos (sin resolver); la
+// resolución a ruta canónica la hace el Build, que conoce la ruta del artículo.
+func extractTextAndLinks(r io.Reader) (body string, hrefs []string) {
 	doc, err := html.Parse(io.LimitReader(r, maxArticleBytes))
 	if err != nil {
-		return ""
+		return "", nil
 	}
 
 	var sb strings.Builder
@@ -78,6 +89,11 @@ func extractText(r io.Reader) (body string) {
 		case html.ElementNode:
 			if skipNode(n) {
 				return
+			}
+			if n.DataAtom == atom.A {
+				if h := nodeAttr(n, "href"); h != "" {
+					hrefs = append(hrefs, h)
+				}
 			}
 			if isBlock(n.DataAtom) {
 				sb.WriteByte(' ')
@@ -95,7 +111,17 @@ func extractText(r io.Reader) (body string) {
 	walk(doc)
 
 	// Colapsa todo el blanco (espacios, saltos, tabs) a un único espacio.
-	return strings.Join(strings.Fields(sb.String()), " ")
+	return strings.Join(strings.Fields(sb.String()), " "), hrefs
+}
+
+// nodeAttr devuelve el valor del atributo key del nodo, o "" si no está.
+func nodeAttr(n *html.Node, key string) string {
+	for _, a := range n.Attr {
+		if a.Key == key {
+			return a.Val
+		}
+	}
+	return ""
 }
 
 // skipNode: true si el nodo (y su subárbol) no debe aportar texto.
