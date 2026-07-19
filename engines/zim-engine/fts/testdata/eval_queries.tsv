@@ -1,0 +1,18 @@
+# Set de evaluación de relevancia del motor FTS5 (MEJORAS-BUSQUEDA.md §0).
+# Formato:  consulta <TAB> path_esperado_en_top3
+# El corpus vive en eval_test.go (evalArchive). Sirve de red de seguridad:
+# si un cambio de ranking/consulta baja hit@3 o MRR por debajo del umbral
+# registrado en eval_test.go, el test falla.
+#
+# Casos: término simple, multiidioma AND (excluye "solo-historia"), fold de
+# tildes, stemming (plural), y coincidencia por cuerpo.
+napoleón	C/Napoleón Bonaparte
+historia de napoleón	C/Napoleón Bonaparte
+revolución francesa	C/Revolución Francesa
+guerras napoleónicas	C/Napoleón Bonaparte
+energía solar	C/Energía solar
+energia solar	C/Energía solar
+sistema operativo	C/Sistema operativo
+sistemas operativos	C/Sistema operativo
+gatos	C/Gato
+computadora	C/Sistema operativo
