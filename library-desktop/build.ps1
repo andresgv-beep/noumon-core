@@ -13,22 +13,27 @@ $Bin     = Join-Path $Desktop 'bin'
 $env:PATH = "$env:PATH;$env:USERPROFILE\go\bin"
 $env:GOCACHE = Join-Path $env:TEMP 'noumon-go-build-cache'
 $env:GOTELEMETRY = 'off'
-$ClientResource = Join-Path $Desktop 'noumon_icon.syso'
-$ClientIcon = Join-Path $Desktop 'assets\noumon.ico'
+$IconResource = Join-Path $Desktop 'noumon_icon.syso'
+$ClientIcon = Join-Path $Root 'icons\noumon_icon_client.png'
+$PanelIcon  = Join-Path $Root 'icons\noumon-control-panel.png'
 
 function Assert-NativeSuccess([string]$Step) {
   if ($LASTEXITCODE -ne 0) { throw "$Step fallo con codigo $LASTEXITCODE" }
 }
 
-function New-ClientResource {
-  if (-not (Test-Path -LiteralPath $ClientIcon -PathType Leaf)) { throw "Falta el icono del cliente: $ClientIcon" }
-  if (Test-Path -LiteralPath $ClientResource) { Remove-Item -LiteralPath $ClientResource -Force }
+# El .syso queda en el directorio del paquete y go build lo enlaza solo, por eso
+# se genera antes de cada exe (cliente o panel) y se borra al terminar.
+function New-IconResource([string]$Icon) {
+  if (-not (Test-Path -LiteralPath $Icon -PathType Leaf)) { throw "Falta el icono: $Icon" }
+  if (Test-Path -LiteralPath $IconResource) { Remove-Item -LiteralPath $IconResource -Force }
   Push-Location $Desktop
   try {
-    go run ./cmd/iconresource -icon $ClientIcon -out $ClientResource
-    Assert-NativeSuccess 'Recurso de icono del cliente'
+    go run ./cmd/iconresource -icon $Icon -out $IconResource
+    Assert-NativeSuccess 'Recurso de icono'
   } finally { Pop-Location }
 }
+
+function New-ClientResource { New-IconResource $ClientIcon }
 
 if ($Mode -eq 'remote') {
   Write-Host '[1/1] Cliente de escritorio remoto...' -ForegroundColor Cyan
@@ -39,7 +44,7 @@ if ($Mode -eq 'remote') {
     Assert-NativeSuccess 'Cliente remoto'
   } finally {
     Pop-Location
-    if (Test-Path -LiteralPath $ClientResource) { Remove-Item -LiteralPath $ClientResource -Force }
+    if (Test-Path -LiteralPath $IconResource) { Remove-Item -LiteralPath $IconResource -Force }
   }
   Write-Host "OK -> $Desktop\noumon-client.exe" -ForegroundColor Green
   exit 0
@@ -95,15 +100,19 @@ try {
   Assert-NativeSuccess 'Noumon'
 } finally {
   Pop-Location
-  if (Test-Path -LiteralPath $ClientResource) { Remove-Item -LiteralPath $ClientResource -Force }
+  if (Test-Path -LiteralPath $IconResource) { Remove-Item -LiteralPath $IconResource -Force }
 }
 
 Write-Host '[8/10] Library Control Panel nativo...' -ForegroundColor Cyan
+New-IconResource $PanelIcon
 Push-Location $Desktop
 try {
   go build -tags 'desktop production' -ldflags '-H windowsgui -X main.interfaceMode=panel' -o 'library-control-panel.exe' .
   Assert-NativeSuccess 'Library Control Panel'
-} finally { Pop-Location }
+} finally {
+  Pop-Location
+  if (Test-Path -LiteralPath $IconResource) { Remove-Item -LiteralPath $IconResource -Force }
+}
 
 Write-Host '[9/10] Avisos de software de terceros...' -ForegroundColor Cyan
 $Notices = Join-Path $Root 'noumon\public\THIRD-PARTY-NOTICES.txt'

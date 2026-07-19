@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+if [ -d /run/systemd/system ]; then
+  systemctl daemon-reload || true
+fi
+# Los datos del usuario (/var/lib/noumon: pool de ZIMs, indices, mapas) se
+# conservan incluso en purge, igual que en Windows. Borrado manual si se desea.
+exit 0

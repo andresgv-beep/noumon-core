@@ -1,0 +1,17 @@
+[Unit]
+Description=Noumon Server (biblioteca offline)
+After=network.target
+
+[Service]
+Type=simple
+User=noumon
+Group=noumon
+Environment=NOUMON_LIBRARY_DATA=/var/lib/noumon
+WorkingDirectory=/opt/noumon/bin
+ExecStart=/opt/noumon/bin/library-supervisor run
+Restart=on-failure
+RestartSec=3
+# El supervisor ya reinicia core/translate-wrap; systemd solo vigila al supervisor.
+
+[Install]
+WantedBy=multi-user.target

@@ -168,3 +168,11 @@ La tarea solo está terminada cuando:
 - **“Maps sigue mostrando el HTML antiguo”**: comparar `library-server/core/maps-www/index.html` con `Program Files/Noumon/bin/maps-www/index.html`.
 - **“El servicio funciona pero la ventana no cambió”**: cerrar y volver a abrir `noumon.exe`.
 - **“Solo generé noumon-client.exe”**: se usó el modo `remote`; para esta instalación se necesita `all-in-one`.
+
+## Distribución a otras máquinas
+
+Esta guía cubre el ciclo de desarrollo en esta máquina. Para generar el
+instalador de usuario final (`NoumonSetup-<version>.exe`, también válido como
+actualizador sin conexión) y las fases Linux/ARM, ver `DISTRIBUCION.md` en la
+raíz del repositorio. Regla corta: cada compilación destinada a máquinas
+reales termina con `scripts\make-installer-windows.ps1`.

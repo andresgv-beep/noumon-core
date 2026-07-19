@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+if ! getent passwd noumon >/dev/null 2>&1; then
+  useradd --system --home-dir /var/lib/noumon --shell /usr/sbin/nologin noumon
+fi
+mkdir -p /var/lib/noumon
+chown -R noumon:noumon /var/lib/noumon
+
+if [ -d /run/systemd/system ]; then
+  systemctl daemon-reload || true
+  systemctl enable noumon.service >/dev/null 2>&1 || true
+  # restart cubre tanto instalacion nueva como actualizacion en sitio
+  systemctl restart noumon.service || true
+fi
+
+echo "Noumon instalado. Interfaz: http://localhost:8090  Panel: http://localhost:8090/panel/"
+exit 0
