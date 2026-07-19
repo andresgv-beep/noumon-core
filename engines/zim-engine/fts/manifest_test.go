@@ -26,8 +26,9 @@ func TestManifestMatches(t *testing.T) {
 	if err := m.Matches(a); err != nil {
 		t.Fatalf("mismo ZIM debería casar: %v", err)
 	}
-	if m.Analyzer != "es" {
-		t.Errorf("analizador para spa = %q, quiero es", m.Analyzer)
+	// spa → es (NormLang) y con stemmer: el nombre descriptivo del análisis FTS5.
+	if m.Analyzer != "fts5/unicode61+snowball(es)" {
+		t.Errorf("analizador para spa = %q, quiero fts5/unicode61+snowball(es)", m.Analyzer)
 	}
 
 	otro := fakeArchive{uuid: [16]byte{0x99}, count: 8606}

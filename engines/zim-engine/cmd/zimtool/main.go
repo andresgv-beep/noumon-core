@@ -106,7 +106,10 @@ func main() {
 		if len(os.Args) < 4 {
 			usage()
 		}
-		store := !(len(os.Args) > 4 && os.Args[4] == "nostore")
+		// Por defecto contentless, IGUAL que el Core en producción (runIndex no
+		// fija StoreBody). "store" fuerza guardar docs.body para inspeccionar
+		// snippets desde el índice sin releer el .zim.
+		store := len(os.Args) > 4 && os.Args[4] == "store"
 		err = ftsIndex(a, os.Args[3], store)
 	default:
 		usage()
@@ -119,7 +122,7 @@ func main() {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "uso: zimtool info|ls|at|cat|meta|suggest|bench <archivo.zim> [args]")
-	fmt.Fprintln(os.Stderr, "     zimtool index <archivo.zim> <dir-índice>   construye el índice full-text (C2)")
+	fmt.Fprintln(os.Stderr, "     zimtool index <archivo.zim> <dir-índice> [store]   construye el índice full-text (C2; contentless salvo 'store')")
 	fmt.Fprintln(os.Stderr, "     zimtool fts   <archivo.zim> <dir-índice> <consulta> [n]  busca (verifica índice↔zim)")
 	os.Exit(2)
 }

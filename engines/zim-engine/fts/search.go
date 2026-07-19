@@ -1,12 +1,11 @@
 package fts
 
 import (
+	"database/sql"
 	"fmt"
-	"strings"
 
+	"github.com/andresgv-beep/zim-engine/analyzer"
 	"github.com/andresgv-beep/zim-engine/zim"
-
-	"github.com/blevesearch/bleve/v2"
 )
 
 // Hit: un resultado full-text. Path es el FullPath de la entrada ("C/Saturno"), que
@@ -19,23 +18,25 @@ type Hit struct {
 	Score   float64
 }
 
-// Index: un índice bleve abierto para consulta. Seguro para uso concurrente (bleve
-// serializa internamente sus lecturas).
+// Index: un índice FTS5 abierto para consulta. Seguro para uso concurrente
+// (database/sql gestiona su pool; el .db se abre en solo lectura).
 type Index struct {
-	idx      bleve.Index
+	db       *sql.DB
 	manifest Manifest
+	lang     string // normalizado, del manifiesto: gobierna stemming de consulta
 }
 
 // Open abre un índice ya construido en dir y VERIFICA que corresponde a ese
 // archive (FTS-AUDIT BUG-1). Es la cerradura del camino de apertura: escribir un
 // manifiesto no es verificarlo, igual que esconder un botón no es un permiso.
-// Sin esta comprobación, copiar el .bleve equivocado al pool sirve resultados
+// Sin esta comprobación, copiar el .db equivocado al pool sirve resultados
 // fantasma sin una sola queja — y todo el diseño de índices distribuibles
 // (INDEXER.md) depende de que esto no pueda pasar.
 //
 // Errores:
 //   - manifiesto ausente  → build interrumpido o índice pre-manifiesto: reindexar
 //   - Matches falla       → índice de otro ZIM, otro entryCount u otro esquema
+//     (los índices bleve de la era anterior caen aquí: schema v1 ≠ v2 → reindexar)
 func Open(dir string, a zim.Archive) (*Index, error) {
 	// Reconcile primero (INDEXER-CRASH-SAFETY.md, Capa 2): tras un arranque sucio
 	// puede haber un build completo sin cambiar (.new) que hay que promover, o
@@ -51,56 +52,82 @@ func Open(dir string, a zim.Archive) (*Index, error) {
 	if err := m.Matches(a); err != nil {
 		return nil, err
 	}
-	idx, err := bleve.Open(dir)
+	db, err := openReadDB(dir)
 	if err != nil {
 		return nil, err
 	}
-	return &Index{idx: idx, manifest: m}, nil
+	return &Index{db: db, manifest: m, lang: analyzer.NormLang(m.Language)}, nil
 }
 
 // Manifest devuelve el manifiesto con el que se abrió el índice (ya verificado).
 func (i *Index) Manifest() Manifest { return i.manifest }
 
-func (i *Index) Close() error { return i.idx.Close() }
+func (i *Index) Close() error { return i.db.Close() }
 
 // DocCount devuelve cuántos artículos hay indexados.
-func (i *Index) DocCount() (uint64, error) { return i.idx.DocCount() }
+func (i *Index) DocCount() (uint64, error) {
+	var n uint64
+	err := i.db.QueryRow(`SELECT count(*) FROM docs`).Scan(&n)
+	return n, err
+}
 
 // Search ejecuta la consulta full-text y devuelve los hits ordenados por rank
-// (BM25) y el total de coincidencias. El match sobre título va potenciado ×3: un
-// artículo cuyo TÍTULO casa pesa más que uno que solo menciona el término. Esto
+// (BM25) y el total de coincidencias. El match sobre título va potenciado ×3
+// vía los pesos de bm25() — mismo boost que el titleQ de la era bleve. Esto
 // deja el orden fino al scoring del shim, igual que hoy con kiwix.
+//
+// OJO con el signo: bm25() de FTS5 devuelve valores NEGATIVOS (más negativo =
+// más relevante; se ordena ASC). Aquí se voltea a positivo (-bm25) en el SQL,
+// de una vez y para siempre: Hit.Score es "más grande = mejor", como con bleve,
+// y el prior de enlaces de MEJORAS-BUSQUEDA.md podrá multiplicar sobre un score
+// positivo sin trampas de signo.
 func (i *Index) Search(query string, limit int) ([]Hit, uint64, error) {
 	if limit <= 0 {
 		limit = 10
 	}
+	match := buildMatchQuery(i.lang, query)
+	if match == "" { // consulta sin ningún token (solo puntuación…)
+		return nil, 0, nil
+	}
 
-	bodyQ := bleve.NewMatchQuery(query)
-	bodyQ.SetField("body")
-	titleQ := bleve.NewMatchQuery(query)
-	titleQ.SetField("title")
-	titleQ.SetBoost(3)
-
-	req := bleve.NewSearchRequestOptions(bleve.NewDisjunctionQuery(bodyQ, titleQ), limit, 0, false)
-	req.Fields = []string{"title"}
-	req.Highlight = bleve.NewHighlight()
-	req.Highlight.AddField("body")
-
-	res, err := i.idx.Search(req)
+	// Pesos bm25 por columna en el orden del esquema: title, body, title_st,
+	// body_st. Título ×3 en ambas formas.
+	rows, err := i.db.Query(`
+		SELECT d.path, d.title, COALESCE(d.body, ''), -bm25(fts, 3.0, 1.0, 3.0, 1.0) AS score
+		FROM fts JOIN docs d ON d.id = fts.rowid
+		WHERE fts MATCH ?
+		ORDER BY score DESC
+		LIMIT ?`, match, limit)
 	if err != nil {
+		return nil, 0, fmt.Errorf("fts match: %w", err)
+	}
+	defer rows.Close()
+
+	origToks := analyzer.Tokenize(query)
+	stemToks := analyzer.Analyze(i.lang, query)
+
+	hits := make([]Hit, 0, limit)
+	for rows.Next() {
+		var h Hit
+		var body string
+		if err := rows.Scan(&h.Path, &h.Title, &body, &h.Score); err != nil {
+			return nil, 0, err
+		}
+		// Snippet propio sobre el body original almacenado (fts5.go). Sin
+		// StoreBody body viene vacío y el snippet queda "" — el shim lo rellena
+		// leyendo el .zim, mismo contrato que con bleve sin term vectors.
+		h.Snippet = makeSnippet(i.lang, body, origToks, stemToks)
+		hits = append(hits, h)
+	}
+	if err := rows.Err(); err != nil {
 		return nil, 0, err
 	}
 
-	hits := make([]Hit, 0, len(res.Hits))
-	for _, h := range res.Hits {
-		hit := Hit{Path: h.ID, Score: h.Score}
-		if t, ok := h.Fields["title"].(string); ok {
-			hit.Title = t
-		}
-		if frags, ok := h.Fragments["body"]; ok && len(frags) > 0 {
-			hit.Snippet = strings.TrimSpace(frags[0])
-		}
-		hits = append(hits, hit)
+	// Total de coincidencias (no solo las devueltas), para el "N resultados" de
+	// la UI — bleve lo regalaba en res.Total; FTS5 lo cobra con un count aparte.
+	var total uint64
+	if err := i.db.QueryRow(`SELECT count(*) FROM fts WHERE fts MATCH ?`, match).Scan(&total); err != nil {
+		return nil, 0, err
 	}
-	return hits, res.Total, nil
+	return hits, total, nil
 }

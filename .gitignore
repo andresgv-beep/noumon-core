@@ -22,6 +22,9 @@ go.work.sum
 # artefactos de datos del motor (nunca al repo; se regeneran)
 **/*.zim
 **/*.tix
+**/*.fts/
+**/*.fts.new/
+**/*.fts.old/
 **/*.bleve/
 **/*.zim.meta
 library-server/core/www-client/

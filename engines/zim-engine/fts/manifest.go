@@ -21,10 +21,14 @@ import (
 // ManifestName es el nombre del fichero de manifiesto dentro del dir del índice.
 const ManifestName = "zim-fts.json"
 
-// SchemaVersion versiona el esquema del documento indexado (campos + mapping).
-// Si cambia extract.go o buildIndexMapping de forma incompatible, se incrementa:
+// SchemaVersion versiona el esquema del índice (motor + campos + análisis).
+// Si cambia extract.go o el esquema FTS5 de forma incompatible, se incrementa:
 // los índices con schema viejo se rechazan y se reindexan.
-const SchemaVersion = 1
+//
+//	v1 — bleve (histórico). v2 — SQLite FTS5 contentless + columnas *_st
+//	(MIGRACION-FTS5.md). Un índice bleve abierto por este binario falla en
+//	Matches con "esquema v1 ≠ v2: reindexar", que es exactamente lo que toca.
+const SchemaVersion = 2
 
 type Manifest struct {
 	Schema     int    `json:"schema"`
@@ -109,7 +113,7 @@ func newManifest(a zim.Archive, opts BuildOptions, t Tally) Manifest {
 		Skipped:    t.Skipped,
 		Failed:     t.Failed,
 		Language:   opts.Language,
-		Analyzer:   analyzerFor(opts.Language),
+		Analyzer:   AnalyzerName(opts.Language),
 		StoreBody:  opts.StoreBody,
 		BuiltAt:    time.Now().UTC().Format(time.RFC3339),
 	}

@@ -4,25 +4,34 @@ package fts
 // esto se pone rojo con el número del bug delante.
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/blevesearch/bleve/v2"
 )
 
-// buildTinyIndex crea un índice bleve mínimo válido en dir (sin pasar por Build,
+// buildTinyIndex crea un índice FTS5 mínimo válido en dir (sin pasar por Build,
 // que necesita un Archive real) y le escribe el manifiesto que se le pida.
 func buildTinyIndex(t *testing.T, dir string, m *Manifest) {
 	t.Helper()
-	idx, err := bleve.New(dir, bleve.NewIndexMapping())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := openBuildDB(dir)
 	if err != nil {
-		t.Fatalf("bleve.New: %v", err)
+		t.Fatalf("openBuildDB: %v", err)
 	}
-	if err := idx.Index("C/Doc", map[string]string{"title": "Doc", "body": "hola mundo"}); err != nil {
-		t.Fatalf("index: %v", err)
+	ins := &inserter{db: db, storeBody: true, batch: 16}
+	if err := ins.add("C/Doc", indexDoc{
+		Title: "Doc", Body: "hola mundo",
+		TitleSt: "doc", BodySt: "hola mund",
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
 	}
-	if err := idx.Close(); err != nil {
+	if err := ins.finish(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if err := db.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
 	if m != nil {

@@ -41,7 +41,7 @@ func (s *Server) kget(u string) (*http.Response, error) {
 
 // absResource resuelve un recurso relativo del ZIM contra la URL del artículo.
 func absResource(href string, base *url.URL) string {
-	if href == "" || isExternal(href) {
+	if href == "" || isExternal(href) || base == nil {
 		return ""
 	}
 	ref, err := url.Parse(href)

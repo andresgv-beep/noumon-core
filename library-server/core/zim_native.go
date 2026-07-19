@@ -54,7 +54,7 @@ type nativeZims struct {
 
 type nativeArchive struct {
 	arc   zim.Archive
-	path  string    // ruta del .zim en el pool (el índice .bleve vive al lado)
+	path  string    // ruta del .zim en el pool (el índice .fts vive al lado)
 	mtime time.Time // mtime del .zim: Last-Modified (el archivo entero es un snapshot)
 }
 

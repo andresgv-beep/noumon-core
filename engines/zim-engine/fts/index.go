@@ -2,6 +2,7 @@ package fts
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -10,31 +11,24 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/andresgv-beep/zim-engine/analyzer"
 	"github.com/andresgv-beep/zim-engine/zim"
 
-	"github.com/blevesearch/bleve/v2"
-	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
-	"github.com/blevesearch/bleve/v2/analysis/lang/ar"
-	"github.com/blevesearch/bleve/v2/analysis/lang/de"
-	"github.com/blevesearch/bleve/v2/analysis/lang/en"
-	"github.com/blevesearch/bleve/v2/analysis/lang/es"
-	"github.com/blevesearch/bleve/v2/analysis/lang/fr"
-	"github.com/blevesearch/bleve/v2/analysis/lang/it"
-	"github.com/blevesearch/bleve/v2/analysis/lang/nl"
-	"github.com/blevesearch/bleve/v2/analysis/lang/pt"
-	"github.com/blevesearch/bleve/v2/analysis/lang/ru"
-	"github.com/blevesearch/bleve/v2/mapping"
+	_ "modernc.org/sqlite" // SQLite puro Go, sin CGO — el mismo driver del Core
 )
 
 // ErrIncompleteBuild: los errores reales del build superaron el umbral. El índice
 // mentiría por omisión, así que no se escribe manifiesto (FTS-AUDIT BUG-2).
 var ErrIncompleteBuild = errors.New("fts: build incompleto")
 
-// docFields: nombres de campo del documento indexado. El ID del documento bleve es
-// el FullPath de la entrada ("C/Saturno"), así que no hace falta guardarlo aparte.
+// indexDoc: un artículo listo para insertar. Los campos *_st (stem+fold) se
+// calculan en los WORKERS: el stemming es CPU y ahí ya estamos en paralelo; el
+// consumidor único solo mete filas.
 type indexDoc struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
+	Title   string
+	Body    string
+	TitleSt string
+	BodySt  string
 }
 
 // Progress: avance del job de indexado, para pintar en la CLI o el Panel.
@@ -44,31 +38,36 @@ type Progress struct {
 	Total   uint32 // total de entradas del .zim
 }
 
-// BuildOptions configura el job. Language sale de M/Language del .zim; "" ⇒ standard.
+// BuildOptions configura el job. Language sale de M/Language del .zim; "" ⇒ sin
+// stemmer (solo columnas originales con fold del tokenizador).
 //
-// StoreBody: guardar el texto del artículo en el índice permite snippets resaltados
-// directamente de bleve, pero infla el índice (~76–109% del .zim medido). Con false
-// solo se indexa (searchable, no almacenado) y el snippet se regenera leyendo el
-// artículo del .zim al mostrar — mismo camino que fillMissingPreviews del shim.
+// StoreBody: guardar el texto del artículo en docs.body permite snippets
+// resaltados directamente del índice; con false solo se indexa (la FTS5 es
+// contentless: el índice invertido existe igual) y el snippet se regenera
+// leyendo el artículo del .zim al mostrar — mismo camino que
+// fillMissingPreviews del shim. A diferencia de bleve, aquí el coste de
+// StoreBody es UNA copia del texto (docs.body), no term vectors aparte.
 type BuildOptions struct {
 	Language   string
-	BatchSize  int // 0 ⇒ 512
+	BatchSize  int // 0 ⇒ 512; tamaño de transacción de inserción
 	StoreBody  bool
 	OnProgress func(Progress)
 }
 
-// Build crea (reconstruyendo desde cero) el índice bleve en dir a partir del
+// Build crea (reconstruyendo desde cero) el índice FTS5 en dir a partir del
 // archive. Devuelve cuántos artículos se indexaron. Cancelable por ctx (§17): un
 // job largo se corta limpio si se retira la colección o se apaga el proceso.
 func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (int, error) {
-	// ctx interno cancelable: un fallo del Builder debe poder cortar workers y
-	// dispatcher aunque el llamante no cancele.
+	// ctx interno cancelable: un fallo del insertador debe poder cortar workers
+	// y dispatcher aunque el llamante no cancele.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	if opts.BatchSize <= 0 {
 		opts.BatchSize = 512
 	}
+	lang := analyzer.NormLang(opts.Language)
+
 	// Publicación atómica (INDEXER-CRASH-SAFETY.md, Capa 1): se construye en un
 	// directorio APARTE y solo al final se cambia por el bueno de golpe. Así el
 	// índice vivo NUNCA se toca durante el build → un apagón a mitad no lo corrompe
@@ -81,17 +80,16 @@ func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (i
 	if err := os.RemoveAll(building); err != nil { // restos de un build anterior
 		return 0, err
 	}
+	if err := os.MkdirAll(building, 0o755); err != nil {
+		return 0, err
+	}
 
-	// Builder offline de bleve: la API para índices write-once-read-many como este.
-	// A diferencia del índice "vivo" (bleve.New + Batch), el Builder consolida los
-	// segmentos al cerrar y NO deja huérfanos en disco — medido: el camino vivo
-	// dejaba ~2× de disco fantasma (28.8 vs 14.4 MiB en es_climate) hasta una
-	// purga asíncrona de scorch con la que no se puede contar.
-	bld, err := bleve.NewBuilder(building, buildIndexMapping(opts.Language, opts.StoreBody),
-		map[string]interface{}{"batchSize": opts.BatchSize})
+	db, err := openBuildDB(building)
 	if err != nil {
 		return 0, err
 	}
+	// El .db con journal OFF no sobrevive a un corte — da igual: un corte deja
+	// building sin manifiesto, que Reconcile reconoce como basura y borra.
 
 	// Namespace de artículos según esquema: 'C' moderno, 'A' legacy (§13).
 	artNS := byte('A')
@@ -102,30 +100,30 @@ func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (i
 	total := a.EntryCount()
 
 	// Pipeline paralelo: lo caro es la extracción (abrir entrada + descomprimir +
-	// parsear HTML), CPU-bound → pool de workers. El Builder recibe los docs desde
-	// un ÚNICO consumidor. El dispatch va por RANGOS
+	// parsear HTML) y ahora también el stemming, CPU-bound → pool de workers. La
+	// inserción SQL va por un ÚNICO consumidor. El dispatch va por RANGOS
 	// contiguos de la path pointer list: entradas vecinas comparten cluster, así
 	// cada worker explota la LRU en vez de pelearse por descomprimir lo mismo.
 	//
-	// Nota de determinismo: el ranking y el conteo son idénticos siempre (BM25 va
-	// por estadísticas del corpus, no por orden de inserción), pero el layout de
-	// segmentos del índice ya NO es byte-a-byte reproducible. Se acepta: el gate
-	// de determinismo §5 aplica al índice de títulos, no al FTS.
+	// Nota de determinismo: con inserción reordenada (abajo) el .db es
+	// reproducible en contenido para el mismo ZIM y opciones; el layout de
+	// páginas de SQLite no se garantiza byte a byte. Mismo criterio que con
+	// bleve: el gate de determinismo §5 aplica al índice de títulos, no al FTS.
 	const chunk = 64
 	workers := runtime.GOMAXPROCS(0)
 	if workers > 8 {
-		workers = 8 // el batcher y el disco saturan antes; más workers = RAM inútil
+		workers = 8 // el insertador y el disco saturan antes; más workers = RAM inútil
 	}
 
 	type doc struct {
 		id string
 		d  indexDoc
 	}
-	// Cada chunk viaja con su número de secuencia y el batcher REORDENA: los docs
-	// entran a bleve en el orden de la path pointer list aunque la extracción sea
-	// paralela — inserción determinista, independiente del número de workers. El
-	// buffer de pendientes queda acotado por construcción: como mucho hay
-	// (workers + cap(jobs)) chunks en vuelo fuera de orden.
+	// Cada chunk viaja con su número de secuencia y el consumidor REORDENA: los
+	// docs entran a SQLite en el orden de la path pointer list aunque la
+	// extracción sea paralela — inserción determinista, independiente del número
+	// de workers. El buffer de pendientes queda acotado por construcción: como
+	// mucho hay (workers + cap(jobs)) chunks en vuelo fuera de orden.
 	type job struct {
 		seq    int
 		lo, hi uint32
@@ -174,7 +172,13 @@ func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (i
 						skipped.Add(1) // sin texto útil (vacías, solo-imagen): legítimo
 						continue
 					}
-					out = append(out, doc{e.FullPath(), indexDoc{Title: e.Title(), Body: body}})
+					title := e.Title()
+					out = append(out, doc{e.FullPath(), indexDoc{
+						Title:   title,
+						Body:    body,
+						TitleSt: strings.Join(analyzer.Analyze(lang, title), " "),
+						BodySt:  strings.Join(analyzer.Analyze(lang, body), " "),
+					}})
 				}
 				select {
 				case results <- chunkResult{j.seq, out}:
@@ -204,6 +208,11 @@ func Build(ctx context.Context, a zim.Archive, dir string, opts BuildOptions) (i
 
 	go func() { wg.Wait(); close(results) }()
 
+	// Insertador: transacciones de opts.BatchSize docs. docs.body solo si
+	// StoreBody; la fila FTS5 (contentless) lleva rowid=docs.id para que la
+	// búsqueda pueda hacer JOIN.
+	ins := &inserter{db: db, storeBody: opts.StoreBody, batch: opts.BatchSize}
+
 	indexed, lastReport := 0, 0
 	next := 0
 	pending := map[int][]doc{}
@@ -219,11 +228,10 @@ consume:
 			delete(pending, next)
 			next++
 			for _, d := range ds {
-				if err := bld.Index(d.id, d.d); err != nil {
-					// FTS-AUDIT BUG-2: un fallo del Builder no es "un artículo
-					// menos" — es el índice roto (disco lleno, segmento corrupto).
-					// Antes: continue silencioso. Ahora: se aborta el build.
-					indexErr = fmt.Errorf("bld.Index(%s): %w", d.id, err)
+				if err := ins.add(d.id, d.d); err != nil {
+					// FTS-AUDIT BUG-2: un fallo del insertador no es "un artículo
+					// menos" — es el índice roto (disco lleno, .db corrupto).
+					indexErr = fmt.Errorf("insert(%s): %w", d.id, err)
 					cancel() // corta workers y dispatcher
 					break consume
 				}
@@ -246,31 +254,28 @@ consume:
 		Failed:     int(failed.Load()),
 	}
 
-	// Si el builder falló o el ctx cortó el job, un índice a medias no vale nada:
-	// cerrar el builder, borrar el directorio y reportar la causa real.
-	if indexErr != nil {
-		bld.Close()
+	// Si el insertador falló o el ctx cortó el job, un índice a medias no vale
+	// nada: cerrar el .db, borrar el directorio y reportar la causa real.
+	abort := func() {
+		db.Close()
 		os.RemoveAll(building)
+	}
+	if indexErr != nil {
+		abort()
 		return indexed, indexErr
 	}
 	if err := ctx.Err(); err != nil {
-		bld.Close()
-		os.RemoveAll(building)
+		abort()
 		return indexed, err
 	}
 
 	// CERO artículos indexados = no hay índice que escribir. Colecciones de solo
 	// vídeo/JS (p. ej. cursos interactivos) no tienen texto extraíble: la
-	// colección queda en búsqueda por título y ya. Además, el Builder de bleve
-	// (v2.6.0, scorch/builder.go:264) hace PANIC en Close() con 0 docs — se
-	// cierra tras recover y se limpia el directorio. Descubierto con un ZIM real
-	// (avanti-conics1: 215 entradas, 0 con texto).
+	// colección queda en búsqueda por título y ya. (Con FTS5 no hay el panic de
+	// Close-con-0-docs del Builder de bleve; el criterio de no publicar un
+	// índice vacío se conserva igualmente.)
 	if indexed == 0 {
-		func() {
-			defer func() { _ = recover() }()
-			bld.Close()
-		}()
-		os.RemoveAll(building)
+		abort()
 		return 0, nil
 	}
 
@@ -278,22 +283,30 @@ consume:
 	// 1% de los candidatos, el índice miente por omisión → no merece manifiesto.
 	// (Skipped no cuenta: una página sin texto es legítima, no un fallo.)
 	if tally.Candidates > 0 && tally.Failed*100 > tally.Candidates {
-		bld.Close()
-		os.RemoveAll(building)
+		abort()
 		return indexed, fmt.Errorf("%w: %d de %d candidatos fallaron (>1%%): índice incompleto, no se escribe manifiesto",
 			ErrIncompleteBuild, tally.Failed, tally.Candidates)
 	}
 
-	// Close del Builder = el merge final: consolida los segmentos y deja el índice
-	// compacto. Aún en el directorio de construcción, no en el vivo.
-	if err := bld.Close(); err != nil {
+	// Cierre = el merge final: 'optimize' consolida los b-trees de FTS5 en su
+	// forma más compacta (equivalente al Close del Builder de bleve). Aún en el
+	// directorio de construcción, no en el vivo.
+	if err := ins.finish(); err != nil {
+		abort()
+		return indexed, err
+	}
+	if _, err := db.Exec(`INSERT INTO fts(fts) VALUES('optimize')`); err != nil {
+		abort()
+		return indexed, fmt.Errorf("optimize: %w", err)
+	}
+	if err := db.Close(); err != nil {
 		return indexed, err
 	}
 
-	// El manifiesto va DESPUÉS del Close: su presencia certifica build completo Y
-	// honesto (el tally viaja dentro). Se escribe en building; a partir de aquí,
-	// "building con manifiesto" = índice listo para publicar (lo que Reconcile
-	// reconoce y promueve si un corte pilla el swap por medio).
+	// El manifiesto va DESPUÉS del cierre: su presencia certifica build completo
+	// Y honesto (el tally viaja dentro). Se escribe en building; a partir de
+	// aquí, "building con manifiesto" = índice listo para publicar (lo que
+	// Reconcile reconoce y promueve si un corte pilla el swap por medio).
 	if err := writeManifest(building, newManifest(a, opts, tally)); err != nil {
 		return indexed, err
 	}
@@ -310,95 +323,88 @@ consume:
 	return indexed, nil
 }
 
+// inserter agrupa las inserciones en transacciones de `batch` documentos con
+// statements preparados. add/finish son de un solo goroutine (el consumidor).
+type inserter struct {
+	db        *sql.DB
+	storeBody bool
+	batch     int
+
+	tx      *sql.Tx
+	insDoc  *sql.Stmt
+	insFts  *sql.Stmt
+	inBatch int
+}
+
+func (n *inserter) begin() error {
+	tx, err := n.db.Begin()
+	if err != nil {
+		return err
+	}
+	insDoc, err := tx.Prepare(`INSERT INTO docs(path, title, body) VALUES(?, ?, ?)`)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	insFts, err := tx.Prepare(`INSERT INTO fts(rowid, title, body, title_st, body_st) VALUES(?, ?, ?, ?, ?)`)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	n.tx, n.insDoc, n.insFts, n.inBatch = tx, insDoc, insFts, 0
+	return nil
+}
+
+func (n *inserter) add(path string, d indexDoc) error {
+	if n.tx == nil {
+		if err := n.begin(); err != nil {
+			return err
+		}
+	}
+	var body any // NULL si no se almacena; el índice invertido lo lleva igual
+	if n.storeBody {
+		body = d.Body
+	}
+	res, err := n.insDoc.Exec(path, d.Title, body)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	if _, err := n.insFts.Exec(id, d.Title, d.Body, d.TitleSt, d.BodySt); err != nil {
+		return err
+	}
+	n.inBatch++
+	if n.inBatch >= n.batch {
+		return n.finish()
+	}
+	return nil
+}
+
+func (n *inserter) finish() error {
+	if n.tx == nil {
+		return nil
+	}
+	n.insDoc.Close()
+	n.insFts.Close()
+	err := n.tx.Commit()
+	n.tx = nil
+	return err
+}
+
 func isHTML(mime string) bool {
 	return strings.HasPrefix(mime, "text/html")
 }
 
-// buildIndexMapping arma el mapping bleve: title y body como texto con el analizador
-// del idioma (stemming + stop words). El título se guarda siempre (barato, se pinta
-// en resultados); el body solo con storeBody — y con él los term vectors, que solo
-// sirven para el highlight de bleve sobre texto almacenado.
-func buildIndexMapping(lang string, storeBody bool) mapping.IndexMapping {
-	an := analyzerFor(lang)
-
-	field := func(store, vectors bool) *mapping.FieldMapping {
-		fm := bleve.NewTextFieldMapping()
-		fm.Analyzer = an
-		fm.Store = store
-		fm.IncludeTermVectors = vectors
-		return fm
+// AnalyzerName devuelve el nombre descriptivo del análisis que se usaría para
+// un código de idioma dado. Expuesto para diagnóstico (la CLI lo muestra al
+// indexar) y guardado en el manifiesto.
+func AnalyzerName(lang string) string {
+	l := analyzer.NormLang(lang)
+	if analyzer.HasStemmer(l) {
+		return "fts5/unicode61+snowball(" + l + ")"
 	}
-
-	dm := bleve.NewDocumentMapping()
-	dm.AddFieldMappingsAt("title", field(true, storeBody))
-	dm.AddFieldMappingsAt("body", field(storeBody, storeBody))
-
-	im := bleve.NewIndexMapping()
-	im.DefaultAnalyzer = an
-	im.DefaultMapping = dm
-	return im
-}
-
-// AnalyzerName devuelve el nombre del analizador bleve que se usaría para un código
-// de idioma dado. Expuesto para diagnóstico (p. ej. la CLI lo muestra al indexar).
-func AnalyzerName(lang string) string { return analyzerFor(lang) }
-
-// analyzerFor mapea el código M/Language (ISO 639-1 de 2 letras, o 639-3 de 3) al
-// analizador bleve. Idioma desconocido ⇒ standard (unicode + lowercase, sin stemmer)
-// para no romper nada: siempre indexa, aunque sin stemming específico.
-func analyzerFor(lang string) string {
-	switch normLang(lang) {
-	case "es":
-		return es.AnalyzerName
-	case "en":
-		return en.AnalyzerName
-	case "fr":
-		return fr.AnalyzerName
-	case "de":
-		return de.AnalyzerName
-	case "it":
-		return it.AnalyzerName
-	case "pt":
-		return pt.AnalyzerName
-	case "ru":
-		return ru.AnalyzerName
-	case "ar":
-		return ar.AnalyzerName
-	case "nl":
-		return nl.AnalyzerName
-	}
-	return standard.Name
-}
-
-// normLang normaliza el código: primer subtag, minúsculas, y traduce los 639-3 más
-// comunes a su 639-1. "spa" → "es", "es-419" → "es", "chu" → "chu" (→ standard).
-func normLang(lang string) string {
-	lang = strings.ToLower(strings.TrimSpace(lang))
-	if i := strings.IndexAny(lang, "-_"); i > 0 {
-		lang = lang[:i]
-	}
-	if len(lang) == 2 {
-		return lang
-	}
-	switch lang {
-	case "spa":
-		return "es"
-	case "eng":
-		return "en"
-	case "fra", "fre":
-		return "fr"
-	case "deu", "ger":
-		return "de"
-	case "ita":
-		return "it"
-	case "por":
-		return "pt"
-	case "rus":
-		return "ru"
-	case "ara":
-		return "ar"
-	case "nld", "dut":
-		return "nl"
-	}
-	return lang // 3-letras sin mapear → caerá en standard
+	return "fts5/unicode61"
 }

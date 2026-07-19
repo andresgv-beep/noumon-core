@@ -1,8 +1,8 @@
 // zim_fts.go — Full-text NATIVO (Fase C2, Milestone 2 · INDEXER.md).
 //
 // Detrás del mismo toggle ZIM_ENGINE=native, la búsqueda global deja de llamar
-// al /search de kiwix (Xapian) y consulta el índice bleve de cada colección: un
-// directorio `<nombre>.bleve/` AL LADO del .zim, con manifiesto verificado al
+// al /search de kiwix (Xapian) y consulta el índice FTS5 de cada colección: un
+// directorio `<nombre>.fts/` AL LADO del .zim, con manifiesto verificado al
 // abrir (fts.Open exige que uuid/entryCount/schema casen con el ZIM — FTS-AUDIT
 // BUG-1). Sin índice, la colección sigue buscándose por título/suggest — regla
 // de los tres pisos (INDEXER.md §0): el FTS es una capacidad que aparece, no un
@@ -27,10 +27,15 @@ import (
 )
 
 // ftsDirFor: convención del pool — el índice vive junto al .zim, mismo nombre,
-// extensión .bleve. Es la forma en que un índice precocinado en el PC se copia a
+// extensión .fts. Es la forma en que un índice precocinado en el PC se copia a
 // la Pi (INDEXER.md §2): dos ficheros al lado, cero configuración.
+//
+// Histórico: hasta la migración a SQLite FTS5 el sufijo era .bleve (el motor era
+// bleve). Se renombró a .fts al matar bleve — un dir llamado .bleve con un
+// fts.db de SQLite dentro engañaba. Los índices .bleve viejos no se descubren:
+// se reindexan (schema v1 ≠ v2 los rechazaría igual).
 func ftsDirFor(zimPath string) string {
-	return strings.TrimSuffix(zimPath, filepath.Ext(zimPath)) + ".bleve"
+	return strings.TrimSuffix(zimPath, filepath.Ext(zimPath)) + ".fts"
 }
 
 // ftsState: índice abierto de una colección. En el registro solo viven
