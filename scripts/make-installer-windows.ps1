@@ -45,6 +45,20 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'No se pudo generar assets\noumon.ico' }
 } finally { Pop-Location }
 
+# El instalador ofrece "Solo cliente": esa variante usa el cliente remoto
+# (gateway a un servidor de otra maquina), que build.ps1 all-in-one no genera.
+Write-Host 'Cliente remoto (instalacion "solo cliente")...' -ForegroundColor Cyan
+Push-Location $Desktop
+try {
+  go run ./cmd/iconresource -icon (Join-Path $Root 'icons\noumon_icon_client.png') -out (Join-Path $Desktop 'noumon_icon.syso')
+  if ($LASTEXITCODE -ne 0) { throw 'No se pudo generar el recurso de icono' }
+  go build -tags 'desktop production' -ldflags '-H windowsgui -X main.distributionMode=remote' -o 'noumon-client.exe' .
+  if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar noumon-client.exe' }
+} finally {
+  if (Test-Path -LiteralPath (Join-Path $Desktop 'noumon_icon.syso')) { Remove-Item -LiteralPath (Join-Path $Desktop 'noumon_icon.syso') -Force }
+  Pop-Location
+}
+
 $isccCandidates = @(
   "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
   "$env:ProgramFiles\Inno Setup 6\ISCC.exe",

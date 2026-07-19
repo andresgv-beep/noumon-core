@@ -43,6 +43,24 @@ NoumonSetup-<version>.exe.sha256
 
 Requisito único: **Inno Setup 6** (`winget install JRSoftware.InnoSetup`).
 
+### Tipos de instalación
+
+El mismo setup ofrece tres tipos (página "Tipo de instalación"; en silencioso,
+`/TYPE=full|server|client`, por defecto `full`):
+
+- **Completa**: cliente todo-en-uno + servicio + Panel. Una sola máquina.
+- **Solo servidor**: servicio NoumonServer + Panel de Control, sin ventana de
+  cliente. Para el equipo que sirve a la casa/aula.
+- **Solo cliente**: únicamente la ventana Noumon en modo *gateway remoto*
+  (`noumon-client.exe`, que `make-installer-windows.ps1` compila aparte). Al
+  abrirla por primera vez pide la dirección del servidor y la guarda en
+  `%AppData%\Noumon\gateway.json`; también respeta `NOUMON_LIBRARY_SERVER`.
+
+Aviso: cambiar de tipo sobre una instalación existente no retira los
+componentes del tipo anterior (Inno no borra lo ya copiado). Para pasar p. ej.
+de Completa a Solo cliente: desinstalar primero y volver a instalar (los datos
+de usuario se conservan siempre).
+
 ### Qué hace el instalador en la máquina destino
 
 1. Pide elevación (UAC) y cierra las apps Noumon abiertas si hace falta.

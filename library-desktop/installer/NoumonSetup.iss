@@ -47,34 +47,59 @@ VersionInfoProductName={#AppName}
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+; Tres instalaciones desde el mismo setup:
+;   Completa      -> cliente todo-en-uno + servicio + panel (una sola maquina)
+;   Solo servidor -> servicio + panel, sin ventana de cliente (p. ej. el PC
+;                    que sirve a la casa/aula; se administra con el panel)
+;   Solo cliente  -> ventana Noumon en modo gateway remoto: al abrirla pide la
+;                    direccion del servidor (o NOUMON_LIBRARY_SERVER)
+[Types]
+Name: "full"; Description: "Completa (cliente + servidor en esta maquina)"
+Name: "server"; Description: "Solo servidor (servicio + Panel de Control)"
+Name: "client"; Description: "Solo cliente (conectar a un servidor remoto)"
+Name: "custom"; Description: "Personalizada"; Flags: iscustom
+
+[Components]
+Name: "client"; Description: "Cliente Noumon (ventana nativa)"; Types: full client
+Name: "server"; Description: "Servidor NoumonServer (servicio + motor + contenidos)"; Types: full server
+Name: "panel"; Description: "Library Control Panel (administracion)"; Types: full server
+
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Components: client
 
 [Files]
-Source: "{#DesktopDir}\noumon-all-in-one.exe"; DestDir: "{app}"; DestName: "noumon.exe"; Flags: ignoreversion
-Source: "{#DesktopDir}\library-control-panel.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#DesktopDir}\bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs
+; El exe del cliente depende de si hay servidor local: con servidor va el
+; todo-en-uno; sin el, el cliente remoto (gateway) que pide la direccion.
+Source: "{#DesktopDir}\noumon-all-in-one.exe"; DestDir: "{app}"; DestName: "noumon.exe"; Components: client and server; Flags: ignoreversion
+Source: "{#DesktopDir}\noumon-client.exe"; DestDir: "{app}"; DestName: "noumon.exe"; Components: client and not server; Flags: ignoreversion
+Source: "{#DesktopDir}\library-control-panel.exe"; DestDir: "{app}"; Components: panel; Flags: ignoreversion
+Source: "{#DesktopDir}\bin\*"; DestDir: "{app}\bin"; Components: server; Flags: ignoreversion recursesubdirs createallsubdirs
 #if FileExists(RedistWebView2)
 Source: "{#RedistWebView2}"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: not WebView2Installed
 #endif
 
 [Icons]
-Name: "{autoprograms}\Noumon\Noumon"; Filename: "{app}\noumon.exe"; WorkingDir: "{app}"
-Name: "{autoprograms}\Noumon\Library Control Panel"; Filename: "{app}\library-control-panel.exe"; WorkingDir: "{app}"
+Name: "{autoprograms}\Noumon\Noumon"; Filename: "{app}\noumon.exe"; WorkingDir: "{app}"; Components: client
+Name: "{autoprograms}\Noumon\Library Control Panel"; Filename: "{app}\library-control-panel.exe"; WorkingDir: "{app}"; Components: panel
 Name: "{autodesktop}\Noumon"; Filename: "{app}\noumon.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
 #if FileExists(RedistWebView2)
 Filename: "{tmp}\MicrosoftEdgeWebView2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "Instalando Microsoft WebView2..."; Check: not WebView2Installed; Flags: waituntilterminated
 #endif
-Filename: "{app}\bin\library-supervisor.exe"; Parameters: "install"; StatusMsg: "Registrando el servicio NoumonServer..."; Flags: runhidden waituntilterminated
-Filename: "{app}\bin\library-supervisor.exe"; Parameters: "start"; StatusMsg: "Arrancando el servicio NoumonServer..."; Flags: runhidden waituntilterminated
-Filename: "{app}\noumon.exe"; Description: "{cm:LaunchProgram,Noumon}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\bin\library-supervisor.exe"; Parameters: "install"; StatusMsg: "Registrando el servicio NoumonServer..."; Components: server; Flags: runhidden waituntilterminated
+Filename: "{app}\bin\library-supervisor.exe"; Parameters: "start"; StatusMsg: "Arrancando el servicio NoumonServer..."; Components: server; Flags: runhidden waituntilterminated
+Filename: "{app}\noumon.exe"; Description: "{cm:LaunchProgram,Noumon}"; Components: client; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "{app}\bin\library-supervisor.exe"; Parameters: "uninstall"; RunOnceId: "NoumonSvcUninstall"; Flags: runhidden waituntilterminated
+Filename: "{app}\bin\library-supervisor.exe"; Parameters: "uninstall"; RunOnceId: "NoumonSvcUninstall"; Check: SupervisorPresent; Flags: runhidden waituntilterminated
 
 [Code]
+function SupervisorPresent(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\bin\library-supervisor.exe'));
+end;
+
 // WebView2 Evergreen instalado (por maquina o por usuario).
 function WebView2Installed(): Boolean;
 var
