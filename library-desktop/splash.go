@@ -6,32 +6,75 @@ import (
 )
 
 func serveSplash(w http.ResponseWriter, remote bool, target string) {
-	message := "Conectando con el servicio local de Library Server..."
+	message := "Conectando con el servicio local de Noumon Server..."
 	if remote {
 		message = "Conectando con " + target + "..."
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(pageStart + `<meta http-equiv="refresh" content="1"><title>Noumon</title>` + pageStyle + `</head><body><main><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>Noumon</h1><div class="bar"></div><p>` + template.HTMLEscapeString(message) + `</p></main></body></html>`))
+	_, _ = w.Write([]byte(pageStart + `<meta http-equiv="refresh" content="1"><title>Noumon</title>` + pageStyle + `</head><body>` + chromeBar + `<main><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>Noumon</h1><div class="bar"></div><p>` + template.HTMLEscapeString(message) + `</p></main>` + chromeScript + `</body></html>`))
 }
 
 func serveSetup(w http.ResponseWriter, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(pageStart + `<title>Conectar Noumon</title>` + pageStyle + `</head><body><main class="setup"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>Conectar a Noumon Server</h1><p>Escribe la direccion del equipo o NAS que guarda tu biblioteca.</p><form id="setup"><input id="target" type="url" required autofocus placeholder="https://library.ejemplo.local"><button>Conectar</button><small id="error">` + template.HTMLEscapeString(message) + `</small></form></main><script>
+	_, _ = w.Write([]byte(pageStart + `<title>Conectar Noumon</title>` + pageStyle + `</head><body>` + chromeBar + `<main class="setup"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>Conectar a Noumon Server</h1><p>Escribe la direccion del equipo o NAS que guarda tu biblioteca.</p><form id="setup"><input id="target" type="url" required autofocus placeholder="https://library.ejemplo.local"><button>Conectar</button><small id="error">` + template.HTMLEscapeString(message) + `</small></form></main><script>
 document.getElementById('setup').addEventListener('submit',async function(event){
  event.preventDefault();var button=this.querySelector('button'),error=document.getElementById('error');button.disabled=true;error.textContent='Comprobando...';
  try{var response=await fetch('/__noumon/gateway',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:document.getElementById('target').value})});var body=await response.json();if(!response.ok)throw new Error(body.error||'No se pudo guardar');location.reload();}
  catch(e){error.textContent=e.message;button.disabled=false;}
 });
-</script></body></html>`))
+</script>` + chromeScript + `</body></html>`))
+}
+
+// serveDisconnected sustituye la página de error interna del WebView cuando el
+// proxy no puede alcanzar el servidor: mensaje claro, reintento automático y,
+// en modo remoto, la opción de conectar con otro servidor.
+func serveDisconnected(w http.ResponseWriter, remote bool, target string) {
+	message := "El servicio local de Noumon Server no responde."
+	if remote && target != "" {
+		message = "No se pudo contactar con " + target + "."
+	}
+	other := ""
+	if remote {
+		other = `<button type="button" class="ghost" id="showother">Conectar a otro servidor</button><form id="setup" hidden><input id="target" type="url" required placeholder="https://library.ejemplo.local"><button>Conectar</button><small id="error"></small></form>`
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write([]byte(pageStart + `<title>Noumon</title>` + pageStyle + `</head><body>` + chromeBar + `<main class="setup"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>Se ha perdido la conexi&oacute;n con el servidor</h1><p>` + template.HTMLEscapeString(message) + `<br>Reintentando autom&aacute;ticamente...</p><div class="bar"></div>` + other + `</main><script>
+var retrying=true;
+async function ping(){if(!retrying)return;try{var r=await fetch('/api/health',{cache:'no-store'});if(r.ok)location.replace('/');}catch(e){}}
+setInterval(ping,2000);
+var show=document.getElementById('showother');
+if(show)show.addEventListener('click',function(){retrying=false;this.hidden=true;var f=document.getElementById('setup');f.hidden=false;document.getElementById('target').focus();});
+var form=document.getElementById('setup');
+if(form)form.addEventListener('submit',async function(event){
+ event.preventDefault();var button=this.querySelector('button'),error=document.getElementById('error');button.disabled=true;error.textContent='Comprobando...';
+ try{var response=await fetch('/__noumon/gateway',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:document.getElementById('target').value})});var body=await response.json();if(!response.ok)throw new Error(body.error||'No se pudo guardar');location.replace('/');}
+ catch(e){error.textContent=e.message;button.disabled=false;}
+});
+</script>` + chromeScript + `</body></html>`))
 }
 
 const pageStart = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
 
 const pageStyle = `<style>
-html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#0e0e14;color:#e9e9f0;font:15px/1.45 system-ui,Segoe UI,sans-serif}main{width:min(440px,calc(100% - 48px));display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px}img{width:82px;height:82px}h1{font-size:22px;margin:0}p{color:#9393a0;margin:0}.bar{width:190px;height:3px;border-radius:3px;overflow:hidden;background:#23232e;position:relative}.bar:after{content:"";position:absolute;inset:0;width:40%;border-radius:3px;background:linear-gradient(90deg,#7c6cf0,#f0468a);animation:slide 1s ease-in-out infinite}@keyframes slide{0%{left:-40%}100%{left:100%}}form{width:100%;display:flex;flex-direction:column;gap:11px;margin-top:12px}input,button{box-sizing:border-box;width:100%;height:46px;border-radius:11px;font:inherit}input{border:1px solid #353543;background:#181820;color:#fff;padding:0 14px;outline:none}input:focus{border-color:#8b5cf6}button{border:0;background:linear-gradient(135deg,#6f5ee8,#9b4fe1);color:#fff;font-weight:650;cursor:pointer}button:disabled{opacity:.55;cursor:wait}small{min-height:20px;color:#f08094}
+html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#0e0e14;color:#e9e9f0;font:15px/1.45 system-ui,Segoe UI,sans-serif}main{width:min(440px,calc(100% - 48px));display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px}img{width:82px;height:82px}h1{font-size:22px;margin:0}p{color:#9393a0;margin:0}.bar{width:190px;height:3px;border-radius:3px;overflow:hidden;background:#23232e;position:relative}.bar:after{content:"";position:absolute;inset:0;width:40%;border-radius:3px;background:linear-gradient(90deg,#7c6cf0,#f0468a);animation:slide 1s ease-in-out infinite}@keyframes slide{0%{left:-40%}100%{left:100%}}form{width:100%;display:flex;flex-direction:column;gap:11px;margin-top:12px}input,button{box-sizing:border-box;width:100%;height:46px;border-radius:11px;font:inherit}input{border:1px solid #353543;background:#181820;color:#fff;padding:0 14px;outline:none}input:focus{border-color:#8b5cf6}button{border:0;background:linear-gradient(135deg,#6f5ee8,#9b4fe1);color:#fff;font-weight:650;cursor:pointer}button:disabled{opacity:.55;cursor:wait}button.ghost{width:auto;height:38px;padding:0 18px;background:transparent;border:1px solid #353543;color:#b9b9c6;font-weight:500;margin-top:8px}button.ghost:hover{border-color:#8b5cf6;color:#fff}small{min-height:20px;color:#f08094}
+#chrome{position:fixed;top:0;left:0;right:0;height:38px;display:flex;align-items:stretch;--wails-draggable:drag}#chrome .space{flex:1}#chrome .wc{--wails-draggable:no-drag;width:46px;height:100%;border:0;border-radius:0;background:transparent;color:#9393a0;font:13px/1 system-ui,sans-serif;cursor:pointer}#chrome .wc:hover{background:#23232e;color:#fff}#chrome .wc.close:hover{background:#d3305a;color:#fff}
 </style>`
+
+// chromeBar dibuja una franja superior arrastrable con los controles de
+// ventana: la app es frameless y normalmente los pinta la SPA, así que sin
+// esto las páginas del shell dejan al usuario sin forma de cerrar o mover.
+// chromeScript la oculta si el runtime de Wails no está disponible.
+const chromeBar = `<div id="chrome" hidden><div class="space"></div><button class="wc" id="wmin" aria-label="Minimizar">&#8211;</button><button class="wc" id="wmax" aria-label="Maximizar">&#9633;</button><button class="wc close" id="wclose" aria-label="Cerrar">&#10005;</button></div>`
+
+const chromeScript = `<script>
+(function(){var bar=document.getElementById('chrome');if(!window.runtime||typeof window.runtime.WindowMinimise!=='function')return;bar.hidden=false;
+document.getElementById('wmin').onclick=function(){window.runtime.WindowMinimise()};
+document.getElementById('wmax').onclick=function(){window.runtime.WindowToggleMaximise()};
+document.getElementById('wclose').onclick=function(){window.runtime.Quit()};})();
+</script>`
 
 // El SVG es el espiral de noumon/src/lib/Logo.svelte, con el color del
 // acento fijado porque aqui no hay CSS del cliente.

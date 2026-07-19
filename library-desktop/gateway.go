@@ -106,7 +106,15 @@ func (s *shell) installProxy(target *url.URL) {
 		// del alta remota sigue viva para un servidor detrás de un proxy de verdad.
 		r.Header["X-Forwarded-For"] = nil
 	}
-	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, _ error) {
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, _ error) {
+		// Para una navegación (recarga, arranque con el servidor caído) el WebView
+		// pintaría su página de error interna, sin controles de ventana: servimos
+		// la página de desconexión del shell. Las llamadas fetch de la SPA siguen
+		// recibiendo el error plano de siempre.
+		if strings.Contains(r.Header.Get("Accept"), "text/html") {
+			serveDisconnected(w, s.remote, s.targetString())
+			return
+		}
 		http.Error(w, "Library Server no disponible", http.StatusServiceUnavailable)
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
