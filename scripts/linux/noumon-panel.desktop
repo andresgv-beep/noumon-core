@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Noumon Panel de Control
+Comment=Administracion del servidor Noumon
+Comment[es]=Administracion del servidor Noumon
+Exec=xdg-open http://localhost:8090/panel/
+Icon=noumon-panel
+Terminal=false
+Categories=Settings;
