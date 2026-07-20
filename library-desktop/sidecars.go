@@ -35,6 +35,10 @@ type shell struct {
 	proxy     *httputil.ReverseProxy
 	remote    bool
 	startPath string
+	// setupNotice explica en la pantalla de conexión por qué se pide la
+	// dirección otra vez (p. ej. gateway.json corrupto). Se fija una vez en
+	// el arranque y deja de mostrarse en cuanto hay configuración válida.
+	setupNotice string
 
 	configured atomic.Bool
 	ready      atomic.Bool
@@ -46,12 +50,13 @@ type shell struct {
 }
 
 func newShell() (*shell, error) {
-	target, remote, configured, err := resolveShellTarget()
+	target, remote, configured, notice, err := resolveShellTarget()
 	if err != nil {
 		return nil, err
 	}
 	s := &shell{
-		remote: remote,
+		remote:      remote,
+		setupNotice: notice,
 	}
 	if interfaceMode == "panel" {
 		s.startPath = "/panel/"
@@ -69,7 +74,7 @@ func (s *shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.remote && !s.configured.Load() {
-		serveSetup(w, "")
+		serveSetup(w, s.setupNotice)
 		return
 	}
 	if !s.ready.Load() {

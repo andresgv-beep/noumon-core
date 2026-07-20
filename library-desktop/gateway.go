@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -21,30 +22,43 @@ type gatewayConfig struct {
 	Target string `json:"target"`
 }
 
-func resolveShellTarget() (*url.URL, bool, bool, error) {
-	remote := distributionMode == "remote"
+// resolveShellTarget devuelve el destino inicial del shell. notice lleva un
+// aviso para la pantalla de conexión cuando la configuración guardada no
+// sirve: en una app Frameless un log.Fatal es una muerte invisible (doble clic
+// y no aparece nada), así que gateway.json ilegible o inválido NUNCA es fatal —
+// se trata como "sin configurar" y el usuario vuelve a escribir la dirección.
+// Solo NOUMON_LIBRARY_SERVER inválida sigue siendo error: es un contrato
+// explícito del operador, no estado guardado que pueda corromperse solo.
+func resolveShellTarget() (target *url.URL, remote, configured bool, notice string, err error) {
+	remote = distributionMode == "remote"
 	if raw := strings.TrimSpace(os.Getenv("NOUMON_LIBRARY_SERVER")); raw != "" {
-		target, err := normalizeRemoteTarget(raw)
-		return target, true, err == nil, err
+		target, err = normalizeRemoteTarget(raw)
+		return target, true, err == nil, "", err
 	}
 	if !remote {
-		target, err := url.Parse(localCoreURL)
-		return target, false, err == nil, err
+		target, err = url.Parse(localCoreURL)
+		return target, false, err == nil, "", err
 	}
 
-	raw, err := os.ReadFile(shellConfigPath())
-	if os.IsNotExist(err) {
-		return nil, true, false, nil
+	raw, readErr := os.ReadFile(shellConfigPath())
+	if os.IsNotExist(readErr) {
+		return nil, true, false, "", nil
 	}
-	if err != nil {
-		return nil, true, false, fmt.Errorf("leer configuracion del gateway: %w", err)
+	if readErr != nil {
+		log.Printf("gateway.json ilegible, se pide la direccion de nuevo: %v", readErr)
+		return nil, true, false, "No se pudo leer la configuracion guardada. Escribe la direccion de nuevo.", nil
 	}
 	var cfg gatewayConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, true, false, fmt.Errorf("configuracion del gateway invalida: %w", err)
+	if jsonErr := json.Unmarshal(raw, &cfg); jsonErr != nil {
+		log.Printf("gateway.json invalido, se pide la direccion de nuevo: %v", jsonErr)
+		return nil, true, false, "La configuracion guardada no era valida. Escribe la direccion de nuevo.", nil
 	}
-	target, err := normalizeRemoteTarget(cfg.Target)
-	return target, true, err == nil, err
+	target, targetErr := normalizeRemoteTarget(cfg.Target)
+	if targetErr != nil {
+		log.Printf("direccion guardada invalida, se pide de nuevo: %v", targetErr)
+		return nil, true, false, "La direccion guardada no era valida. Escribe la direccion de nuevo.", nil
+	}
+	return target, true, true, "", nil
 }
 
 func normalizeRemoteTarget(raw string) (*url.URL, error) {
@@ -119,6 +133,23 @@ func (s *shell) installProxy(target *url.URL) {
 		http.Error(w, "Library Server no disponible", http.StatusServiceUnavailable)
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
+		// Blindaje: si el servidor emitiera un Location ABSOLUTO hacia sí mismo
+		// (http://ip-del-servidor/...), el webview navegaría fuera del origen del
+		// gateway — se perderían la inyección de globals, el mismo-origen y la
+		// barra de ventana. Se reescribe a ruta relativa para que la navegación
+		// (y cualquier fetch que siga la redirección) se quede dentro del proxy.
+		// Un Location hacia OTRO host se deja intacto: no es contenido nuestro.
+		if location := response.Header.Get("Location"); location != "" &&
+			response.StatusCode >= 300 && response.StatusCode < 400 {
+			if parsed, err := url.Parse(location); err == nil && parsed.Host == target.Host && parsed.IsAbs() {
+				parsed.Scheme, parsed.Host, parsed.User = "", "", nil
+				relative := parsed.String()
+				if relative == "" {
+					relative = "/"
+				}
+				response.Header.Set("Location", relative)
+			}
+		}
 		// Los webview de Wails sirven la app por un esquema propio y NO siguen
 		// redirecciones HTTP en las navegaciones: pintan el cuerpo del 302
 		// ("Found.") tal cual. Ocurre p. ej. en la raíz de una colección ZIM,

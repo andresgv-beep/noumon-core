@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -189,5 +192,118 @@ func TestGatewayConvierteRedireccionesDeNavegacionEnMetaRefresh(t *testing.T) {
 	response.Body.Close()
 	if response.StatusCode != http.StatusFound || response.Header.Get("Location") == "" {
 		t.Fatalf("fetch: status = %d Location=%q; se esperaba 302 intacto", response.StatusCode, response.Header.Get("Location"))
+	}
+}
+
+func TestResolveShellTargetConfigCorruptoNoEsFatal(t *testing.T) {
+	// Un gateway.json roto NO puede impedir que la app abra: en una ventana
+	// Frameless un log.Fatal es una muerte invisible. Debe tratarse como
+	// "sin configurar" con aviso para la pantalla de conexión.
+	setConfigDirEnv(t, t.TempDir())
+	configPath := shellConfigPath()
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	oldMode := distributionMode
+	distributionMode = "remote"
+	t.Cleanup(func() { distributionMode = oldMode })
+	t.Setenv("NOUMON_LIBRARY_SERVER", "")
+
+	cases := []struct{ name, content string }{
+		{"json roto", "{corrupto"},
+		{"target invalido", `{"target":"ftp://nas.local"}`},
+	}
+	for _, c := range cases {
+		if err := os.WriteFile(configPath, []byte(c.content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		target, remote, configured, notice, err := resolveShellTarget()
+		if err != nil {
+			t.Fatalf("%s: devolvio error fatal: %v", c.name, err)
+		}
+		if target != nil || !remote || configured {
+			t.Fatalf("%s: se esperaba sin configurar; target=%v configured=%v", c.name, target, configured)
+		}
+		if notice == "" {
+			t.Fatalf("%s: falta el aviso para la pantalla de conexion", c.name)
+		}
+	}
+}
+
+func TestSetupMuestraElAvisoDeConfigCorrupta(t *testing.T) {
+	t.Parallel()
+	s := &shell{remote: true, setupNotice: "La configuracion guardada no era valida. Escribe la direccion de nuevo."}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "text/html")
+	s.ServeHTTP(rec, req)
+	if body := rec.Body.String(); !strings.Contains(body, "no era valida") {
+		t.Fatalf("la pantalla de conexion no muestra el aviso: %.200s", body)
+	}
+}
+
+func TestGatewayReescribeRedireccionAbsolutaDelMismoHost(t *testing.T) {
+	t.Parallel()
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/content/wiki/" {
+			// Redireccion ABSOLUTA hacia el propio servidor: el caso que
+			// escaparia del gateway si no se reescribe.
+			w.Header().Set("Location", upstream.URL+"/content/wiki/A/Portada")
+			w.WriteHeader(http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+	target, _ := url.Parse(upstream.URL)
+
+	s := &shell{remote: true}
+	s.installProxy(target)
+	s.configured.Store(true)
+	s.ready.Store(true)
+	server := httptest.NewServer(s)
+	defer server.Close()
+
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	// Navegacion: el meta refresh debe apuntar a la ruta RELATIVA.
+	request, _ := http.NewRequest(http.MethodGet, server.URL+"/content/wiki/", nil)
+	request.Header.Set("Accept", "text/html")
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if !strings.Contains(string(body), `url=/content/wiki/A/Portada`) || strings.Contains(string(body), upstream.URL) {
+		t.Fatalf("el meta refresh no quedo relativo al gateway: %s", body)
+	}
+
+	// Fetch: el 302 conserva Location, pero ya reescrito a relativo.
+	request, _ = http.NewRequest(http.MethodGet, server.URL+"/content/wiki/", nil)
+	response, err = client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if got := response.Header.Get("Location"); got != "/content/wiki/A/Portada" {
+		t.Fatalf("Location = %q; esperado /content/wiki/A/Portada", got)
+	}
+}
+
+// setConfigDirEnv apunta os.UserConfigDir a un directorio temporal en el SO
+// donde corra el test.
+func setConfigDirEnv(t *testing.T, dir string) {
+	t.Helper()
+	switch runtime.GOOS {
+	case "windows":
+		t.Setenv("AppData", dir)
+	case "darwin":
+		t.Setenv("HOME", dir)
+	default:
+		t.Setenv("XDG_CONFIG_HOME", dir)
 	}
 }
