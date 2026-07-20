@@ -3,6 +3,7 @@
   // ELIMINAR un item no deseado (ficha + fichero(s) + portada + pistas). Admin.
   import { onMount } from 'svelte'
   import { getMedia, deleteMedia } from './api.js'
+  import { t } from './i18n.svelte.js'
 
   let items = $state([])
   let loading = $state(true)
@@ -17,19 +18,19 @@
   onMount(load)
 
   async function del(it) {
-    if (!confirm(`¿Eliminar "${it.title}" de la biblioteca?\nSe borra del pool y no se puede deshacer.`)) return
+    if (!confirm(t('media.confirmDelete', { title: it.title }))) return
     busy = { ...busy, [it.id]: true }
     try {
       await deleteMedia(it.id)
       items = items.filter((x) => x.id !== it.id)
     } catch (e) {
-      alert('No se pudo eliminar.')
+      alert(t('media.deleteFail'))
     }
     busy = { ...busy, [it.id]: false }
   }
 
-  const KIND = { video: 'Vídeo', audio: 'Audio', gallery: 'Imagen', pdf: 'Texto', reader: 'Texto' }
-  const kindLabel = (t) => KIND[t] || 'Documento'
+  const KIND = { video: 'media.kindVideo', audio: 'media.kindAudio', gallery: 'media.kindImage', pdf: 'media.kindText', reader: 'media.kindText' }
+  const kindLabel = (tpl) => t(KIND[tpl] || 'media.kindDoc')
 
   const shown = $derived(
     items.filter((it) => {
@@ -41,14 +42,14 @@
 </script>
 
 <div class="toolbar">
-  <span class="cnt"><b>{items.length}</b> contenidos en el pool</span>
+  <span class="cnt">{t('media.count', { n: items.length })}</span>
   <span class="grow"></span>
-  <input class="search-in" placeholder="Filtrar…" bind:value={filter} />
-  <button class="btn" onclick={load}>↻ Actualizar</button>
+  <input class="search-in" placeholder={t('media.filter')} bind:value={filter} />
+  <button class="btn" onclick={load}>↻ {t('media.refresh')}</button>
 </div>
 
 {#if loading}
-  <div class="empty">Cargando…</div>
+  <div class="empty">{t('media.loading')}</div>
 {:else if shown.length}
   {#each shown as it (it.id)}
     <div class="row" style="grid-template-columns:1fr auto">
@@ -59,15 +60,15 @@
           {it.collection}{#if it.author} · {it.author}{/if}
         </div>
       </div>
-      <button class="btn btn-danger" title="Eliminar del pool" onclick={() => del(it)} disabled={busy[it.id]}>
-        {busy[it.id] ? '…' : '🗑 Eliminar'}
+      <button class="btn btn-danger" title={t('media.deleteTitle')} onclick={() => del(it)} disabled={busy[it.id]}>
+        {busy[it.id] ? '…' : '🗑 ' + t('media.delete')}
       </button>
     </div>
   {/each}
 {:else if items.length}
-  <div class="empty">Ningún contenido coincide con el filtro.</div>
+  <div class="empty">{t('media.noMatch')}</div>
 {:else}
-  <div class="empty"><div class="big">Sin medios locales</div>Añade contenido propio al pool y aparecerá aquí para gestionarlo.</div>
+  <div class="empty"><div class="big">{t('media.emptyTitle')}</div>{t('media.emptyBody')}</div>
 {/if}
 
 <style>

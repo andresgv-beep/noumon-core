@@ -398,6 +398,7 @@ func main() {
 		adminMux.HandleFunc("/api/admin/zim/index/cancel", s.zimNative.handleIndexCancel)
 	}
 	s.registerAdminTranslateRoutes(adminMux)              // modelos de traducción (proxy a translate-wrap)
+	s.registerAdminDepsRoutes(adminMux)                   // aprovisionamiento de herramientas (admin_deps.go)
 	newAdminCatalog(mgr, zimDir).registerRoutes(adminMux) // catálogo remoto de kiwix → descarga al pool
 	s.registerAdminUserRoutes(adminMux)                   // alta/baja de cuentas (auth.go)
 	s.registerAccessRoutes(adminMux)                      // acceso por colección: nivel + edad (access.go)

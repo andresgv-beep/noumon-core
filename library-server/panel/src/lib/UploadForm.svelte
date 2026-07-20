@@ -3,6 +3,7 @@
   // muestran: moments (vídeo) · cabinet (documento). Crea vía /api/admin/upload;
   // si recibe `item`, edita su ficha vía /api/admin/media/update (sin cambiar el fichero).
   import { uploadContent, updateContent } from './api.js'
+  import { t } from './i18n.svelte.js'
 
   let { source = 'moments', item = null, onDone } = $props()
   const editing = !!item
@@ -38,8 +39,8 @@
 
   async function submit(e) {
     e?.preventDefault()
-    if (!editing && !file) { err = 'Elige un fichero'; return }
-    if (!title.trim()) { err = 'Falta el título'; return }
+    if (!editing && !file) { err = t('upload.errNoFile'); return }
+    if (!title.trim()) { err = t('upload.errNoTitle'); return }
     busy = true; err = ''
     const fields = { source: src, title, author, tags, description, access }
     if (!editing) fields.collection = collection
@@ -50,59 +51,59 @@
       const resp = editing
         ? await updateContent(item.id, fields, files)
         : await uploadContent(fields, { ...files, file })
-      if (!resp.ok) { const b = await resp.json().catch(() => ({})); throw new Error(b.error || 'no se pudo guardar') }
+      if (!resp.ok) { const b = await resp.json().catch(() => ({})); throw new Error(b.error || t('upload.saveFail')) }
       onDone?.()
     } catch (e) { err = e.message } finally { busy = false }
   }
 </script>
 
 <form class="uform" onsubmit={submit}>
-  <div class="ulabel">{editing ? 'Editar' : 'Nueva importación'} · {isVideo ? 'Moments' : 'Cabinet'}</div>
+  <div class="ulabel">{editing ? t('upload.editTitle') : t('upload.newTitle')} · {isVideo ? 'Moments' : 'Cabinet'}</div>
 
   {#if editing}
-    <div class="editfile"><b>Fichero:</b> {item.media}<span class="hint"> · el fichero no se cambia (para eso, elimina y vuelve a subir)</span></div>
+    <div class="editfile"><b>{t('upload.fileLabel')}</b> {item.media}<span class="hint"> · {t('upload.fileNoChange')}</span></div>
   {:else}
     <label class="drop">
       <input type="file" accept={isVideo ? 'video/*' : '.pdf,.epub,.mp3,.ogg,.flac,.m4a,.wav,.jpg,.jpeg,.png,.gif,.webp,.txt,.md'} onchange={pickFile} />
       <svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px"><path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4" /></svg>
-      <span>{fileName || (isVideo ? 'Arrastra un vídeo o pulsa para elegir' : 'Arrastra un documento o pulsa para elegir')}</span>
+      <span>{fileName || (isVideo ? t('upload.dropVideo') : t('upload.dropDoc'))}</span>
     </label>
   {/if}
 
   <div class="ugrid">
-    <label class="fld" style="grid-column:1 / -1">{isVideo ? 'Nombre' : 'Título'}<input type="text" bind:value={title} placeholder={isVideo ? 'Título del vídeo' : 'Título del documento'} /></label>
+    <label class="fld" style="grid-column:1 / -1">{isVideo ? t('upload.name') : t('upload.title')}<input type="text" bind:value={title} placeholder={isVideo ? t('upload.phVideoTitle') : t('upload.phDocTitle')} /></label>
 
-    <label class="fld">{isVideo ? 'Canal / autor' : 'Autor'}<input type="text" bind:value={author} /></label>
+    <label class="fld">{isVideo ? t('upload.channelAuthor') : t('upload.author')}<input type="text" bind:value={author} /></label>
     {#if !editing}
-      <label class="fld">Colección<input type="text" bind:value={collection} placeholder="General" /></label>
+      <label class="fld">{t('upload.collection')}<input type="text" bind:value={collection} placeholder={t('upload.phCollection')} /></label>
     {/if}
 
     {#if isVideo}
-      <label class="fld">Duración (segundos)<input type="number" min="0" bind:value={duration} placeholder="opcional" /></label>
-      <label class="fld">Tags<input type="text" bind:value={tags} placeholder="separados por comas" /></label>
+      <label class="fld">{t('upload.duration')}<input type="number" min="0" bind:value={duration} placeholder={t('upload.phOptional')} /></label>
+      <label class="fld">{t('upload.tags')}<input type="text" bind:value={tags} placeholder={t('upload.phCommaTags')} /></label>
     {:else}
-      <label class="fld">Año<input type="text" bind:value={date} placeholder="p. ej. 1998" /></label>
-      <label class="fld">Idioma<input type="text" bind:value={language} placeholder="Español" /></label>
-      <label class="fld">Categorías<input type="text" bind:value={tags} placeholder="separadas por comas" /></label>
-      <label class="fld">Licencia<input type="text" bind:value={license} placeholder="CC BY, dominio público…" /></label>
-      <label class="fld">Contribuidor<input type="text" bind:value={contributor} placeholder="p. ej. una biblioteca" /></label>
+      <label class="fld">{t('upload.year')}<input type="text" bind:value={date} placeholder={t('upload.phYear')} /></label>
+      <label class="fld">{t('upload.language')}<input type="text" bind:value={language} placeholder={t('upload.phLanguage')} /></label>
+      <label class="fld">{t('upload.categories')}<input type="text" bind:value={tags} placeholder={t('upload.phCommaCats')} /></label>
+      <label class="fld">{t('upload.license')}<input type="text" bind:value={license} placeholder={t('upload.phLicense')} /></label>
+      <label class="fld">{t('upload.contributor')}<input type="text" bind:value={contributor} placeholder={t('upload.phContributor')} /></label>
     {/if}
 
-    <label class="fld" style="grid-column:1 / -1">Descripción<textarea rows="2" bind:value={description}></textarea></label>
+    <label class="fld" style="grid-column:1 / -1">{t('upload.description')}<textarea rows="2" bind:value={description}></textarea></label>
 
-    <label class="fld">Visibilidad
+    <label class="fld">{t('upload.visibility')}
       <select bind:value={access}>
-        {#if editing}<option value="">(mantener actual)</option>{/if}
-        <option value="open">Abierto · todos</option>
-        <option value="login">Sesión · con cuenta</option>
-        <option value="blocked">Bloqueado · solo admin</option>
+        {#if editing}<option value="">{t('upload.accessKeep')}</option>{/if}
+        <option value="open">{t('upload.accessOpen')}</option>
+        <option value="login">{t('upload.accessLogin')}</option>
+        <option value="blocked">{t('upload.accessBlocked')}</option>
       </select>
     </label>
-    <label class="fld">{isVideo ? 'Miniatura del vídeo' : 'Portada'} {editing ? '(cambiar)' : '(opcional)'}
+    <label class="fld">{isVideo ? t('upload.thumb') : t('upload.cover')} {editing ? t('upload.change') : t('upload.optional')}
       <input type="file" accept="image/*" onchange={pickCover} />
     </label>
     {#if isVideo}
-      <label class="fld">Logo del canal / autor {editing ? '(cambiar)' : '(opcional)'}
+      <label class="fld">{t('upload.channelLogo')} {editing ? t('upload.change') : t('upload.optional')}
         <input type="file" accept="image/*" onchange={pickAvatar} />
       </label>
     {/if}
@@ -111,9 +112,9 @@
   {#if err}<div class="uerr">{err}</div>{/if}
 
   <div class="uactions">
-    <button type="button" class="btn" onclick={() => onDone?.()}>Cancelar</button>
+    <button type="button" class="btn" onclick={() => onDone?.()}>{t('upload.cancel')}</button>
     <button type="submit" class="btn btn-primary" disabled={busy}>
-      {busy ? 'Guardando…' : editing ? 'Guardar cambios' : `Publicar en ${isVideo ? 'Moments' : 'Cabinet'}`}
+      {busy ? t('upload.saving') : editing ? t('upload.saveChanges') : t('upload.publishTo', { app: isVideo ? 'Moments' : 'Cabinet' })}
     </button>
   </div>
 </form>

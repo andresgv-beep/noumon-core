@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { listDownloads, pauseDownload, resumeDownload, cancelDownload, clearDownloads, getMedia, deleteMedia } from './api.js'
   import { bytes } from './fmt.js'
+  import { t } from './i18n.svelte.js'
   import KiwixCatalog from './KiwixCatalog.svelte'
   import UploadForm from './UploadForm.svelte'
 
@@ -17,13 +18,13 @@
   async function loadMedia() { media = await getMedia() }
   const momentsItems = $derived(media.filter((m) => m.source === 'moments'))
   const cabinetItems = $derived(media.filter((m) => m.source === 'cabinet'))
-  const KIND = { video: 'Vídeo', audio: 'Audio', gallery: 'Imagen', pdf: 'Documento', reader: 'Documento' }
+  const KIND = { video: 'import.kindVideo', audio: 'import.kindAudio', gallery: 'import.kindImage', pdf: 'import.kindDoc', reader: 'import.kindDoc' }
 
   async function del(it) {
-    if (!confirm(`¿Eliminar "${it.title}"?\nSe borra del pool y no se puede deshacer.`)) return
+    if (!confirm(t('import.confirmDelete', { title: it.title }))) return
     busyDel = { ...busyDel, [it.id]: true }
     try { await deleteMedia(it.id); media = media.filter((x) => x.id !== it.id) }
-    catch (e) { alert('No se pudo eliminar.') }
+    catch (e) { alert(t('import.deleteFail')) }
     busyDel = { ...busyDel, [it.id]: false }
   }
 
@@ -44,10 +45,10 @@
 </script>
 
 <div class="stabs">
-  <button class="stab" class:on={sub === 'kiwix'} onclick={() => go('kiwix')}>Catálogo Kiwix</button>
+  <button class="stab" class:on={sub === 'kiwix'} onclick={() => go('kiwix')}>{t('import.tabKiwix')}</button>
   <button class="stab" class:on={sub === 'moments'} onclick={() => go('moments')}>Moments {#if momentsItems.length}<span class="qn">{momentsItems.length}</span>{/if}</button>
   <button class="stab" class:on={sub === 'cabinet'} onclick={() => go('cabinet')}>Cabinet {#if cabinetItems.length}<span class="qn">{cabinetItems.length}</span>{/if}</button>
-  <button class="stab" class:on={sub === 'cola'} onclick={() => go('cola')}>Cola {#if queueCount}<span class="qn">{queueCount}</span>{/if}</button>
+  <button class="stab" class:on={sub === 'cola'} onclick={() => go('cola')}>{t('import.tabQueue')} {#if queueCount}<span class="qn">{queueCount}</span>{/if}</button>
 </div>
 
 {#if sub === 'kiwix'}
@@ -57,10 +58,10 @@
   {@const items = sub === 'moments' ? momentsItems : cabinetItems}
   {@const appName = sub === 'moments' ? 'Moments' : 'Cabinet'}
   <div class="toolbar">
-    <span class="cnt"><b>{items.length}</b> en {appName}</span>
+    <span class="cnt"><b>{items.length}</b> {t('import.inApp', { app: appName })}</span>
     <span class="grow"></span>
     {#if !formOpen && !editItem}
-      <button class="btn btn-primary" onclick={() => (formOpen = true)}>＋ Nueva importación</button>
+      <button class="btn btn-primary" onclick={() => (formOpen = true)}>＋ {t('import.newImport')}</button>
     {/if}
   </div>
 
@@ -78,29 +79,29 @@
         <div style="min-width:0">
           <div class="cname">{it.title}</div>
           <div class="cpath" style="font-family:var(--font-sans)">
-            <span class="badge b-mute">{KIND[it.template] || 'Documento'}</span>
+            <span class="badge b-mute">{t(KIND[it.template] || 'import.kindDoc')}</span>
             {it.collection}{#if it.author} · {it.author}{/if}
           </div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <button class="btn" onclick={() => { editItem = it; formOpen = false }}>✏ Editar</button>
-          <button class="btn" onclick={() => del(it)} disabled={busyDel[it.id]}>{busyDel[it.id] ? '…' : '🗑 Eliminar'}</button>
+          <button class="btn" onclick={() => { editItem = it; formOpen = false }}>✏ {t('import.edit')}</button>
+          <button class="btn" onclick={() => del(it)} disabled={busyDel[it.id]}>{busyDel[it.id] ? '…' : '🗑 ' + t('import.delete')}</button>
         </div>
       </div>
     {/each}
   {:else if !formOpen && !editItem}
     <div class="empty">
-      <div class="big">{sub === 'moments' ? 'Sin vídeos en Moments' : 'Cabinet vacío'}</div>
-      Pulsa «Nueva importación» para subir tu {sub === 'moments' ? 'primer vídeo' : 'primer documento'}.
+      <div class="big">{sub === 'moments' ? t('import.emptyMoments') : t('import.emptyCabinet')}</div>
+      {sub === 'moments' ? t('import.emptyHintMoments') : t('import.emptyHintCabinet')}
     </div>
   {/if}
 
 {:else}
   <div class="toolbar">
-    <span class="cnt"><b>{jobs.length}</b> descargas · {queueCount} activas</span>
+    <span class="cnt"><b>{jobs.length}</b> {t('import.queueCount', { n: queueCount })}</span>
     <span class="grow"></span>
-    <button class="btn" onclick={refreshQueue}>↻ Actualizar</button>
-    <button class="btn" title="Limpiar historial (quita las descargas terminadas; no borra ficheros)" aria-label="Limpiar historial"
+    <button class="btn" onclick={refreshQueue}>↻ {t('import.refresh')}</button>
+    <button class="btn" title={t('import.clearTitle')} aria-label={t('import.clearLabel')}
       onclick={clearQueue} disabled={!jobs.some((j) => j.status === 'done' || j.status === 'error' || j.status === 'cancelled')}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></svg>
     </button>
@@ -123,17 +124,17 @@
         </div>
         <div style="display:flex;gap:6px;justify-self:end">
           {#if j.status === 'downloading' || j.status === 'queued'}
-            <button class="btn" title="Pausar" onclick={() => pauseDownload(j.id).then(refreshQueue)}>⏸</button>
+            <button class="btn" title={t('import.pause')} onclick={() => pauseDownload(j.id).then(refreshQueue)}>⏸</button>
           {:else if j.status === 'paused' || j.status === 'error'}
-            <button class="btn" title="Reanudar" onclick={() => resumeDownload(j.id).then(refreshQueue)}>▶</button>
+            <button class="btn" title={t('import.resume')} onclick={() => resumeDownload(j.id).then(refreshQueue)}>▶</button>
           {/if}
           {#if j.status !== 'done' && j.status !== 'cancelled'}
-            <button class="btn" title="Cancelar" onclick={() => cancelDownload(j.id).then(refreshQueue)}>✕</button>
+            <button class="btn" title={t('import.cancel')} onclick={() => cancelDownload(j.id).then(refreshQueue)}>✕</button>
           {/if}
         </div>
       </div>
     {/each}
   {:else}
-    <div class="empty"><div class="big">Cola vacía</div>Descarga un ZIM desde el catálogo Kiwix y aparecerá aquí con su progreso.</div>
+    <div class="empty"><div class="big">{t('import.queueEmpty')}</div>{t('import.queueEmptyHint')}</div>
   {/if}
 {/if}

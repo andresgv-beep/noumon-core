@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { getMaps, downloadMap, cancelMapDownload, activateMap, deleteMap, installMapGeocoder, indexMapStreets, cancelMapStreetIndex } from './api.js'
+  import { t } from './i18n.svelte.js'
   import { bytes } from './fmt.js'
 
   let data = $state({ catalog: [], installed: [], active: null, job: null, available: false, geocoder: { installed: false, job: null } })
@@ -26,8 +27,8 @@
 
   async function start(region) {
     if (busy || downloading) return
-    const warning = detail === 15 ? 'El nivel detallado puede ocupar varios GB según la región.' : 'El tamaño depende de la región seleccionada.'
-    if (!confirm(`Descargar ${region.name} hasta zoom ${detail}?\n\n${warning}`)) return
+    const warning = detail === 15 ? t('maps.warnDetailed') : t('maps.warnSize')
+    if (!confirm(t('maps.confirmDownload', { name: region.name, zoom: detail, warning }))) return
     busy = true
     try { await downloadMap(region.id, detail); await load() } catch (e) { error = e.message } finally { busy = false }
   }
@@ -36,7 +37,7 @@
     try { await activateMap(file); await load() } catch (e) { error = e.message } finally { busy = false }
   }
   async function remove(file) {
-    if (!confirm(`Eliminar ${file} del servidor?`)) return
+    if (!confirm(t('maps.confirmDelete', { file }))) return
     busy = true
     try { await deleteMap(file); await load() } catch (e) { error = e.message } finally { busy = false }
   }
@@ -45,95 +46,95 @@
     try { await installMapGeocoder(); await load() } catch (e) { error = e.message } finally { busy = false }
   }
   async function indexStreets(map) {
-    if (!confirm(`Indexar las calles de ${map.name}?\n\nSe procesa el mapa localmente. Puede tardar varios minutos, pero el servidor seguirá funcionando.`)) return
+    if (!confirm(t('maps.confirmIndex', { name: map.name }))) return
     busy = true
     try { await indexMapStreets(map.file); await load() } catch (e) { error = e.message } finally { busy = false }
   }
 </script>
 
 <div class="toolbar">
-  <span class="cnt">Mapas offline · <b>{data.installed?.length || 0}</b> instalados</span>
+  <span class="cnt">{t('maps.title')} · <b>{data.installed?.length || 0}</b> {t('maps.installedSuffix')}</span>
   <span class="grow"></span>
-  <button class="btn" onclick={load}>↻ Actualizar</button>
+  <button class="btn" onclick={load}>↻ {t('maps.refresh')}</button>
 </div>
 
 {#if !data.available}
-  <div class="ccnote">El extractor PMTiles no está instalado junto al servidor. Reinstala el paquete todo-en-uno.</div>
+  <div class="ccnote">{t('maps.extractorMissing')}</div>
 {/if}
 
 {#if streetIndexing}
   <div class="mapjob">
-    <div><b>Indexando calles de {data.streetJob.name}</b><small>{data.streetJob.tiles || 0} / {data.streetJob.totalTiles || '…'} teselas · {data.streetJob.streets || 0} calles · z{data.streetJob.zoom || '…'}</small></div>
+    <div><b>{t('maps.indexingStreets', { name: data.streetJob.name })}</b><small>{t('maps.streetProgress', { tiles: data.streetJob.tiles || 0, total: data.streetJob.totalTiles || '…', streets: data.streetJob.streets || 0, zoom: data.streetJob.zoom || '…' })}</small></div>
     <span class="pspin"></span>
-    <button class="btn" onclick={cancelMapStreetIndex}>Cancelar</button>
+    <button class="btn" onclick={cancelMapStreetIndex}>{t('maps.cancel')}</button>
   </div>
 {:else if data.streetJob?.status === 'error'}
-  <div class="root-error">{data.streetJob.error || 'No se pudieron indexar las calles.'}</div>
+  <div class="root-error">{data.streetJob.error || t('maps.indexFail')}</div>
 {/if}
 
 {#if downloading}
   <div class="mapjob">
-    <div><b>Descargando {data.job.name}</b><small>{bytes(data.job.bytes)} escritos · zoom {data.job.maxZoom}</small></div>
+    <div><b>{t('maps.downloadingMap', { name: data.job.name })}</b><small>{t('maps.downloadProgress', { size: bytes(data.job.bytes), zoom: data.job.maxZoom })}</small></div>
     <span class="pspin"></span>
-    <button class="btn" onclick={cancelMapDownload}>Cancelar</button>
+    <button class="btn" onclick={cancelMapDownload}>{t('maps.cancel')}</button>
   </div>
 {:else if data.job?.status === 'error'}
-  <div class="root-error">{data.job.error || 'No se pudo descargar el mapa.'}</div>
+  <div class="root-error">{data.job.error || t('maps.downloadFail')}</div>
 {/if}
 
 <div class="geocoder" class:ready={data.geocoder?.installed}>
   <div class="cic">⌕</div>
   <div>
-    <b>Buscador de lugares offline</b>
+    <b>{t('maps.geocoderTitle')}</b>
     {#if data.geocoder?.installed}
-      <small>Activo · ciudades y localidades de todo el mundo · {bytes(data.geocoder.bytes)}</small>
+      <small>{t('maps.geocoderActive', { size: bytes(data.geocoder.bytes) })}</small>
     {:else if geocoding}
-      <small>{data.geocoder.job.status === 'indexing' ? 'Creando índice…' : `Descargando… ${bytes(data.geocoder.job.bytes)}`}</small>
+      <small>{data.geocoder.job.status === 'indexing' ? t('maps.geocoderIndexing') : t('maps.geocoderDownloading', { size: bytes(data.geocoder.job.bytes) })}</small>
     {:else if data.geocoder?.job?.status === 'error'}
       <small class="geoerr">{data.geocoder.job.error}</small>
     {:else}
-      <small>Necesario para buscar Barcelona, Madrid, Tokio y otras localidades.</small>
+      <small>{t('maps.geocoderNeed')}</small>
     {/if}
   </div>
-  {#if !data.geocoder?.installed && !geocoding}<button class="btn" onclick={installGeocoder} disabled={busy}>Instalar buscador</button>{/if}
+  {#if !data.geocoder?.installed && !geocoding}<button class="btn" onclick={installGeocoder} disabled={busy}>{t('maps.geocoderInstall')}</button>{/if}
   {#if geocoding}<span class="pspin"></span>{/if}
 </div>
 
-<div class="label">Mapas instalados</div>
+<div class="label">{t('maps.installedLabel')}</div>
 {#if data.installed?.length}
   {#each data.installed as map (map.file)}
     <div class="row installed">
       <div class="cic">◈</div>
-      <div><div class="cname">{map.name} {#if data.active?.file === map.file}<span class="badge b-signal">activo</span>{/if}</div><div class="cpath">{map.file} · zoom {map.maxZoom} · {bytes(map.bytes)}</div></div>
+      <div><div class="cname">{map.name} {#if data.active?.file === map.file}<span class="badge b-signal">{t('maps.badgeActive')}</span>{/if}</div><div class="cpath">{t('maps.mapMeta', { file: map.file, zoom: map.maxZoom, size: bytes(map.bytes) })}</div></div>
       <div class="actions">
         {#if map.streetIndexed}
-          <span class="badge b-signal">calles indexadas · {bytes(map.streetBytes)}</span>
+          <span class="badge b-signal">{t('maps.streetsIndexed', { size: bytes(map.streetBytes) })}</span>
         {:else}
-          <button class="btn" onclick={() => indexStreets(map)} disabled={busy || streetIndexing}>Indexar calles</button>
+          <button class="btn" onclick={() => indexStreets(map)} disabled={busy || streetIndexing}>{t('maps.indexStreets')}</button>
         {/if}
-        {#if data.active?.file !== map.file}<button class="btn" onclick={() => activate(map.file)} disabled={busy}>Activar</button>{/if}
-        <button class="btn danger" onclick={() => remove(map.file)} disabled={busy}>Eliminar</button>
+        {#if data.active?.file !== map.file}<button class="btn" onclick={() => activate(map.file)} disabled={busy}>{t('maps.activate')}</button>{/if}
+        <button class="btn danger" onclick={() => remove(map.file)} disabled={busy}>{t('maps.delete')}</button>
       </div>
     </div>
   {/each}
 {:else}
-  <div class="empty compact">Aún no hay mapas. Elige una zona del catálogo.</div>
+  <div class="empty compact">{t('maps.noMaps')}</div>
 {/if}
 
-<div class="label catalog-label">Catálogo mundial</div>
+<div class="label catalog-label">{t('maps.catalog')}</div>
 <div class="chips">
   {#each categories as cat}<button class="chip" class:on={category === cat} onclick={() => (category = cat)}>{cat}</button>{/each}
 </div>
 <div class="detail">
-  <span>Nivel de detalle</span>
-  <button class="chip" class:on={detail === 10} onclick={() => (detail = 10)}>Básico · z10</button>
-  <button class="chip" class:on={detail === 13} onclick={() => (detail = 13)}>Normal · z13</button>
-  <button class="chip" class:on={detail === 15} onclick={() => (detail = 15)}>Detallado · z15</button>
+  <span>{t('maps.detailLevel')}</span>
+  <button class="chip" class:on={detail === 10} onclick={() => (detail = 10)}>{t('maps.detailBasic')}</button>
+  <button class="chip" class:on={detail === 13} onclick={() => (detail = 13)}>{t('maps.detailNormal')}</button>
+  <button class="chip" class:on={detail === 15} onclick={() => (detail = 15)}>{t('maps.detailFull')}</button>
 </div>
 <div class="region-grid">
   {#each regions as region (region.id)}
     <button class="region" onclick={() => start(region)} disabled={!data.available || busy || downloading}>
-      <span class="rglyph">◈</span><span><b>{region.name}</b><small>Descargar recorte offline</small></span><span class="arrow">↓</span>
+      <span class="rglyph">◈</span><span><b>{region.name}</b><small>{t('maps.downloadRegion')}</small></span><span class="arrow">↓</span>
     </button>
   {/each}
 </div>

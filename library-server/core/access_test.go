@@ -166,8 +166,8 @@ func TestItemOpenRespectsAccess(t *testing.T) {
 func TestMediaCollectionForRelMatchesToItem(t *testing.T) {
 	cases := map[string]string{
 		"Biblioteca/Libros/linux.pdf": "Biblioteca/Libros",
-		"Publico/doc.pdf":           "Publico",
-		"suelto.pdf":                ".",
+		"Publico/doc.pdf":             "Publico",
+		"suelto.pdf":                  ".",
 	}
 	for rel, want := range cases {
 		if got := mediaCollectionForRel(rel); got != want {

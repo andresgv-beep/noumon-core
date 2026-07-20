@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { listUsers, createUser, deleteUser, resetPassword } from './api.js'
+  import { t } from './i18n.svelte.js'
 
   let { me } = $props()
 
@@ -8,8 +9,8 @@
   // caracteres + al menos uno no alfanumérico. El servidor es la autoridad; esto
   // solo da feedback inmediato para no ir y volver al backend por un error obvio.
   const pwProblem = (pw) => {
-    if ((pw || '').length < 10) return 'Mínimo 10 caracteres'
-    if (!/[^\p{L}\p{N}]/u.test(pw)) return 'Debe incluir un carácter especial'
+    if ((pw || '').length < 10) return t('users.pwMin')
+    if (!/[^\p{L}\p{N}]/u.test(pw)) return t('users.pwSpecial')
     return ''
   }
   // Generador de temporal que cumple la política (para el reset por olvido).
@@ -44,7 +45,7 @@
     rbusy = true
     try {
       const r = await resetPassword(u.id, rpw)
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'no se pudo')
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || t('users.failed'))
       rdone = rpw           // deja la clave a la vista para copiarla y pasársela al usuario
       rpw = ''
     } catch (e) { rflash = e.message } finally { rbusy = false }
@@ -74,7 +75,7 @@
     flash = ''
     const prob = pwProblem(np)
     if (prob) { flash = prob; return }
-    if (np !== nc) { flash = 'Las contraseñas no coinciden'; return }
+    if (np !== nc) { flash = t('users.pwMismatch'); return }
     creating = true
     try {
       const r = await createUser({ username: nu.trim(), password: np, age: nadmin ? 0 : Number(na), isAdmin: nadmin })
@@ -85,9 +86,9 @@
   }
 
   async function del(u) {
-    if (!confirm(`Borrar la cuenta de "${u.username}"?`)) return
+    if (!confirm(t('users.confirmDelete', { name: u.username }))) return
     const r = await deleteUser(u.id)
-    if (!r.ok) { flash = (await r.json().catch(() => ({}))).error || 'no se pudo'; return }
+    if (!r.ok) { flash = (await r.json().catch(() => ({}))).error || t('users.failed'); return }
     await load()
   }
 
@@ -95,39 +96,39 @@
 </script>
 
 <div class="toolbar">
-  <span class="cnt"><b>{users.length}</b> usuarios</span>
+  <span class="cnt"><b>{users.length}</b> {t('users.count')}</span>
   <span class="grow"></span>
   {#if flash}<span style="font-size:12px;color:var(--crit)">{flash}</span>{/if}
-  <button class="btn btn-primary" onclick={() => (show = !show)}>{show ? 'Cerrar' : '＋ Añadir usuario'}</button>
+  <button class="btn btn-primary" onclick={() => (show = !show)}>{show ? t('users.close') : t('users.addUser')}</button>
 </div>
 
 {#if show}
   <div class="setcard">
-    <h4>Nueva cuenta</h4>
+    <h4>{t('users.newAccount')}</h4>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <input class="uinput" placeholder="Usuario" bind:value={nu} />
+      <input class="uinput" placeholder={t('users.username')} bind:value={nu} />
       {#if nadmin}
-        <div style="align-self:center;font-size:11.5px;color:var(--ink-faint)">Admin: ve todo (sin edad)</div>
+        <div style="align-self:center;font-size:11.5px;color:var(--ink-faint)">{t('users.adminNote')}</div>
       {:else}
-        <input class="uinput" type="number" min="0" max="120" placeholder="Edad" bind:value={na} />
+        <input class="uinput" type="number" min="0" max="120" placeholder={t('users.age')} bind:value={na} />
       {/if}
-      <input class="uinput" type="password" placeholder="Contraseña" bind:value={np} />
-      <input class="uinput" type="password" placeholder="Repetir contraseña" bind:value={nc} />
+      <input class="uinput" type="password" placeholder={t('users.password')} bind:value={np} />
+      <input class="uinput" type="password" placeholder={t('users.repeatPassword')} bind:value={nc} />
     </div>
-    <div class="pwhint" style="margin-bottom:10px">Mínimo 10 caracteres e incluir al menos un carácter especial (por ejemplo !@#$%).</div>
+    <div class="pwhint" style="margin-bottom:10px">{t('users.pwHint')}</div>
     <div class="setrow" style="padding-top:0">
       <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-dim);cursor:pointer">
-        <input type="checkbox" bind:checked={nadmin} /> Administrador (ve y gestiona todo)
+        <input type="checkbox" bind:checked={nadmin} /> {t('users.adminCheck')}
       </label>
-      <button class="btn btn-primary" disabled={creating || !nu || !np || !nc} onclick={add}>{creating ? '…' : 'Crear'}</button>
+      <button class="btn btn-primary" disabled={creating || !nu || !np || !nc} onclick={add}>{creating ? '…' : t('users.create')}</button>
     </div>
   </div>
 {/if}
 
 {#if loading}
-  <div class="empty">Leyendo usuarios…</div>
+  <div class="empty">{t('users.reading')}</div>
 {:else if err}
-  <div class="empty"><div class="big">No se pudieron leer los usuarios</div>{err}</div>
+  <div class="empty"><div class="big">{t('users.loadFail')}</div>{err}</div>
 {:else}
   {#each users as u (u.id)}
     <div class="row" style="grid-template-columns:40px 1fr auto">
@@ -135,17 +136,17 @@
       <div style="min-width:0">
         <div class="cname">
           {u.username}
-          {#if u.isAdmin}<span class="badge b-signal">admin</span>{:else}<span class="badge b-mute">{u.age} años</span>{/if}
-          {#if me && u.id === me.id}<span class="badge b-info">tú</span>{/if}
+          {#if u.isAdmin}<span class="badge b-signal">{t('users.badgeAdmin')}</span>{:else}<span class="badge b-mute">{t('users.badgeAge', { age: u.age })}</span>{/if}
+          {#if me && u.id === me.id}<span class="badge b-info">{t('users.badgeYou')}</span>{/if}
         </div>
-        <div class="cpath">{u.isAdmin ? 've todo · administra' : `ve ≤ ${u.age}+ según cada colección`}</div>
+        <div class="cpath">{u.isAdmin ? t('users.adminDesc') : t('users.ageDesc', { age: u.age })}</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn" onclick={() => (resetId === u.id ? (resetId = null) : openReset(u))}>
-          {resetId === u.id ? 'Cerrar' : 'Restablecer'}
+          {resetId === u.id ? t('users.close') : t('users.reset')}
         </button>
         {#if !me || u.id !== me.id}
-          <button class="btn" onclick={() => del(u)}>Borrar</button>
+          <button class="btn" onclick={() => del(u)}>{t('users.delete')}</button>
         {/if}
       </div>
     </div>
@@ -153,35 +154,35 @@
     {#if resetId === u.id}
       <div class="setcard" style="margin:-4px 0 8px">
         {#if rdone}
-          <h4>Contraseña temporal establecida</h4>
-          <p class="tmphint">Pásasela a <b>{u.username}</b>. Podrá cambiarla desde su cuenta en el lector.</p>
+          <h4>{t('users.tempSetTitle')}</h4>
+          <p class="tmphint">{t('users.tempGiveTo')} <b>{u.username}</b>. {t('users.tempCanChange')}</p>
           <div class="tmpbox">
             <code>{rdone}</code>
-            <button class="btn" onclick={() => navigator.clipboard?.writeText(rdone)}>Copiar</button>
+            <button class="btn" onclick={() => navigator.clipboard?.writeText(rdone)}>{t('users.copy')}</button>
           </div>
           <div class="setrow" style="padding-top:8px">
             <span class="grow"></span>
-            <button class="btn btn-primary" onclick={() => { resetId = null; rdone = '' }}>Hecho</button>
+            <button class="btn btn-primary" onclick={() => { resetId = null; rdone = '' }}>{t('users.done')}</button>
           </div>
         {:else}
-          <h4>Restablecer contraseña de {u.username}</h4>
-          <p class="tmphint">Pon una temporal (o genera una) y pásasela al usuario. Deberá cambiarla después desde su cuenta.</p>
+          <h4>{t('users.resetTitle', { name: u.username })}</h4>
+          <p class="tmphint">{t('users.resetHint')}</p>
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-            <input class="uinput" style="flex:1" type="text" placeholder="Nueva contraseña temporal" bind:value={rpw} />
-            <button class="btn" onclick={fillTemp}>Generar</button>
+            <input class="uinput" style="flex:1" type="text" placeholder={t('users.tempPlaceholder')} bind:value={rpw} />
+            <button class="btn" onclick={fillTemp}>{t('users.generate')}</button>
           </div>
-          <div class="pwhint">Mínimo 10 caracteres e incluir un carácter especial.</div>
+          <div class="pwhint">{t('users.pwHintShort')}</div>
           <div class="setrow" style="padding-top:8px">
             {#if rflash}<span style="font-size:12px;color:var(--crit)">{rflash}</span>{/if}
             <span class="grow"></span>
-            <button class="btn btn-primary" disabled={rbusy || !rpw} onclick={() => doReset(u)}>{rbusy ? '…' : 'Restablecer'}</button>
+            <button class="btn btn-primary" disabled={rbusy || !rpw} onclick={() => doReset(u)}>{rbusy ? '…' : t('users.reset')}</button>
           </div>
         {/if}
       </div>
     {/if}
   {/each}
   <div class="empty" style="padding:16px 24px;font-size:11.5px">
-    El primer usuario es admin (estilo Immich). La <b>edad</b> decide qué colecciones con restricción puede ver cada cuenta.
+    {t('users.footFirst')} <b>{t('users.footAgeWord')}</b> {t('users.footRest')}
   </div>
 {/if}
 

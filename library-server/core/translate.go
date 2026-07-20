@@ -72,10 +72,17 @@ func (s *Server) handleTranslateLanguages(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var payload struct {
-		Pairs []map[string]string `json:"pairs"`
+		Pairs     []map[string]string `json:"pairs"`
+		ToolError string              `json:"toolError"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"available": false})
+		return
+	}
+	// translate-wrap vivo pero sin translateLocally: no disponible, con motivo,
+	// para que el Panel ofrezca instalar la herramienta en vez de un aviso mudo.
+	if payload.ToolError != "" {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "reason": "tool-missing"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"available": true, "pairs": payload.Pairs})

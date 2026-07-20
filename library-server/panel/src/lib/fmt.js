@@ -1,5 +1,7 @@
 // Formateo compartido del Panel.
 
+import { i18n } from './i18n.svelte.js'
+
 export function bytes(n) {
   if (!n || n < 0) return '0 B'
   const u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -9,14 +11,15 @@ export function bytes(n) {
 }
 
 export function num(n) {
-  return (n || 0).toLocaleString('es-ES')
+  return (n || 0).toLocaleString(i18n.locale === 'en' ? 'en-GB' : 'es-ES')
 }
 
 // Metadatos de presentación por sección del pool (icono/color/etiqueta).
+// `labelKey` se resuelve con t() en la vista para que reaccione al idioma.
 export const SECTION_META = {
-  zim:       { label: 'Colecciones ZIM', glyph: 'W', color: 'var(--info)' },
-  models:    { label: 'Modelos de traducción', glyph: '文', color: 'var(--magenta)' },
-  downloads: { label: 'Descargas / media', glyph: '▼', color: 'var(--orange)' },
-  maps:      { label: 'Mapas', glyph: '◈', color: 'var(--signal)' },
-  db:        { label: 'Estado (bases de datos)', glyph: '≡', color: 'var(--ink-mute)' },
+  zim:       { labelKey: 'pool.zim', glyph: 'W', color: 'var(--info)' },
+  models:    { labelKey: 'pool.models', glyph: '文', color: 'var(--magenta)' },
+  downloads: { labelKey: 'pool.downloads', glyph: '▼', color: 'var(--orange)' },
+  maps:      { labelKey: 'pool.maps', glyph: '◈', color: 'var(--signal)' },
+  db:        { labelKey: 'pool.db', glyph: '≡', color: 'var(--ink-mute)' },
 }

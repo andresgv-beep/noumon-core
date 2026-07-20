@@ -133,6 +133,10 @@ export const translateAvailable = () => getJSON('/api/admin/translate/available'
 export const translateDownload = (id) => postJSON('/api/admin/translate/download', { id })
 export const translateRemove = (id) => postJSON('/api/admin/translate/remove', { id })
 
+// Aprovisionamiento de herramientas externas (admin_deps.go)
+export const getDeps = () => getJSON('/api/admin/deps').then((d) => d.tools || []).catch(() => [])
+export const installDep = (id) => postJSON('/api/admin/deps/install', { id })
+
 // Contenido del pool (medios locales) · listar y eliminar
 export const getMedia = () =>
   getJSON('/api/media').then((d) => d.items || []).catch(() => [])

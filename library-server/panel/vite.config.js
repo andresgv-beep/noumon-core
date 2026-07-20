@@ -10,8 +10,11 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
-      '/api': 'http://127.0.0.1:8090',
-      '/content': 'http://127.0.0.1:8090',
+      // changeOrigin:false conserva el Host original (localhost:5174): así el
+      // guardián anti-CSRF del Core ve Origin == Host y deja pasar el login en
+      // desarrollo sin necesitar DEV_CORS ni tocar el servicio.
+      '/api': { target: 'http://127.0.0.1:8090', changeOrigin: false },
+      '/content': { target: 'http://127.0.0.1:8090', changeOrigin: false },
     },
   },
   build: {

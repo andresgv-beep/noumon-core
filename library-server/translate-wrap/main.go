@@ -80,7 +80,10 @@ func defaultTranslateBin() string {
 }
 
 func engineCommand(args ...string) *exec.Cmd {
-	cmd := exec.Command(bin, args...)
+	mu.RLock()
+	current := bin
+	mu.RUnlock()
+	cmd := exec.Command(current, args...)
 	if modelsDir == "" {
 		return cmd
 	}
@@ -201,9 +204,38 @@ func samePath(a, b string) bool {
 // loadModels ejecuta `translateLocally -l` y arma pares + mapa (from-to)->modelId.
 // Construye copias locales y las intercambia bajo lock: seguro con traducciones
 // en curso y refleja bien los modelos añadidos/quitados en caliente.
+// toolErr registra por qué el motor no está operativo (p. ej. translateLocally
+// sin instalar). Protegido por mu, como pairs/model.
+var toolErr string
+
+// retryLoadIfNeeded reintenta listar modelos si el último intento falló: así el
+// sidecar se recupera en caliente cuando el aprovisionamiento coloca el binario,
+// sin reiniciar el servicio (degradación limpia, PLAN-INSTALACION-LIMPIA §3).
+func retryLoadIfNeeded() {
+	mu.RLock()
+	failed := toolErr != ""
+	mu.RUnlock()
+	if !failed {
+		return
+	}
+	// La ruta se fijó al arrancar; si el aprovisionamiento colocó el binario
+	// después (p. ej. el Panel lo acaba de instalar), hay que re-resolverla o
+	// el reintento seguiría buscando el nombre pelado en el PATH para siempre.
+	resolved := defaultTranslateBin()
+	mu.Lock()
+	bin = resolved
+	mu.Unlock()
+	if err := loadModels(); err == nil {
+		log.Printf("motor de traduccion recuperado: %s", resolved)
+	}
+}
+
 func loadModels() error {
 	out, err := engineCommand("-l").Output()
 	if err != nil {
+		mu.Lock()
+		toolErr = err.Error()
+		mu.Unlock()
 		return err
 	}
 	newPairs := []map[string]string{}
@@ -218,16 +250,21 @@ func loadModels() error {
 		newPairs = append(newPairs, map[string]string{"from": from, "to": to})
 	}
 	mu.Lock()
-	pairs, model = newPairs, newModel
+	pairs, model, toolErr = newPairs, newModel, ""
 	mu.Unlock()
 	return nil
 }
 
 func handleLanguages(w http.ResponseWriter, r *http.Request) {
+	retryLoadIfNeeded()
 	mu.RLock()
-	p := pairs
+	p, terr := pairs, toolErr
 	mu.RUnlock()
-	writeJSON(w, http.StatusOK, map[string]any{"pairs": p})
+	body := map[string]any{"pairs": p}
+	if terr != "" {
+		body["toolError"] = terr
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // ── Gestión de modelos (Panel de Control) ──────────────────────────────────
@@ -469,7 +506,10 @@ func main() {
 	sem = make(chan struct{}, conc)
 
 	if err := loadModels(); err != nil {
-		log.Fatalf("no se pudo listar modelos con %s: %v", bin, err)
+		// Sin binario el sidecar NO muere: sigue sirviendo con 0 pares y lo
+		// reintenta en cada /languages. Así el Panel puede contar qué falta y
+		// la instalación de la herramienta lo activa sin reiniciar nada.
+		log.Printf("aviso: traductor no operativo (se reintentara solo): %v", err)
 	}
 	log.Printf("translate-wrap → http://%s:%s  ·  motor: %s  ·  pares: %v  ·  concurrencia %d",
 		bind, port, bin, pairs, conc)

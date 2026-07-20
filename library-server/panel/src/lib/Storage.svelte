@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { getStorage, setStorageRoot } from './api.js'
+  import { t } from './i18n.svelte.js'
   import { bytes, num, SECTION_META } from './fmt.js'
 
   let data = $state(null)
@@ -16,7 +17,7 @@
     try {
       data = await getStorage()
     } catch (e) {
-      error = e.message || 'no se pudo leer el pool'
+      error = e.message || t('storage.readFail')
     } finally {
       loading = false
     }
@@ -38,7 +39,7 @@
     const next = draftRoot.trim()
     if (!next || savingRoot) return
     if (data.usedBytes > 0 && next.toLowerCase() !== (data.root || '').toLowerCase() &&
-        !confirm('La ubicación cambiará para el contenido nuevo. Los archivos que ya existen no se moverán automáticamente. ¿Continuar?')) return
+        !confirm(t('storage.confirmMove'))) return
     savingRoot = true; rootError = ''
     try {
       await setStorageRoot(next)
@@ -51,9 +52,9 @@
         } catch (e) {}
         await new Promise((resolve) => setTimeout(resolve, 1000))
       }
-      rootError = 'El servidor tarda más de lo esperado en reiniciarse.'
+      rootError = t('storage.restartSlow')
     } catch (e) {
-      rootError = e.message || 'No se pudo cambiar la ubicación.'
+      rootError = e.message || t('storage.rootFail')
     } finally {
       savingRoot = false
     }
@@ -65,50 +66,50 @@
 </script>
 
 <div class="toolbar">
-  <span class="cnt">Pool de almacenamiento · <b>{bytes(used)}</b> en uso</span>
+  <span class="cnt">{t('storage.inUse', { size: bytes(used) })}</span>
   <span class="grow"></span>
-  <button class="btn" onclick={load} disabled={loading}>↻ Actualizar</button>
+  <button class="btn" onclick={load} disabled={loading}>↻ {t('storage.refresh')}</button>
 </div>
 
 {#if data}
   <div class="setcard">
     <div class="root-title">
-      <h4>Carpeta de la biblioteca</h4>
+      <h4>{t('storage.libraryFolder')}</h4>
       {#if data.configurable && !editingRoot}
-        <button class="btn root-change" onclick={startRootEdit}>Cambiar ubicación</button>
+        <button class="btn root-change" onclick={startRootEdit}>{t('storage.changeLocation')}</button>
       {/if}
     </div>
     <div class="setrow">
-      <code>{data.root || '— sin POOL_ROOT (rutas legacy) —'}</code>
+      <code>{data.root || t('storage.noRoot')}</code>
       <span class="badge {data.provider === 'noumon' ? 'b-signal' : 'b-info'}">
         {data.provider || 'host'}
       </span>
     </div>
     <div class="setrow" style="color:var(--ink-faint);font-size:11.5px;padding-top:0">
       {#if data.configurable}
-        Aquí se guardan ZIM, medios, mapas y modelos. Las cuentas y la configuración interna permanecen protegidas en el sistema.
+        {t('storage.rootHint')}
       {:else}
-        Esta ubicación está administrada por la configuración externa del servidor.
+        {t('storage.rootExternal')}
       {/if}
     </div>
 
     {#if editingRoot}
       <div class="root-editor">
-        <div class="root-label">Disco del servidor</div>
+        <div class="root-label">{t('storage.serverDisk')}</div>
         <div class="volume-list">
           {#each data.volumes || [] as volume (volume.path)}
             <button class="chip" onclick={() => chooseVolume(volume.path)}>{volume.path}</button>
           {/each}
         </div>
         <label>
-          Carpeta absoluta
+          {t('storage.absFolder')}
           <input bind:value={draftRoot} placeholder="D:\Noumon" disabled={savingRoot} />
         </label>
-        <div class="root-note">Si no existe, Library Server la creará y comprobará que puede escribir en ella.</div>
+        <div class="root-note">{t('storage.createNote')}</div>
         {#if rootError}<div class="root-error">{rootError}</div>{/if}
         <div class="root-actions">
-          <button class="btn" onclick={() => (editingRoot = false)} disabled={savingRoot}>Cancelar</button>
-          <button class="btn btn-primary" onclick={saveRoot} disabled={savingRoot || !draftRoot.trim()}>{savingRoot ? 'Aplicando…' : 'Crear y usar'}</button>
+          <button class="btn" onclick={() => (editingRoot = false)} disabled={savingRoot}>{t('storage.cancel')}</button>
+          <button class="btn btn-primary" onclick={saveRoot} disabled={savingRoot || !draftRoot.trim()}>{savingRoot ? t('storage.applying') : t('storage.createUse')}</button>
         </div>
       </div>
     {:else if rootError}
@@ -116,32 +117,32 @@
     {/if}
   </div>
 
-  <div class="label">Contenido del pool</div>
+  <div class="label">{t('storage.poolContent')}</div>
   {#each data.sections as s (s.key)}
-    {@const meta = SECTION_META[s.key] || { label: s.key, glyph: '·', color: 'var(--ink-mute)' }}
+    {@const meta = SECTION_META[s.key] || { labelKey: '', glyph: '·', color: 'var(--ink-mute)' }}
     <div class="row" style="grid-template-columns:40px 1fr 150px">
       <div class="cic" style="background:color-mix(in srgb, {meta.color} 15%, transparent);color:{meta.color}">{meta.glyph}</div>
       <div style="min-width:0">
         <div class="cname">
-          {meta.label}
+          {meta.labelKey ? t(meta.labelKey) : s.key}
           <span class="badge b-mute">{s.engine}</span>
-          {#if !s.exists}<span class="badge b-warn">no encontrado</span>{/if}
+          {#if !s.exists}<span class="badge b-warn">{t('storage.notFound')}</span>{/if}
         </div>
-        <div class="cpath">{s.path || '— ubicación no declarada —'}</div>
+        <div class="cpath">{s.path || t('storage.noPath')}</div>
         {#if s.exists && s.bytes > 0}
           <div class="bar" style="max-width:280px"><i style="width:{Math.max(3, (s.bytes / maxSection) * 100)}%"></i></div>
         {/if}
       </div>
       <div class="cmeta">
         {bytes(s.bytes)}<br>
-        <span style="color:var(--ink-faint)">{num(s.items)} {s.key === 'zim' ? 'ficheros' : 'items'}</span>
+        <span style="color:var(--ink-faint)">{num(s.items)} {s.key === 'zim' ? t('storage.files') : t('storage.items')}</span>
       </div>
     </div>
   {/each}
 {:else if loading}
-  <div class="empty">Leyendo el pool…</div>
+  <div class="empty">{t('storage.reading')}</div>
 {:else if error}
-  <div class="empty"><div class="big">No se pudo leer el pool</div>{error}</div>
+  <div class="empty"><div class="big">{t('storage.readFailTitle')}</div>{error}</div>
 {/if}
 
 <style>
