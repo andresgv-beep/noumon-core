@@ -57,6 +57,7 @@ func depManifest() []depTool {
 			Source:  "github.com/XapaJIaMnu/translateLocally",
 			URL:     "https://github.com/XapaJIaMnu/translateLocally/releases/download/latest/translateLocally.windows-2022.core-avx-i.exe",
 			Bytes:   59515392,
+			SHA256:  "b7cb0f58369cc508812f049af8c07ed59f2340e8007d31ee672dcef450e53aa4",
 			File:    "translateLocally.exe",
 		}}
 	}
