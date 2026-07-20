@@ -38,7 +38,7 @@ func main() {
 
 	logPath, err := supervisorLogPath()
 	if err == nil {
-		if file, openErr := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); openErr == nil {
+		if file, openErr := openRotatedLog(logPath, maxLogSize); openErr == nil {
 			defer file.Close()
 			log.SetOutput(file)
 		}
@@ -91,6 +91,25 @@ func (s *supervisor) run(ctx context.Context) error {
 	return nil
 }
 
+// restartDelay decide cuánto esperar antes de relanzar (sleep) y el backoff
+// que queda armado para la siguiente caída (next). Un reinicio administrativo
+// (código 75) siempre espera 300ms y rearma el backoff a 1s: se evalúa antes
+// que el uptime para que una sesión larga no lo pise. Un proceso que aguantó
+// más de 30s se considera sano y también rearma a 1s.
+func restartDelay(current, uptime time.Duration, adminRestart bool) (sleep, next time.Duration) {
+	if adminRestart {
+		return 300 * time.Millisecond, time.Second
+	}
+	if uptime > 30*time.Second {
+		current = time.Second
+	}
+	next = current * 2
+	if next > 30*time.Second {
+		next = 30 * time.Second
+	}
+	return current, next
+}
+
 func (s *supervisor) runLoop(ctx context.Context, name, executable string, processEnv func() []string, core bool) {
 	delay := time.Second
 	for {
@@ -98,6 +117,7 @@ func (s *supervisor) runLoop(ctx context.Context, name, executable string, proce
 			return
 		}
 		started := time.Now()
+		adminRestart := false
 		cmd := exec.Command(executable)
 		cmd.Dir = s.binDir
 		// Se recalcula en cada arranque: los cambios guardados por el Panel se
@@ -135,7 +155,7 @@ func (s *supervisor) runLoop(ctx context.Context, name, executable string, proce
 				exitCode := commandExitCode(err)
 				if core && exitCode == restartExitCode {
 					log.Print("reinicio administrativo solicitado")
-					delay = 300 * time.Millisecond
+					adminRestart = true
 				} else {
 					log.Printf("%s termino (codigo=%d, uptime=%s): %v", name, exitCode, time.Since(started).Round(time.Second), err)
 				}
@@ -145,19 +165,12 @@ func (s *supervisor) runLoop(ctx context.Context, name, executable string, proce
 			}
 		}
 
-		if time.Since(started) > 30*time.Second {
-			delay = time.Second
-		}
+		sleep, next := restartDelay(delay, time.Since(started), adminRestart)
+		delay = next
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(delay):
-		}
-		if delay < 30*time.Second {
-			delay *= 2
-			if delay > 30*time.Second {
-				delay = 30 * time.Second
-			}
+		case <-time.After(sleep):
 		}
 	}
 }
@@ -176,8 +189,25 @@ func (s *supervisor) clearChild(name string, cmd *exec.Cmd) {
 	s.mu.Unlock()
 }
 
+// maxLogSize acota cada fichero de log. Con una sola generación .old el uso
+// total queda en ~2× por proceso. La rotación ocurre al abrir (arranque del
+// supervisor o relanzamiento del hijo): un hijo que viva meses sin caerse
+// puede superarlo hasta su siguiente reinicio, porque el hijo escribe
+// directamente sobre el descriptor y no se puede rotar por debajo en Windows.
+const maxLogSize = 5 << 20 // 5 MB
+
+// openRotatedLog abre path en modo append; si ya supera limit, lo aparta
+// antes a path+".old" (sustituyendo la generación anterior).
+func openRotatedLog(path string, limit int64) (*os.File, error) {
+	if info, err := os.Stat(path); err == nil && info.Size() >= limit {
+		_ = os.Remove(path + ".old")
+		_ = os.Rename(path, path+".old")
+	}
+	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+}
+
 func (s *supervisor) processLog(name string) (*os.File, error) {
-	return os.OpenFile(filepath.Join(s.logDir, name+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	return openRotatedLog(filepath.Join(s.logDir, name+".log"), maxLogSize)
 }
 
 func (s *supervisor) coreEnv() []string {
@@ -187,7 +217,14 @@ func (s *supervisor) coreEnv() []string {
 	var cfg supervisorConfig
 	if configErr == nil {
 		extra["NOUMON_LIBRARY_CONFIG"] = configPath
-		cfg, _ = readSupervisorConfig(configPath)
+		var readErr error
+		cfg, readErr = readSupervisorConfig(configPath)
+		if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+			// Sin esto, un config.json corrupto degrada en silencio: contentRoot
+			// desaparece y el pool vuelve al directorio de estado ("¿dónde está
+			// mi biblioteca?") sin ninguna pista en el log.
+			log.Printf("config.json ilegible, se usan valores por defecto: %v", readErr)
+		}
 	}
 
 	// "Publicar en la red local" del Panel. Un BIND del entorno del operador
