@@ -128,23 +128,23 @@
 
 <style>
   .ov { position: fixed; inset: 0; background: rgba(0, 0, 0, .5); display: grid; place-items: center; z-index: 60; }
-  .card { width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 20px 50px rgba(0, 0, 0, .4); }
+  .card { width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--border); border-radius:var(--r-lg); padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 20px 50px rgba(0, 0, 0, .4); }
   h3 { font-size: 16px; color: var(--ink); }
   .hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
   form { display: flex; flex-direction: column; gap: 11px; }
   label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
-  input { background: var(--panel-2, var(--raise)); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; font-size: 14px; color: var(--ink); text-transform: none; letter-spacing: normal; }
+  input { background: var(--panel-2, var(--raise)); border: 1px solid var(--border); border-radius:var(--r-md); padding: 9px 11px; font-size: 14px; color: var(--ink); text-transform: none; letter-spacing: normal; }
   input:focus { outline: none; border-color: var(--accent-2); }
   .err { font-size: 12.5px; color: #f87171; }
-  .note { font-size: 12px; color: var(--ink-dim); background: var(--raise); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .note { font-size: 12px; color: var(--ink-dim); background: var(--raise); border: 1px solid var(--border); border-radius:var(--r-md); padding: 8px 10px; }
   .note.ok { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
   .pwhint { font-size: 11px; color: var(--faint); line-height: 1.4; }
   .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
-  .btn { padding: 9px 15px; border-radius: 9px; border: 1px solid var(--border); color: var(--ink-dim); font-size: 13.5px; }
+  .btn { padding: 9px 15px; border-radius:var(--r-md); border: 1px solid var(--border); color: var(--ink-dim); font-size: 13.5px; }
   .btn:hover { background: var(--raise); color: var(--ink); }
   .btn.primary { background: color-mix(in srgb, var(--accent) 20%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--ink); width: 100%; justify-content: center; }
   .who { display: flex; align-items: center; gap: 12px; }
-  .av { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--ink); font-weight: 700; font-size: 15px; }
+  .av { width: 42px; height: 42px; border-radius: var(--r-round); display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--ink); font-weight: 700; font-size: 15px; }
   .wt { display: flex; flex-direction: column; }
   .wt b { font-size: 15px; color: var(--ink); }
   .wt small { font-size: 12px; color: var(--muted); }

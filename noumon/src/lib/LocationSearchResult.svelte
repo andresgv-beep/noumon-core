@@ -100,13 +100,13 @@
   .geo-kind{display:flex;align-items:center;gap:7px;color:var(--accent-2);font-size:11px;font-weight:650;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px}
   h2{font-size:26px;line-height:1.2;font-weight:650;color:var(--ink);letter-spacing:-.3px}
   .geo-copy p{color:var(--muted);font-size:13.5px;margin-top:6px}
-  .approx{display:inline-block;margin-top:8px;padding:4px 8px;border-radius:7px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent-2);font-size:10.5px}
+  .approx{display:inline-block;margin-top:8px;padding:4px 8px;border-radius:var(--r-sm);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent-2);font-size:10.5px}
   .radius-label{display:block;max-width:260px;margin-top:24px;color:var(--ink-dim);font-size:12.5px}
   .radius-label>span:first-child{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
   .radius-label output{color:var(--ink);font-weight:600}
   .radius-label input{width:100%;accent-color:var(--accent);cursor:pointer;margin-top:9px}
   .range-ends{display:flex;justify-content:space-between;color:var(--faint);font-size:10.5px;margin-top:1px}
-  .map-wrap{position:absolute;inset:0 0 0 36%;overflow:hidden;border-radius:16px;
+  .map-wrap{position:absolute;inset:0 0 0 36%;overflow:hidden;border-radius:var(--r-pill);
     -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%),linear-gradient(180deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);
     -webkit-mask-composite:source-in;
     mask-image:linear-gradient(90deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%),linear-gradient(180deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);
@@ -117,9 +117,9 @@
   .nearby-head h3{font-size:14px;font-weight:650;color:var(--ink)}
   .nearby-head span{font-size:11px;color:var(--faint)}
   .poi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 8px}
-  .poi{min-width:0;display:flex;align-items:center;gap:9px;text-align:left;padding:8px;border-radius:9px;transition:background .12s}
+  .poi{min-width:0;display:flex;align-items:center;gap:9px;text-align:left;padding:8px;border-radius:var(--r-md);transition:background .12s}
   .poi:hover,.poi.selected{background:var(--card)}
-  .poi-icon{display:grid;place-items:center;width:31px;height:31px;flex:none;border-radius:10px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent-2)}
+  .poi-icon{display:grid;place-items:center;width:31px;height:31px;flex:none;border-radius:var(--r-md);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent-2)}
   .poi-copy{min-width:0;display:flex;flex-direction:column}
   .poi-copy b,.poi-copy small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .poi-copy b{font-size:12.5px;font-weight:600;color:var(--ink-dim)}

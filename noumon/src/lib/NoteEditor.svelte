@@ -54,22 +54,22 @@
 <style>
   .scrim{position:fixed;inset:0;z-index:100;background:color-mix(in srgb,#000 55%,transparent);backdrop-filter:blur(2px);display:grid;place-items:center;padding:24px;animation:fade .12s ease}
   @keyframes fade{from{opacity:0}to{opacity:1}}
-  .card{width:100%;max-width:620px;background:var(--panel);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden;animation:pop .14s ease}
+  .card{width:100%;max-width:620px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-pill);box-shadow:0 24px 70px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden;animation:pop .14s ease}
   @keyframes pop{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
   .nhead{display:flex;align-items:center;gap:12px;padding:16px 16px 14px;border-bottom:1px solid var(--border)}
-  .ntile{width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-2)}
+  .ntile{width:34px;height:34px;border-radius:var(--r-md);flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-2)}
   .ntitle{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
   .ntitle b{font-size:15px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ntitle small{font-size:12px;color:var(--muted)}
-  .x{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--muted);flex:none}
+  .x{width:30px;height:30px;border-radius:var(--r-md);display:grid;place-items:center;color:var(--muted);flex:none}
   .x:hover{background:var(--raise);color:var(--ink)}
-  textarea{margin:16px;height:280px;resize:vertical;background:var(--ground);border:1px solid var(--border);border-radius:11px;padding:14px 16px;color:var(--ink);font-size:14.5px;line-height:1.6;outline:none;font-family:inherit;transition:border-color .12s}
+  textarea{margin:16px;height:280px;resize:vertical;background:var(--ground);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;color:var(--ink);font-size:14.5px;line-height:1.6;outline:none;font-family:inherit;transition:border-color .12s}
   textarea:focus{border-color:color-mix(in srgb,var(--accent) 55%,var(--border))}
   textarea::placeholder{color:var(--muted)}
   .nfoot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px 16px}
   .tip{font-size:12px;color:var(--faint)}
   .btns{display:flex;gap:8px}
-  .btn{display:flex;align-items:center;gap:7px;height:36px;padding:0 16px;border-radius:9px;font-size:13.5px;font-weight:550;transition:background .12s,color .12s,opacity .12s}
+  .btn{display:flex;align-items:center;gap:7px;height:36px;padding:0 16px;border-radius:var(--r-md);font-size:13.5px;font-weight:550;transition:background .12s,color .12s,opacity .12s}
   .btn.ghost{color:var(--ink-dim)}
   .btn.ghost:hover{background:var(--raise);color:var(--ink)}
   .btn.primary{background:linear-gradient(140deg,var(--accent),var(--accent-2));color:#fff}

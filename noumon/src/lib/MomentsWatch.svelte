@@ -377,7 +377,7 @@
   .yw { flex: 1; min-width: 0; height: 100%; overflow-y: auto; background: var(--ground); color: var(--ink); }
   /* Badge de traducción (flota arriba-derecha, visible al hacer scroll) */
   .tbadge-anchor { position: sticky; top: 0; z-index: 6; height: 0; }
-  .tbadge { position: absolute; top: 12px; right: 18px; display: flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 20px; background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow); color: var(--ink-dim); font-size: 12.5px; font-weight: 520; }
+  .tbadge { position: absolute; top: 12px; right: 18px; display: flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius:var(--r-pill); background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow); color: var(--ink-dim); font-size: 12.5px; font-weight: 520; }
   .tbadge.done { color: var(--accent-2); }
   .tbadge.done :global(.ic) { color: var(--accent-2); }
   .tspin { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: tspin .7s linear infinite; }
@@ -389,11 +389,11 @@
   .ic { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
   /* Player real 16:9 */
-  .player { position: relative; aspect-ratio: 16/9; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); background: #000; }
+  .player { position: relative; aspect-ratio: 16/9; border-radius:var(--r-pill); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); background: #000; }
   .player video { width: 100%; height: 100%; display: block; background: #000; object-fit: contain; cursor: pointer; }
 
   /* Botón grande de play cuando está pausado */
-  .bigplay { position: absolute; inset: 0; margin: auto; width: 66px; height: 66px; border-radius: 999px; background: rgba(0,0,0,.5); color: #fff; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.28); cursor: pointer; transition: background .14s, transform .14s; }
+  .bigplay { position: absolute; inset: 0; margin: auto; width: 66px; height: 66px; border-radius:var(--r-pill); background: rgba(0,0,0,.5); color: #fff; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.28); cursor: pointer; transition: background .14s, transform .14s; }
   .bigplay:hover { background: rgba(0,0,0,.68); transform: scale(1.05); }
 
   /* Spinner de buffering: el <video> disparó play pero está esperando datos. */
@@ -412,10 +412,10 @@
   .seg-fill { height: 100%; background: var(--accent); }
   .playhead { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); box-shadow: 0 0 0 2px rgba(0,0,0,.35); pointer-events: none; opacity: 0; transition: opacity .1s; }
   .seek:hover .playhead { opacity: 1; }
-  .chaptip { position: absolute; bottom: 20px; transform: translateX(-50%); background: rgba(0,0,0,.88); color: #fff; font-size: 12px; font-weight: 550; padding: 4px 9px; border-radius: 7px; white-space: nowrap; pointer-events: none; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .chaptip { position: absolute; bottom: 20px; transform: translateX(-50%); background: rgba(0,0,0,.88); color: #fff; font-size: 12px; font-weight: 550; padding: 4px 9px; border-radius:var(--r-sm); white-space: nowrap; pointer-events: none; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
 
   .vrow { display: flex; align-items: center; gap: 8px; color: #fff; }
-  .vbtn { width: 32px; height: 32px; display: grid; place-items: center; color: #fff; background: none; border: 0; cursor: pointer; border-radius: 7px; transition: background .12s; }
+  .vbtn { width: 32px; height: 32px; display: grid; place-items: center; color: #fff; background: none; border: 0; cursor: pointer; border-radius:var(--r-sm); transition: background .12s; }
   .vbtn:hover { background: rgba(255,255,255,.16); }
   .vbtn.on { color: var(--accent-2); }
   .vvol { width: 78px; accent-color: var(--accent); cursor: pointer; }
@@ -427,39 +427,39 @@
 
   .v-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; justify-content: space-between; }
   .chan { display: flex; align-items: center; gap: 11px; }
-  .chan .av { width: 42px; height: 42px; flex: none; border-radius: 999px; display: grid; place-items: center; color: #fff; font-weight: 650; font-size: 15px; background: linear-gradient(150deg, var(--accent), var(--accent-2)); overflow: hidden; }
+  .chan .av { width: 42px; height: 42px; flex: none; border-radius:var(--r-pill); display: grid; place-items: center; color: #fff; font-weight: 650; font-size: 15px; background: linear-gradient(150deg, var(--accent), var(--accent-2)); overflow: hidden; }
   .chan .av.img { background: none; }
   .chan .av img { width: 100%; height: 100%; object-fit: cover; }
   .chan .cn { font-size: 14px; font-weight: 620; }
   .chan .cs { font-size: 12px; color: var(--muted); }
-  .chan .chfav { margin-left: 6px; width: 36px; height: 36px; flex: none; border-radius: 999px; display: grid; place-items: center; background: none; border: 0; color: var(--muted); cursor: pointer; transition: color .14s, background .14s; }
+  .chan .chfav { margin-left: 6px; width: 36px; height: 36px; flex: none; border-radius:var(--r-pill); display: grid; place-items: center; background: none; border: 0; color: var(--muted); cursor: pointer; transition: color .14s, background .14s; }
   .chan .chfav:hover { background: var(--raise); color: var(--accent); }
   .chan .chfav.on { color: var(--accent); }
   .acts { display: flex; gap: 8px; flex-wrap: wrap; }
-  .act { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--border); font-size: 13px; font-weight: 550; color: var(--ink-dim); }
+  .act { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius:var(--r-pill); background: var(--card); border: 1px solid var(--border); font-size: 13px; font-weight: 550; color: var(--ink-dim); }
   .act:hover { background: var(--raise); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
   .act.pri { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); color: var(--ink); }
   .act.pri .ic { color: var(--accent); }
 
-  .desc { margin-top: 16px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 15px 17px; }
+  .desc { margin-top: 16px; background: var(--card); border: 1px solid var(--border); border-radius:var(--r-lg); padding: 15px 17px; }
   .desc .m { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; font-weight: 600; color: var(--ink-dim); margin-bottom: 9px; }
   .desc .m span { color: var(--muted); font-weight: 500; }
   .desc p { color: var(--ink-dim); font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
   .tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
-  .tag { font-size: 11.5px; font-weight: 600; color: var(--accent-2); background: color-mix(in srgb, var(--accent) 13%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent); padding: 4px 9px; border-radius: 7px; }
+  .tag { font-size: 11.5px; font-weight: 600; color: var(--accent-2); background: color-mix(in srgb, var(--accent) 13%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent); padding: 4px 9px; border-radius:var(--r-sm); }
 
 
   /* Relacionados: marco fijo (acotado a la ventana, así siempre ≥ el vídeo) con
      la lista scrolleando DENTRO — si no, con muchos vídeos la lista no tendría fin. */
   .side { position: sticky; top: 20px; align-self: start; }
-  .relframe { display: flex; flex-direction: column; min-height: 0; height: calc(100vh - 130px); border: 1px solid var(--border); border-radius: 14px; background: var(--card); padding: 12px 8px 10px 12px; box-shadow: var(--shadow); }
+  .relframe { display: flex; flex-direction: column; min-height: 0; height: calc(100vh - 130px); border: 1px solid var(--border); border-radius:var(--r-lg); background: var(--card); padding: 12px 8px 10px 12px; box-shadow: var(--shadow); }
   .side h2 { flex: none; font-size: 13px; font-weight: 650; color: var(--ink); margin: 2px 2px 10px; }
   .rellist { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
   .rellist::-webkit-scrollbar { width: 8px; }
-  .rellist::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
-  .rel { display: grid; grid-template-columns: 132px 1fr; gap: 11px; padding: 7px; border-radius: 12px; cursor: pointer; background: none; border: 0; color: inherit; text-align: left; }
+  .rellist::-webkit-scrollbar-thumb { background: var(--border); border-radius:var(--r-md); }
+  .rel { display: grid; grid-template-columns: 132px 1fr; gap: 11px; padding: 7px; border-radius:var(--r-lg); cursor: pointer; background: none; border: 0; color: inherit; text-align: left; }
   .rel:hover { background: var(--raise); }
-  .rel .rp { position: relative; aspect-ratio: 16/9; border-radius: 9px; overflow: hidden; border: 1px solid var(--border); background: linear-gradient(150deg, #2d496a, #111822); }
+  .rel .rp { position: relative; aspect-ratio: 16/9; border-radius:var(--r-md); overflow: hidden; border: 1px solid var(--border); background: linear-gradient(150deg, #2d496a, #111822); }
   .rel .rp.img { background: #000; }
   .rel .rp img { width: 100%; height: 100%; object-fit: cover; }
   .rel h3 { font-size: 13px; font-weight: 600; line-height: 1.32; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

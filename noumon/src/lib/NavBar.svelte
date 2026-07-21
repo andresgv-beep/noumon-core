@@ -25,7 +25,7 @@
 </script>
 
 <div class="nav">
-  <button class="navbtn" class:on={!sidebarOpen} title={sidebarOpen ? t('nav.hideLibrary') : t('nav.showLibrary')} onclick={() => onToggleSidebar?.()}><Icon name="panel" /></button>
+  <button class="navbtn" class:on={sidebarOpen} title={sidebarOpen ? t('nav.hideLibrary') : t('nav.showLibrary')} onclick={() => onToggleSidebar?.()}><Icon name="panel" /></button>
   <button class="navbtn" title={t('nav.back')} disabled={!canBack} onclick={() => onBack?.()}><Icon name="back" /></button>
   <button class="navbtn" title={t('nav.forward')} disabled={!canForward} onclick={() => onForward?.()}><Icon name="forward" /></button>
   <button class="navbtn" title={t('nav.reload')} onclick={() => onReload?.()}><Icon name="reload" /></button>
@@ -56,19 +56,19 @@
 
 <style>
   .nav{display:flex;align-items:center;gap:6px;padding:0 16px;background:var(--panel-2);border-bottom:1px solid var(--border);height:100%}
-  .navbtn{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--ink-dim);transition:background .12s;flex:none}
+  .navbtn{width:32px;height:32px;border-radius:var(--r-md);display:grid;place-items:center;color:var(--ink-dim);transition:background .12s;flex:none}
   .navbtn:hover{background:var(--panel)}
   .navbtn.on{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-2)}
   .navbtn:disabled{color:var(--faint);cursor:default}
   .navbtn:disabled:hover{background:none}
-  .address{flex:1;display:flex;align-items:center;gap:10px;height:36px;margin:0 6px;padding:0 8px 0 12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;color:var(--ink-dim);font-size:13.5px;min-width:0;position:relative;overflow:hidden}
+  .address{flex:1;display:flex;align-items:center;gap:10px;height:36px;margin:0 6px;padding:0 8px 0 12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-md);color:var(--ink-dim);font-size:13.5px;min-width:0;position:relative;overflow:hidden}
   .loadbar{position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),var(--accent-2),transparent);background-size:45% 100%;background-repeat:no-repeat;animation:navload 1.05s ease-in-out infinite}
   @keyframes navload{0%{background-position:-45% 0}100%{background-position:145% 0}}
   @media (prefers-reduced-motion:reduce){.loadbar{animation:none;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--accent) 60%,transparent),transparent)}}
   .address :global(.ic){color:var(--muted)}
   .url{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:none;border:0;outline:0;color:var(--ink-dim);font:inherit}
   .url:focus{color:var(--ink)}
-  .mini{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--muted);flex:none}
+  .mini{width:26px;height:26px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--muted);flex:none}
   .mini.starred{color:var(--accent-2)}
   .mini.starred :global(.ic){fill:var(--accent-2);stroke:var(--accent-2)}
   .mini.noted{color:var(--accent-2)}
@@ -76,10 +76,10 @@
   .mini.tagged{color:var(--accent-2)}
   .mini.tagged :global(.ic){fill:color-mix(in srgb,var(--accent-2) 22%,transparent)}
   .mini:hover{background:var(--raise);color:var(--ink)}
-  .userbtn{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:none;transition:background .12s}
+  .userbtn{width:36px;height:36px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;transition:background .12s}
   .userbtn:hover{background:var(--panel)}
-  .uav{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:650;border:1px solid rgba(255,255,255,.14)}
-  .idxbtn{display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;background:var(--panel);border:1px solid var(--border);border-radius:10px;color:var(--ink-dim);font-size:13.5px;flex:none;transition:background .12s,color .12s,border-color .12s}
+  .uav{width:28px;height:28px;border-radius:var(--r-round);display:grid;place-items:center;color:#fff;font-size:11px;font-weight:650;border:1px solid rgba(255,255,255,.14)}
+  .idxbtn{display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-md);color:var(--ink-dim);font-size:13.5px;flex:none;transition:background .12s,color .12s,border-color .12s}
   .idxbtn:hover{background:var(--raise);color:var(--ink)}
   .idxbtn :global(.ic){color:var(--muted)}
   .idxbtn.on{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent-2);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}

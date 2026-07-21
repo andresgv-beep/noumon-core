@@ -11,14 +11,20 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Noumon</title>
     <script>
-      // Anti-parpadeo: fija el tema (data-theme) antes de cargar el bundle.
+      // Anti-parpadeo: fija luz (data-theme), piel (data-skin) y acento antes
+      // de cargar el bundle. Debe reflejar la misma lógica de theme.svelte.js.
       (function () {
         try {
           var c = localStorage.getItem('noumon-theme') || 'dark';
           var r = c === 'system'
             ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
             : c;
-          document.documentElement.setAttribute('data-theme', r);
+          var root = document.documentElement;
+          root.setAttribute('data-theme', r);
+          var skin = localStorage.getItem('noumon-skin');
+          root.setAttribute('data-skin', skin === 'retro' ? 'retro' : 'modern');
+          var accent = localStorage.getItem('noumon-accent');
+          if (accent && /^#[0-9a-f]{6}$/i.test(accent)) root.style.setProperty('--accent', accent);
         } catch (e) {}
       })();
     </script>

@@ -38,7 +38,7 @@
   .phead h1 { font-size: 24px; font-weight: 720; letter-spacing: -.4px; color: var(--ink); transition: color .14s; }
   .phead .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .phsearch { justify-self: center; width: min(460px, 42vw); }
-  .bigsearch { display: flex; align-items: center; gap: 9px; height: 42px; width: 100%; padding: 0 14px; border-radius: 11px; background: var(--card); border: 1px solid var(--border); color: var(--muted); }
+  .bigsearch { display: flex; align-items: center; gap: 9px; height: 42px; width: 100%; padding: 0 14px; border-radius:var(--r-lg); background: var(--card); border: 1px solid var(--border); color: var(--muted); }
   .bigsearch:focus-within { border-color: color-mix(in srgb,var(--accent) 55%,var(--border)); }
   .bigsearch input { flex: 1; min-width: 0; font-size: 13.5px; color: var(--ink); background: none; border: none; outline: none; }
   .ic { stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }

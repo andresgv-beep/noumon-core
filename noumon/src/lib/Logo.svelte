@@ -13,5 +13,5 @@
 </svg>
 
 <style>
-  .logo{display:block;flex:none;user-select:none;color:var(--accent-2,#7f77dd)}
+  .logo{display:block;flex:none;user-select:none;color:var(--logo,#7f77dd)}
 </style>

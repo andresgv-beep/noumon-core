@@ -383,12 +383,14 @@
       tagged={activeTagged} onOpenTags={openActiveTags}
       onAccount={() => (accountOpen = true)} />
   </div>
+  {#if barOn}
+    <div class="r-bar">
+      <BookmarksBar {favorites} {libraries} onOpen={openFav} onToggleHome={toggleHome} onRemoveFav={removeFav} />
+    </div>
+  {/if}
   <div class="r-side"><Sidebar {libraries} activeLib={active?.lib} {activeView} user={auth.user}
       onOpenLibrary={openLibrary} onOpenHome={goHome} onOpenView={openView} onAccount={() => (accountOpen = true)} /></div>
   <div class="r-main">
-    {#if barOn}
-      <BookmarksBar {favorites} {libraries} onOpen={openFav} onToggleHome={toggleHome} onRemoveFav={removeFav} />
-    {/if}
     {#if active}
       <div class="r-reader">
         <Reader tab={active} {libraries} {favorites} {indexOpen} {notesVersion} {tagsVersion} onNavigate={navigate}
@@ -417,9 +419,9 @@
 <style>
   .app{
     height:100vh;display:grid;
-    grid-template-rows:46px 52px 1fr;
+    grid-template-rows:46px 52px auto 1fr;
     grid-template-columns:262px 1fr;
-    grid-template-areas:"top top" "nav nav" "side main";
+    grid-template-areas:"top top" "nav nav" "bar bar" "side main";
     transition:grid-template-columns .2s ease;
   }
   .app.side-hidden{grid-template-columns:0 1fr}
@@ -428,6 +430,7 @@
   :global(.app.bookmarks-open .nav){border-bottom-color:transparent}
   .r-top{grid-area:top;min-width:0}
   .r-nav{grid-area:nav;min-width:0}
+  .r-bar{grid-area:bar;min-width:0}
   .r-side{grid-area:side;overflow:hidden}
   .app.side-hidden .r-side{border-right:none}
   .r-main{grid-area:main;min-width:0;overflow:hidden;display:flex;flex-direction:column}

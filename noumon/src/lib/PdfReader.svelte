@@ -195,7 +195,7 @@
 </div>
 
 <style>
-  .pdf { display: flex; flex-direction: column; height: 78vh; min-height: 460px; background: var(--a-panel, #17181d); border: 1px solid var(--a-line, #2a2d35); border-radius: 4px; overflow: hidden; }
+  .pdf { display: flex; flex-direction: column; height: 78vh; min-height: 460px; background: var(--a-panel, #17181d); border: 1px solid var(--a-line, #2a2d35); border-radius:var(--r-sm); overflow: hidden; }
   :global(.pdf:fullscreen) { height: 100vh; border-radius: 0; }
 
   /* Barra editorial */
@@ -204,14 +204,14 @@
   .pnav, .pzoom { display: flex; align-items: center; gap: 6px; }
   .pzoom { justify-content: flex-end; }
   .pbar button { min-width: 32px; height: 32px; padding: 0 8px; display: grid; place-items: center; border: 1px solid var(--a-line, #2a2d35);
-    background: transparent; color: var(--a-ink, #f2efe8); border-radius: 7px; cursor: pointer; font-size: 16px; line-height: 1; transition: border-color .12s, color .12s, background .12s; }
+    background: transparent; color: var(--a-ink, #f2efe8); border-radius:var(--r-sm); cursor: pointer; font-size: 16px; line-height: 1; transition: border-color .12s, color .12s, background .12s; }
   .pbar button:hover:not(:disabled) { border-color: var(--a-accent, #e0a867); color: var(--a-accent, #e0a867); }
   .pbar button:disabled { opacity: .38; cursor: default; }
   .pbar button.pct { font-size: 12px; min-width: 52px; color: var(--a-dim, #aaa69e); }
   .pbar button.pct.on, .pbar button.pspread.on { border-color: var(--a-accent, #e0a867); color: var(--a-accent, #e0a867); }
   .pnum { display: flex; align-items: center; gap: 7px; color: var(--a-faint, #77746f); }
   .pnum input { width: 42px; height: 32px; text-align: center; background: var(--a-bg, #101114); border: 1px solid var(--a-line, #2a2d35);
-    border-radius: 7px; color: var(--a-ink, #f2efe8); font: inherit; font-size: 12.5px; }
+    border-radius:var(--r-sm); color: var(--a-ink, #f2efe8); font: inherit; font-size: 12.5px; }
   .pnum input:focus { outline: 0; border-color: var(--a-accent, #e0a867); }
   .pnum em { font-style: normal; }
   .pfile { text-align: center; color: var(--a-faint, #77746f); font-family: var(--a-serif, Georgia), serif; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -226,7 +226,7 @@
     scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--a-accent, #e0a867) 42%, transparent) transparent; }
   .pstage::-webkit-scrollbar { width: 11px; height: 11px; }
   .pstage::-webkit-scrollbar-track { background: transparent; }
-  .pstage::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--a-accent, #e0a867) 38%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+  .pstage::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--a-accent, #e0a867) 38%, transparent); border-radius:var(--r-md); border: 3px solid transparent; background-clip: padding-box; }
   .pstage::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--a-accent, #e0a867) 62%, transparent); background-clip: padding-box; }
   .pstage::-webkit-scrollbar-corner { background: transparent; }
   .pstage canvas { display: block; box-shadow: 0 18px 46px rgba(0,0,0,.5); background: #fff; border-radius: 2px; }

@@ -82,26 +82,26 @@
 
 <style>
   .twrap{position:relative;flex:none;display:grid}
-  .tbtn{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--muted);flex:none;transition:background .12s,color .12s}
+  .tbtn{width:26px;height:26px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--muted);flex:none;transition:background .12s,color .12s}
   .tbtn:hover{background:var(--raise);color:var(--ink)}
   .tbtn.on{color:var(--accent-2)}
 
   /* position:fixed → no lo recorta el overflow:hidden de la barra de dirección. */
-  .tdrop{position:fixed;width:266px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:6px;z-index:60;display:flex;flex-direction:column;gap:1px}
+  .tdrop{position:fixed;width:266px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:6px;z-index:60;display:flex;flex-direction:column;gap:1px}
 
-  .auto{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;text-align:left;transition:background .12s}
+  .auto{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-md);text-align:left;transition:background .12s}
   .auto:hover{background:var(--raise)}
   .atext{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
   .atext b{font-size:13.5px;color:var(--ink);font-weight:580}
   .atext small{font-size:11.5px;color:var(--muted);line-height:1.4}
-  .switch{flex:none;width:34px;height:20px;border-radius:11px;background:var(--border);position:relative;transition:background .15s}
+  .switch{flex:none;width:34px;height:20px;border-radius:var(--r-lg);background:var(--border);position:relative;transition:background .15s}
   .switch.on{background:var(--accent)}
   .knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
   .switch.on .knob{transform:translateX(14px)}
 
   .sep{height:1px;background:var(--border);margin:5px 4px}
   .tlabel{font-size:11px;font-weight:650;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);padding:4px 10px 6px}
-  .lrow{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:9px;color:var(--ink-dim);text-align:left;transition:background .12s,color .12s}
+  .lrow{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--r-md);color:var(--ink-dim);text-align:left;transition:background .12s,color .12s}
   .lrow:hover{background:var(--raise);color:var(--ink)}
   .lrow.on{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--ink)}
   .lrow .flag{font-size:18px;line-height:1}

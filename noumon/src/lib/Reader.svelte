@@ -252,7 +252,7 @@
   .reader{flex:1;overflow-y:auto;min-width:0}
   .pluginframe{flex:1;width:100%;height:100%;border:0;display:block;background:var(--ground)}
   .framebox{--content-zoom:1.08;position:relative;flex:1;min-width:0;height:100%;overflow:hidden;background:#fff}
-  .tbadge{position:absolute;top:12px;right:16px;display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:20px;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);color:var(--ink-dim);font-size:12.5px;font-weight:520;z-index:5}
+  .tbadge{position:absolute;top:12px;right:16px;display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:var(--r-pill);background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);color:var(--ink-dim);font-size:12.5px;font-weight:520;z-index:5}
   .tbadge.done{color:var(--accent-2)}
   .tbadge.done :global(.ic){color:var(--accent-2)}
   .spin{width:13px;height:13px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--accent);animation:tspin .7s linear infinite}
@@ -264,7 +264,7 @@
   .toc-col{width:300px;flex:none;border-left:1px solid var(--border);background:var(--panel);overflow-y:auto;padding:18px 14px}
   .toc-h{font-size:12px;font-weight:650;letter-spacing:.6px;text-transform:uppercase;color:var(--faint);padding:0 10px 10px}
   .toc{display:flex;flex-direction:column;gap:1px}
-  .tocitem{display:block;padding:7px 11px;border-radius:8px;color:var(--muted);font-size:13.5px;text-align:left;border-left:2px solid transparent;line-height:1.35;width:100%;transition:background .12s,color .12s}
+  .tocitem{display:block;padding:7px 11px;border-radius:var(--r-md);color:var(--muted);font-size:13.5px;text-align:left;border-left:2px solid transparent;line-height:1.35;width:100%;transition:background .12s,color .12s}
   .tocitem:hover{background:var(--raise);color:var(--ink)}
   .tocitem.lvl3{padding-left:22px;font-size:12.5px}
 </style>

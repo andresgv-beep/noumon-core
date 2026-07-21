@@ -289,7 +289,7 @@
 <style>
   .yp { flex: 1; min-width: 0; height: 100%; overflow-y: auto; background: var(--ground); color: var(--ink); }
   .pane { max-width: 1600px; margin: 0 auto; padding: 24px 26px 60px; }
-  .err { font-size: 13px; color: #da6b74; background: color-mix(in srgb,#da6b74 12%,transparent); border: 1px solid color-mix(in srgb,#da6b74 30%,var(--border)); border-radius: 8px; padding: 10px 12px; margin-top: 20px; }
+  .err { font-size: 13px; color: #da6b74; background: color-mix(in srgb,#da6b74 12%,transparent); border: 1px solid color-mix(in srgb,#da6b74 30%,var(--border)); border-radius:var(--r-md); padding: 10px 12px; margin-top: 20px; }
   .hint { color: var(--muted); font-size: 14px; padding: 40px 4px; text-align: center; }
   .empty { text-align: center; padding: 64px 20px; color: var(--muted); }
   .empty .ei { font-size: 46px; } .empty .et { font-size: 17px; font-weight: 700; color: var(--ink); margin: 12px 0 6px; }
@@ -303,7 +303,7 @@
   .creators { display: flex; align-items: flex-start; gap: 16px; margin: 18px 0 26px; }
   /* Botón píldora con el texto dentro: fondo oscuro (--ink, gris muy oscuro en
      claro, NO negro puro) + texto claro (--ground), como la original. */
-  .tggl { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 999px; background: var(--ink); border: 1px solid var(--ink); color: var(--ground); font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer; align-self: flex-start; margin-top: 21px; transition: filter .14s; }
+  .tggl { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius:var(--r-pill); background: var(--ink); border: 1px solid var(--ink); color: var(--ground); font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer; align-self: flex-start; margin-top: 21px; transition: filter .14s; }
   .tggl:hover { filter: brightness(1.12); }
 
   .mviewport { flex: 1; min-width: 0; overflow: hidden; padding-top: 8px; }
@@ -317,7 +317,7 @@
   .creator { flex: none; width: 66px; display: flex; flex-direction: column; align-items: center; gap: 7px; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; transition: opacity .18s, transform .14s; }
   .creator:hover { transform: translateY(-2px); }
   .creator.dim { opacity: .45; }
-  .cav { width: 54px; height: 54px; border-radius: 999px; overflow: hidden; display: grid; place-items: center; background: linear-gradient(150deg, var(--accent), var(--accent-2)); }
+  .cav { width: 54px; height: 54px; border-radius:var(--r-pill); overflow: hidden; display: grid; place-items: center; background: linear-gradient(150deg, var(--accent), var(--accent-2)); }
   .cav img { width: 100%; height: 100%; object-fit: cover; }
   .ci { color: #fff; font-weight: 650; font-size: 17px; }
   .cname { max-width: 66px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
@@ -334,36 +334,36 @@
      margin-top alinea el borde superior de la card con el primer vídeo (bajo el título de sección). */
   .home-side { order: -1; position: sticky; top: 8px; margin-top: 42px; display: flex; flex-direction: column; gap: 14px; }
   @media (max-width: 1040px) { .home-side { margin-top: 0; } }
-  .sidecard { border: 1px solid var(--border); border-radius: 14px; background: var(--card); padding: 14px 12px 10px; box-shadow: var(--shadow); }
+  .sidecard { border: 1px solid var(--border); border-radius:var(--r-lg); background: var(--card); padding: 14px 12px 10px; box-shadow: var(--shadow); }
   .sidecard h3 { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); font-weight: 650; margin: 2px 4px 10px; }
   .favlist { display: flex; flex-direction: column; gap: 2px; }
-  .favrow { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: 9px; background: none; border: 0; color: inherit; cursor: pointer; text-align: left; }
+  .favrow { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius:var(--r-md); background: none; border: 0; color: inherit; cursor: pointer; text-align: left; }
   .favrow:hover { background: var(--raise); }
-  .favav { width: 30px; height: 30px; flex: none; border-radius: 999px; overflow: hidden; display: grid; place-items: center; background: linear-gradient(150deg, var(--accent), var(--accent-2)); }
+  .favav { width: 30px; height: 30px; flex: none; border-radius:var(--r-pill); overflow: hidden; display: grid; place-items: center; background: linear-gradient(150deg, var(--accent), var(--accent-2)); }
   .favav img { width: 100%; height: 100%; object-fit: cover; }
   .favi { color: #fff; font-weight: 650; font-size: 12px; }
   .favname { font-size: 13px; color: var(--ink-dim); font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .favhint { font-size: 12px; color: var(--muted); line-height: 1.5; padding: 2px 4px 8px; }
   .favhint .star { color: var(--accent); }
-  .clearbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); color: var(--ink-dim); font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .14s, color .14s; }
+  .clearbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border-radius:var(--r-lg); background: var(--card); border: 1px solid var(--border); color: var(--ink-dim); font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .14s, color .14s; }
   .clearbtn:hover:not(:disabled) { border-color: color-mix(in srgb,#da6b74 50%,var(--border)); color: #da6b74; }
   .clearbtn:disabled { opacity: .5; cursor: default; }
 
   .chead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 2px 14px; }
   .chead .sec { margin: 0; }
-  .savebtn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--border); color: var(--ink-dim); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .savebtn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius:var(--r-pill); background: var(--card); border: 1px solid var(--border); color: var(--ink-dim); font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .savebtn:hover { border-color: color-mix(in srgb,var(--accent) 45%,var(--border)); color: var(--accent); }
   .savebtn.on { background: color-mix(in srgb,var(--accent) 14%,transparent); border-color: color-mix(in srgb,var(--accent) 40%,var(--border)); color: var(--accent); }
 
   /* ── Cuadrícula de canales ── */
   .chgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px 14px; }
   .chwrap { position: relative; }
-  .fav-star { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 999px; background: color-mix(in srgb,var(--ground) 65%,transparent); border: 0; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .14s, color .14s; }
+  .fav-star { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; display: grid; place-items: center; border-radius:var(--r-pill); background: color-mix(in srgb,var(--ground) 65%,transparent); border: 0; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .14s, color .14s; }
   .chwrap:hover .fav-star, .fav-star.on { opacity: 1; }
   .fav-star.on, .fav-star:hover { color: var(--accent); }
-  .chcard { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 10px; border-radius: 14px; background: none; border: 0; color: inherit; cursor: pointer; transition: background .14s, transform .14s; }
+  .chcard { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 10px; border-radius:var(--r-lg); background: none; border: 0; color: inherit; cursor: pointer; transition: background .14s, transform .14s; }
   .chcard:hover { background: var(--card); transform: translateY(-3px); }
-  .chav { width: 76px; height: 76px; border-radius: 999px; overflow: hidden; display: grid; place-items: center; background: linear-gradient(150deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow); }
+  .chav { width: 76px; height: 76px; border-radius:var(--r-pill); overflow: hidden; display: grid; place-items: center; background: linear-gradient(150deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow); }
   .chav img { width: 100%; height: 100%; object-fit: cover; }
   .chi { color: #fff; font-weight: 650; font-size: 26px; }
   .chn { font-size: 13.5px; font-weight: 620; color: var(--ink); text-align: center; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -372,18 +372,18 @@
   /* ── Tarjetas de vídeo ── */
   .cards { display: grid; grid-template-columns: repeat(auto-fill,minmax(258px,1fr)); gap: 22px 18px; }
   .card { cursor: pointer; display: flex; flex-direction: column; gap: 11px; text-align: left; background: none; border: 0; padding: 0; color: inherit; }
-  .poster { position: relative; aspect-ratio: 16/9; border-radius: 13px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); transition: transform .14s, border-color .14s; background: radial-gradient(130% 130% at 28% 18%,#3a2f6e 0%,#1a1740 42%,#07070f 100%); }
+  .poster { position: relative; aspect-ratio: 16/9; border-radius:var(--r-lg); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); transition: transform .14s, border-color .14s; background: radial-gradient(130% 130% at 28% 18%,#3a2f6e 0%,#1a1740 42%,#07070f 100%); }
   .poster.img { background: #000; }
   .poster img, .poster video.vframe { width: 100%; height: 100%; object-fit: cover; display: block; }
   .card:hover .poster { transform: translateY(-3px); border-color: color-mix(in srgb,var(--accent) 45%,var(--border)); }
-  .poster .dur { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.82); color: #fff; font-size: 11.5px; font-weight: 600; padding: 2px 6px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+  .poster .dur { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.82); color: #fff; font-size: 11.5px; font-weight: 600; padding: 2px 6px; border-radius:var(--r-sm); font-variant-numeric: tabular-nums; }
   .poster .play { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; transition: opacity .14s; }
   .card:hover .poster .play { opacity: 1; }
-  .poster .play span { width: 52px; height: 52px; border-radius: 999px; background: rgba(10,10,15,.55); display: grid; place-items: center; border: 1px solid rgba(255,255,255,.25); }
+  .poster .play span { width: 52px; height: 52px; border-radius:var(--r-pill); background: rgba(10,10,15,.55); display: grid; place-items: center; border: 1px solid rgba(255,255,255,.25); }
   .poster .prog { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.28); }
   .poster .prog i { display: block; height: 100%; background: var(--accent); }
   .cmeta { display: flex; gap: 11px; }
-  .av { width: 34px; height: 34px; flex: none; border-radius: 999px; display: grid; place-items: center; color: #fff; font-weight: 650; font-size: 13px; background: linear-gradient(150deg, var(--accent), var(--accent-2)); overflow: hidden; }
+  .av { width: 34px; height: 34px; flex: none; border-radius:var(--r-pill); display: grid; place-items: center; color: #fff; font-weight: 650; font-size: 13px; background: linear-gradient(150deg, var(--accent), var(--accent-2)); overflow: hidden; }
   .av.img { background: none; }
   .av img { width: 100%; height: 100%; object-fit: cover; }
   .ct h3 { font-size: 14.5px; font-weight: 600; line-height: 1.33; letter-spacing: -.15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

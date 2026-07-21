@@ -74,12 +74,12 @@
 <style>
   .bookmarks{display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--panel-2);border-bottom:1px solid var(--border);flex:none;min-width:0}
   .bmchips{display:flex;align-items:center;gap:4px;flex:1;min-width:0;overflow:hidden;white-space:nowrap}
-  .bm{display:flex;align-items:center;border-radius:8px;flex:none;transition:background .12s}
+  .bm{display:flex;align-items:center;border-radius:var(--r-md);flex:none;transition:background .12s}
   .bm:hover{background:var(--raise)}
   .bmopen{display:flex;align-items:center;gap:7px;padding:5px 4px 5px 8px;max-width:200px;min-width:0;text-align:left}
   .bmt{font-size:12.5px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .bm:hover .bmt{color:var(--ink)}
-  .bmx{width:20px;height:20px;margin-right:4px;border-radius:5px;display:grid;place-items:center;color:var(--faint);flex:none;opacity:0;transition:opacity .12s,background .12s}
+  .bmx{width:20px;height:20px;margin-right:4px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--faint);flex:none;opacity:0;transition:opacity .12s,background .12s}
   .bm:hover .bmx{opacity:1}
   .bmx:hover{background:var(--border);color:var(--ink)}
   .bmmore{flex:none;padding:5px 10px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
