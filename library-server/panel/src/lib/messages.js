@@ -12,6 +12,8 @@ export const messages = {
     'win.minimise': 'Minimizar',
     'win.maximise': 'Maximizar',
     'win.close': 'Cerrar',
+    'theme.toLight': 'Cambiar a tema claro',
+    'theme.toDark': 'Cambiar a tema oscuro',
 
     // sidebar / navegación
     'nav.storage': 'Almacenamiento',
@@ -456,6 +458,8 @@ export const messages = {
     'win.minimise': 'Minimise',
     'win.maximise': 'Maximise',
     'win.close': 'Close',
+    'theme.toLight': 'Switch to light theme',
+    'theme.toDark': 'Switch to dark theme',
 
     // sidebar / navigation
     'nav.storage': 'Storage',

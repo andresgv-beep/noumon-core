@@ -1,6 +1,7 @@
 <script>
   import { authRegister, authLogin } from './api.js'
   import { i18n, t, setLocale, LANGS } from './i18n.svelte.js'
+  import { theme, toggleTheme } from './theme.svelte.js'
 
   let { setupNeeded = false, onDone } = $props()
 
@@ -59,6 +60,9 @@
       {#each LANGS as l (l.code)}
         <button type="button" class="lchip" class:on={i18n.locale === l.code} onclick={() => setLocale(l.code)}>{l.flag} {l.label}</button>
       {/each}
+      <button type="button" class="lchip" title={theme.mode === 'dark' ? t('theme.toLight') : t('theme.toDark')} onclick={toggleTheme}>
+        {theme.mode === 'dark' ? '☀' : '🌙'}
+      </button>
     </div>
   </form>
 </div>
