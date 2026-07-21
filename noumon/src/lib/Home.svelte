@@ -327,4 +327,44 @@
   .sname{font-size:12.5px;color:var(--ink-dim);text-align:center;line-height:1.3;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .site:hover .sname{color:var(--ink)}
   .sitesempty{text-align:center;color:var(--muted);font-size:13px;padding:14px 0 4px;line-height:1.55}
+
+  /* ── Animación de llegada al inicio (~400 ms) ─────────────────────────
+     Corre al MONTAR (botón Casa, pestaña nueva, arranque, volver de una
+     vista): son animaciones CSS de una pasada — escribir, buscar o
+     actualizar tarjetas no las repite porque los contenedores no se
+     recrean. Nunca bloquea: el buscador acepta foco desde el primer frame.
+     Curva: entra deprisa y se posa suave. */
+  .lockup :global(.logo){
+    animation:hm-pop .34s cubic-bezier(.22,1,.36,1) both;
+  }
+  .lockup :global(.wordmark){
+    animation:hm-rise .28s cubic-bezier(.22,1,.36,1) .1s both;
+  }
+  .bigsearch{
+    animation:hm-open .23s cubic-bezier(.22,1,.36,1) .17s both;
+  }
+  .browse{
+    animation:hm-fade .16s ease-out .24s both;
+  }
+  @keyframes hm-pop{
+    from{opacity:0;transform:scale(.9) rotate(-10deg);filter:drop-shadow(0 0 16px var(--accent-weak))}
+    to{opacity:1;transform:none;filter:none}
+  }
+  @keyframes hm-rise{
+    from{opacity:0;transform:translateY(6px)}
+    to{opacity:1;transform:none}
+  }
+  @keyframes hm-open{
+    from{opacity:0;transform:scaleX(.94)}
+    to{opacity:1;transform:none}
+  }
+  @keyframes hm-fade{
+    from{opacity:0}
+    to{opacity:1}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .lockup :global(.logo),.lockup :global(.wordmark),.bigsearch,.browse{
+      animation:hm-fade .1s ease-out both;
+    }
+  }
 </style>
