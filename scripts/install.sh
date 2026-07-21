@@ -56,6 +56,12 @@ fi
 
 [ -n "$CLEANUP" ] && rm -f "$CLEANUP"
 
+IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+[ -n "$IP" ] || IP="localhost"
 echo ""
-echo "Noumon listo. Abre http://localhost:8090 (panel: http://localhost:8090/panel/)"
+echo "Noumon listo y publicado en tu red local."
+echo "  Biblioteca:  http://$IP:8090"
+echo "  Panel admin: http://$IP:8090/panel/"
+echo "Abre el Panel desde cualquier equipo de la red: el PRIMER registro se"
+echo "convierte en administrador — hazlo tu ahora mismo."
 echo "Servicio: systemctl status noumon"

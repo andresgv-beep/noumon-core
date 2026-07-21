@@ -5,6 +5,14 @@ if ! getent passwd noumon >/dev/null 2>&1; then
   useradd --system --home-dir /var/lib/noumon --shell /usr/sbin/nologin noumon
 fi
 mkdir -p /var/lib/noumon
+
+# Un paquete de servidor Linux existe para servir a la red (Pi headless, aula):
+# se siembra "publicado en LAN" SOLO en la primera instalación (si no hay
+# config previa). El interruptor Red del Panel sigue mandando después, y un
+# BIND del entorno siempre gana (network.go / supervisor).
+if [ ! -f /var/lib/noumon/config.json ]; then
+  printf '{\n  "lanAccess": true\n}\n' > /var/lib/noumon/config.json
+fi
 chown -R noumon:noumon /var/lib/noumon
 
 if [ -d /run/systemd/system ]; then
@@ -14,5 +22,12 @@ if [ -d /run/systemd/system ]; then
   systemctl restart noumon.service || true
 fi
 
-echo "Noumon instalado. Interfaz: http://localhost:8090  Panel: http://localhost:8090/panel/"
+IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+[ -n "$IP" ] || IP="<ip-de-este-equipo>"
+echo ""
+echo "Noumon instalado y publicado en tu red local."
+echo "  Biblioteca:  http://$IP:8090"
+echo "  Panel admin: http://$IP:8090/panel/"
+echo "Abre el Panel desde cualquier equipo de la red: el PRIMER registro"
+echo "se convierte en administrador (hazlo tú ahora)."
 exit 0

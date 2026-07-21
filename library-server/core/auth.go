@@ -556,16 +556,24 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"user": u, "sessionToken": token})
 }
 
-// setupAllowed permite el bootstrap directamente desde el propio equipo. Si la
-// instalación se expone por LAN/proxy, exige NOUMON_SETUP_TOKEN (o el carril de
-// máquina) para que un visitante no pueda apropiarse del primer administrador.
+// setupAllowed gobierna quién puede reclamar el PRIMER administrador (después
+// ya no hay alta pública: handleRegister corta con userCount != 0).
+//
+// Por defecto el alta inicial está abierta en la red donde se sirve: es el
+// modelo Jellyfin/Home Assistant y el correcto para una biblioteca de casa o
+// aula — el instalador headless (Pi) se configura desde otro equipo sin más
+// ceremonia. Para despliegues expuestos de verdad, definir NOUMON_SETUP_TOKEN
+// reactiva la cerradura: el alta remota exige ese código.
 func (s *Server) setupAllowed(r *http.Request, provided string) bool {
 	if s.hasMachineToken(r) || requestIsLocal(r) {
 		return true
 	}
 	expected := strings.TrimSpace(os.Getenv("NOUMON_SETUP_TOKEN"))
+	if expected == "" {
+		return true
+	}
 	provided = strings.TrimSpace(provided)
-	return expected != "" && subtle.ConstantTimeCompare([]byte(expected), []byte(provided)) == 1
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(provided)) == 1
 }
 
 func requestIsLocal(r *http.Request) bool {

@@ -39,6 +39,12 @@ type Server struct {
 	mapsDir string
 	geoMu   sync.RWMutex
 
+	// lanPrivate: el proceso escucha en la red pero la biblioteca NO está
+	// publicada (paquete servidor headless con lanAccess=false). El middleware
+	// cierra el plano de lectura a los remotos y deja abierto el de
+	// administración: despublicar nunca deja fuera al admin (§Red).
+	lanPrivate bool
+
 	// Control de carga (§6, rate-limit v1): kiwixSem limita las peticiones
 	// simultáneas al motor; searchGate limita búsquedas globales concurrentes
 	// (/api/search y /api/images son fan-out caro sobre Xapian → DoS barato).
@@ -388,6 +394,14 @@ func main() {
 	// config.json del pool; el supervisor lo convierte en BIND al reiniciar.
 	network := &networkInfo{configPath: os.Getenv("NOUMON_LIBRARY_CONFIG"), bind: bind, port: port}
 	adminMux.HandleFunc("/api/admin/network", network.handleNetwork)
+
+	// Escucha amplia con biblioteca despublicada (servidor headless): lectura
+	// cerrada a remotos, administración abierta. La decisión la toma el
+	// supervisor (coreEnv) y llega como señal explícita, sin releer config.
+	if os.Getenv("NOUMON_LAN_PRIVATE") == "1" {
+		s.lanPrivate = true
+		log.Printf("red: biblioteca NO publicada (solo administración remota); Panel → Red para publicarla")
+	}
 
 	// Rutas de gestión de ZIM (az se creó arriba, junto al motor de descargas,
 	// para el auto-registro del catálogo).
