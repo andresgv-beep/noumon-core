@@ -1,3 +1,22 @@
+<!-- Concepto de arranque de Noumon (logo rodante → destello → wordmark →
+     luz que rodea el buscador y se atenúa → interfaz). Aprobado 2026-07-21.
+
+     REQUISITOS PARA LA INTEGRACIÓN REAL (decisión final, acordada con Andrés):
+     - El arranque es un MOMENTO DE MARCA FIJO: escenario oscuro + neón lila,
+       idéntico para todos los usuarios y pieles (como el logo de una consola
+       al encender). NO se recolorea con el tema del usuario — se descartó
+       tanto la versión "misma animación con otro acento" como el vestuario
+       por piel: el boot no es moderno ni retro, es Noumon.
+     - AL TERMINAR, el escenario SE DIFUMINA y debajo entra el TEMA
+       PERSISTENTE del usuario (piel + luz + acento, que el anti-parpadeo de
+       index.html ya dejó aplicados): un crossfade suave hacia su Inicio, y
+       ahí encadena la animación de llegada de Home.svelte, ya vestida de su
+       tema. El boot termina donde empieza el mundo del usuario.
+     - Encadena al final con la animación de llegada de Home.svelte.
+     - prefers-reduced-motion → fundido corto, sin rodadura ni destello.
+     - Nunca bloquea: el buscador acepta foco en cuanto aparece.
+     - Usos: arranque de la app y "conectando" del cliente remoto (ahí la
+       rodadura ES la espera y el destello ES la conexión). -->
 <div id="noumon-boot-concept">
   <div class="concept-head">
     <div><strong>Arranque de Noumon</strong><span>Concepto de carga normal → inicio</span></div>
