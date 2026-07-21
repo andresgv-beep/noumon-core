@@ -13,6 +13,10 @@
   /* Tema claro: re-mapea los tokens de la caja/hint (el mapa cambia por su estilo). */
   body[data-flavor="light"]{background:#f4f5f8;--panel:#ffffff;--border:#e0e2ea;--ink:#1b1c24;--muted:#6a6b78;--accent-2:#6a58e0}
   body[data-flavor="light"] .hint{background:rgba(255,255,255,.85);color:#6a6b78}
+  /* Piel retro del shell (?skin=retro): hereda la FORMA — sin curvas y fuente
+     mono en los controles. El mapa sigue claro por decisión de diseño. */
+  :root[data-skin="retro"] *{border-radius:0 !important}
+  :root[data-skin="retro"] body{font-family:ui-monospace,"Cascadia Code","Consolas",monospace}
   .search{position:absolute;top:16px;left:16px;z-index:12;width:var(--overlay-width);max-width:calc(100vw - 32px)}
   .box{display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;background:var(--panel);border:1px solid var(--border);border-radius:13px;box-shadow:0 12px 32px -12px rgba(0,0,0,.6)}
   .box svg{width:19px;height:19px;flex:none;stroke:var(--muted);stroke-width:1.7;fill:none;stroke-linecap:round}
@@ -59,8 +63,11 @@
 <script src="/maps/vendor/pmtiles.js"></script>
 <script>
 (async () => {
-  const requestedLang = new URLSearchParams(location.search).get('lang');
+  const query = new URLSearchParams(location.search);
+  const requestedLang = query.get('lang');
   const lang = requestedLang === 'en' ? 'en' : 'es';
+  // Piel del shell anfitrión (?skin=retro): solo forma, ver CSS de arriba.
+  if (query.get('skin') === 'retro') document.documentElement.dataset.skin = 'retro';
   const messages = {
     es: {
       searchPlaceholder: 'Busca una calle o lugar…', results: 'Resultados', back: '← Volver a resultados',

@@ -28,6 +28,8 @@
   --icon-surface:#c9ccd5;
   --shadow:0 1px 0 rgba(255,255,255,.02), 0 12px 32px -12px rgba(0,0,0,.6);
   --mix:#ffffff; /* hacia dónde se aclara el acento derivado */
+  --code-ink:#cdbcff; /* código inline: legible sobre --raise en cada tema */
+  color-scheme:dark;  /* controles nativos y scrollbars a juego con el tema */
 }
 /* Tema claro: solo re-mapea los tokens del shell (el contenido del ZIM va en su iframe). */
 :root[data-theme="light"]{
@@ -38,6 +40,8 @@
   --icon-surface:#ffffff;
   --shadow:0 1px 2px rgba(20,20,40,.05), 0 14px 30px -16px rgba(20,20,50,.22);
   --mix:#000000;
+  --code-ink:#5240b8;
+  color-scheme:light;
 }
 
 /* ── PIEL RETRO · forma y tipografía (mono + serif, sin curvas) ── */
@@ -58,6 +62,7 @@
   --icon-surface:#c9ccd5;
   --shadow:3px 3px 0 rgba(0,0,0,.85);
   --mix:#ffffff;
+  --code-ink:#cfc4ff;
 }
 /* Retro clara — hueso y vainilla, texto negro y gris pizarra */
 :root[data-skin="retro"][data-theme="light"]{
@@ -68,6 +73,7 @@
   --icon-surface:#ffffff;
   --shadow:3px 3px 0 rgba(0,0,0,.28);
   --mix:#000000;
+  --code-ink:#43389c;
 }
 
 /* ── Derivados del acento: un solo color elegible, el resto se calcula.
@@ -113,7 +119,7 @@ a{color:inherit}
 .zim-content p{margin:1em 0}
 .zim-content a{color:var(--link);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--link) 30%,transparent);cursor:pointer}
 .zim-content a:hover{border-bottom-color:var(--link)}
-.zim-content code{font-family:var(--mono);font-size:.88em;background:var(--raise);color:#cdbcff;padding:.14em .42em;border-radius:var(--r-sm)}
+.zim-content code{font-family:var(--mono);font-size:.88em;background:var(--raise);color:var(--code-ink);padding:.14em .42em;border-radius:var(--r-sm)}
 .zim-content pre{background:#0e0e15;border:1px solid var(--border);border-radius:var(--r-lg);padding:15px 17px;overflow-x:auto;margin:1.2em 0;line-height:1.55}
 .zim-content pre code{background:none;color:#d3d3e0;padding:0;font-size:13.5px}
 .zim-content table{border-collapse:collapse;width:100%;margin:1.3em 0;font-size:14px;display:block;overflow-x:auto}

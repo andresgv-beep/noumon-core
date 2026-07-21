@@ -28,8 +28,21 @@ export const ACCENTS = [
   { hex: '#4aa8e0', labelKey: 'settings.accentCian' },
 ];
 
+// Un acento casi blanco o casi negro no deja derivado legible (enlaces y marca
+// se funden con el fondo): esos extremos se ignoran y se mantiene el anterior.
+function accentUsable(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  return lum > 0.06 && lum < 0.92;
+}
+
+// Los valores recuperados de localStorage se validan SIEMPRE: un valor antiguo
+// o corrupto dejaría Ajustes sin opción seleccionada y la UI en un estado raro.
 function saved() {
-  try { const v = localStorage.getItem(STORE_KEY); if (v) return v; } catch (e) {}
+  try {
+    const v = localStorage.getItem(STORE_KEY);
+    if (THEMES.some((th) => th.code === v)) return v;
+  } catch (e) {}
   return 'dark';
 }
 function savedSkin() {
@@ -39,7 +52,7 @@ function savedSkin() {
 function savedAccent() {
   try {
     const v = localStorage.getItem(ACCENT_KEY);
-    if (v && /^#[0-9a-f]{6}$/i.test(v)) return v;
+    if (v && /^#[0-9a-f]{6}$/i.test(v) && accentUsable(v)) return v;
   } catch (e) {}
   return ''; // vacío = acento por defecto de la piel/luz activas
 }
@@ -64,10 +77,14 @@ function apply() {
     root.setAttribute('data-skin', theme.skin);
     if (theme.accent) root.style.setProperty('--accent', theme.accent);
     else root.style.removeProperty('--accent');
+    // La barra PWA/ventana sigue al fondo real del tema activo.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', getComputedStyle(root).getPropertyValue('--ground').trim() || '#151619');
   } catch (e) {}
 }
 
 export function setTheme(code) {
+  if (!THEMES.some((th) => th.code === code)) return;
   theme.choice = code;
   try { localStorage.setItem(STORE_KEY, code); } catch (e) {}
   apply();
@@ -78,14 +95,6 @@ export function setSkin(code) {
   theme.skin = code;
   try { localStorage.setItem(SKIN_KEY, code); } catch (e) {}
   apply();
-}
-
-// Un acento casi blanco o casi negro no deja derivado legible (enlaces y marca
-// se funden con el fondo): esos extremos se ignoran y se mantiene el anterior.
-function accentUsable(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
-  return lum > 0.06 && lum < 0.92;
 }
 
 // hex '#rrggbb' o '' para volver al acento por defecto.

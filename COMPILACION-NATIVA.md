@@ -52,7 +52,7 @@ Para cambios del servidor o Maps:
 
 ```powershell
 Set-Location .\library-server\core
-$env:GOCACHE = 'C:\Users\asus\Documents\GitHub\library-core\.tmp-gocache'
+$env:GOCACHE = 'C:\Users\asus\Documents\GitHub\noumon-core\.tmp-gocache'
 go test ./...
 ```
 
@@ -63,7 +63,7 @@ Para un cambio exclusivamente visual en `maps-www/index.html`, la compilación c
 Desde `library-desktop`:
 
 ```powershell
-Set-Location C:\Users\asus\Documents\GitHub\library-core\library-desktop
+Set-Location C:\Users\asus\Documents\GitHub\noumon-core\library-desktop
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Mode all-in-one
 ```
 
@@ -88,7 +88,7 @@ No usar `-Mode remote` para actualizar el todo-en-uno. Ese modo genera únicamen
 El instalador exige administrador. Ejecutarlo en una consola normal suele terminar con `Ejecuta este instalador como administrador`. La forma fiable es abrir el aviso UAC mediante `-Verb RunAs`:
 
 ```powershell
-$installer = 'C:\Users\asus\Documents\GitHub\library-core\library-desktop\install-all-in-one.ps1'
+$installer = 'C:\Users\asus\Documents\GitHub\noumon-core\library-desktop\install-all-in-one.ps1'
 $process = Start-Process -FilePath 'powershell.exe' `
   -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $installer) `
   -Verb RunAs -Wait -PassThru
