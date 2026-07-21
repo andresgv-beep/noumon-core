@@ -32,6 +32,34 @@
   --crit: #f26d6d; --crit-dim: rgba(242,109,109,.13); --crit-border: rgba(242,109,109,.34);
   --info: #58a6ff; --info-dim: rgba(88,166,255,.13); --info-border: rgba(88,166,255,.32);
   --magenta: #d18bff; --orange: #ff9552;
+
+  --scroll-thumb: rgba(255,255,255,.12);
+}
+
+/* Tema claro: mismo sistema, tokens invertidos. Se activa con
+   data-theme="light" en <html> (lib/theme.svelte.js). */
+:root[data-theme='light'] {
+  --window-bg: #f3f4f6;
+  --canvas: #ffffff;
+  --canvas-soft: #eceef1;
+  --panel: #f9fafb;
+  --panel-elev: #ffffff;
+
+  --ink: #191b1f; --ink-dim: #3c3f45; --ink-mute: #61656d; --ink-faint: #8d9199; --ink-trace: #bfc3ca;
+
+  --line: rgba(20,25,35,.09); --line-bright: rgba(20,25,35,.16); --line-strong: rgba(20,25,35,.28);
+  --sel: rgba(20,25,35,.07); --sel-border: rgba(20,25,35,.18);
+
+  --accent: #2f55c8; --accent-ink: #2f55c8;
+  --accent-soft: rgba(47,85,200,.08); --accent-dim: rgba(47,85,200,.13); --accent-border: rgba(47,85,200,.38);
+
+  --signal: #178a55; --signal-soft: rgba(23,138,85,.07); --signal-dim: rgba(23,138,85,.11); --signal-border: rgba(23,138,85,.32);
+  --warn: #9d6b06; --warn-dim: rgba(157,107,6,.10); --warn-border: rgba(157,107,6,.30);
+  --crit: #c73e3e; --crit-dim: rgba(199,62,62,.09); --crit-border: rgba(199,62,62,.30);
+  --info: #2467b3; --info-dim: rgba(36,103,179,.09); --info-border: rgba(36,103,179,.30);
+  --magenta: #8e44c9; --orange: #c25c14;
+
+  --scroll-thumb: rgba(20,25,35,.22);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -48,7 +76,7 @@ code { font-family: var(--font-mono); }
 a { color: var(--accent-ink); text-decoration: none; }
 
 .scroll::-webkit-scrollbar { width: 10px; }
-.scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 5px; border: 3px solid var(--window-bg); }
+.scroll::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 5px; border: 3px solid var(--window-bg); }
 .ic { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
 /* Ventana */

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { authMe, authLogout, authLogoutAll, authRefresh, getHealth, getServiceStatus, restartLibraryServer } from './lib/api.js'
   import { i18n, t, setLocale, LANGS } from './lib/i18n.svelte.js'
+  import { theme, toggleTheme } from './lib/theme.svelte.js'
   import Login from './lib/Login.svelte'
   import Storage from './lib/Storage.svelte'
   import Collections from './lib/Collections.svelte'
@@ -134,6 +135,9 @@
             {#each LANGS as l (l.code)}
               <button class="lchip" class:on={i18n.locale === l.code} title={l.label} onclick={() => setLocale(l.code)}>{l.flag} {l.code.toUpperCase()}</button>
             {/each}
+            <button class="lchip" title={theme.mode === 'dark' ? t('theme.toLight') : t('theme.toDark')} onclick={toggleTheme}>
+              {theme.mode === 'dark' ? '☀' : '🌙'}
+            </button>
           </div>
           Noumon<br />© 2026
         </div>
