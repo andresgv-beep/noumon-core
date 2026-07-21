@@ -53,11 +53,13 @@
   --mono:var(--font);
   --tracking:.02em;
 }
-/* Retro oscura — negro, blancos y grises, ventanas en tonos oscuros */
+/* Retro oscura — tinta nocturna: azules-gris entintados con texto marfil,
+   la cara de noche del papel hueso de la retro clara. El negro puro queda
+   reservado a reproductores, fondos de imagen y overlays audiovisuales. */
 :root[data-skin="retro"]:not([data-theme="light"]){
-  --ground:#000000; --panel-2:#0a0b0e; --panel:#101115; --card:#17181d; --raise:#202128;
-  --border:#3a3a44; --border-soft:#26262e;
-  --ink:#ffffff; --ink-dim:#c9c9d0; --muted:#8a8a94; --faint:#5c5c66;
+  --ground:#11141a; --panel-2:#171a21; --panel:#1c2028; --card:#242a33; --raise:#2d343f;
+  --border:#4b5462; --border-soft:#343b47;
+  --ink:#f3f0e7; --ink-dim:#d0ccc2; --muted:#979ba5; --faint:#6a707c;
   --accent:#b9a8ff;
   --icon-surface:#c9ccd5;
   --shadow:3px 3px 0 rgba(0,0,0,.85);
@@ -120,8 +122,8 @@ a{color:inherit}
 .zim-content a{color:var(--link);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--link) 30%,transparent);cursor:pointer}
 .zim-content a:hover{border-bottom-color:var(--link)}
 .zim-content code{font-family:var(--mono);font-size:.88em;background:var(--raise);color:var(--code-ink);padding:.14em .42em;border-radius:var(--r-sm)}
-.zim-content pre{background:#0e0e15;border:1px solid var(--border);border-radius:var(--r-lg);padding:15px 17px;overflow-x:auto;margin:1.2em 0;line-height:1.55}
-.zim-content pre code{background:none;color:#d3d3e0;padding:0;font-size:13.5px}
+.zim-content pre{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:15px 17px;overflow-x:auto;margin:1.2em 0;line-height:1.55}
+.zim-content pre code{background:none;color:var(--ink-dim);padding:0;font-size:13.5px}
 .zim-content table{border-collapse:collapse;width:100%;margin:1.3em 0;font-size:14px;display:block;overflow-x:auto}
 .zim-content th,.zim-content td{border:1px solid var(--border);padding:9px 13px;text-align:left;vertical-align:top}
 .zim-content th{background:var(--raise);color:var(--ink);font-weight:600}
