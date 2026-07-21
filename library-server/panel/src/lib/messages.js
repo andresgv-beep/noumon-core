@@ -426,7 +426,7 @@ export const messages = {
 
     // red
     'net.loadFail': 'no se pudo leer el estado de red',
-    'net.confirmUnpublish': 'Los demás equipos de la red perderán el acceso a la biblioteca. ¿Continuar?',
+    'net.confirmUnpublish': 'Los lectores de la red perderán el acceso a la biblioteca. En un servidor Linux, tu cuenta admin seguirá pudiendo entrar al Panel. ¿Continuar?',
     'net.restartSlow': 'El servidor tarda más de lo esperado en reiniciarse.',
     'net.toggleFail': 'No se pudo cambiar el acceso.',
     'net.title': 'Acceso en red local',
@@ -872,7 +872,7 @@ export const messages = {
 
     // network
     'net.loadFail': 'could not read the network status',
-    'net.confirmUnpublish': 'Other devices on the network will lose access to the library. Continue?',
+    'net.confirmUnpublish': 'Network readers will lose access to the library. On a Linux server, your admin account can still reach the Panel. Continue?',
     'net.restartSlow': 'The server is taking longer than expected to restart.',
     'net.toggleFail': 'Could not change the access.',
     'net.title': 'Local network access',

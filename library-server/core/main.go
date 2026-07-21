@@ -505,6 +505,24 @@ func main() {
 
 // middleware: logging + auth por canal (§6).
 // GET (lectura) pasa siempre en LAN; POST/PUT/DELETE (escritura) exigen token si hay uno configurado.
+// adminPlaneAllowed decide qué puede tocar un remoto cuando la biblioteca está
+// despublicada (lanPrivate): el Panel y sus rutas de identidad/administración
+// siempre (para poder entrar y republicar), y todo lo demás solo con sesión de
+// admin o token de máquina. requireAdmin sigue siendo la cerradura real de
+// /api/admin/*: aquí solo se decide visibilidad del plano.
+func (s *Server) adminPlaneAllowed(r *http.Request) bool {
+	p := r.URL.Path
+	if p == "/api/health" || p == "/panel" || strings.HasPrefix(p, "/panel/") ||
+		strings.HasPrefix(p, "/api/auth/") || strings.HasPrefix(p, "/api/admin/") {
+		return true
+	}
+	if s.hasMachineToken(r) {
+		return true
+	}
+	u := s.currentUser(r)
+	return u != nil && u.IsAdmin
+}
+
 func (s *Server) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -518,6 +536,14 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		// (Wails/WebView2 no reenvía el body del multipart por su proxy → MOMENTS-UPLOAD.md).
 		if requestIsMutation(r) && !requestOriginAllowed(r) && !requestTokenOnly(r) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "origen de la petición no permitido"})
+			return
+		}
+
+		// Biblioteca despublicada con escucha amplia (servidor headless): los
+		// remotos solo alcanzan el plano de administración; la excepción del
+		// admin autenticado le mantiene TODO el acceso (nunca se queda fuera).
+		if s.lanPrivate && !requestIsLocal(r) && !s.adminPlaneAllowed(r) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "biblioteca no publicada en la red; pide acceso al administrador"})
 			return
 		}
 

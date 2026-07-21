@@ -199,6 +199,28 @@ noumon_<version>_arm64.deb (+ .sha256)   noumon_arm64.deb (nombre estable)
   Un `BIND` fijado por entorno siempre gana sobre el Panel. Si el cortafuegos
   está activo hay que permitir el puerto (`sudo ufw allow 8090/tcp`).
 
+### Servidor headless (Pi/NAS): primer arranque y plano de administración
+
+El paquete Linux está pensado para configurarse **desde otro equipo**, sin
+pantalla ni SSH posterior:
+
+1. **Publicado al instalar**: el postinst siembra `{"lanAccess": true}` en
+   `/var/lib/noumon/config.json` (solo si no había config previa) y el mensaje
+   final imprime la URL con la IP real del equipo.
+2. **Primer admin desde la red**: mientras no exista ningún usuario, el primer
+   registro (desde cualquier equipo de la LAN) se convierte en administrador y
+   cierra el alta pública (modelo Jellyfin). Para despliegues expuestos,
+   definir `NOUMON_SETUP_TOKEN` en el entorno del servicio reactiva el código
+   de configuración.
+3. **El timón nunca se apaga**: en no-Windows el proceso escucha siempre en la
+   red. "Dejar de publicar" (Panel → Red) cierra la lectura a los remotos
+   anónimos, pero el Panel, el login y las rutas admin siguen accesibles, y la
+   sesión de admin conserva acceso total — despublicar en remoto no puede
+   dejar fuera al administrador. Señales: el supervisor pasa
+   `NOUMON_BIND_MANAGED=1` (BIND gobernable por el Panel; un BIND del operador
+   sigue mandando) y `NOUMON_LAN_PRIVATE=1` (biblioteca despublicada con
+   escucha amplia).
+
 ### install.sh
 
 `scripts\install.sh` es el camino corto para el usuario Linux:

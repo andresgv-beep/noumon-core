@@ -30,11 +30,13 @@ func (n *networkInfo) handleNetwork(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		cfg, _ := readStorageConfig(n.configPath)
 		writeJSON(w, http.StatusOK, map[string]any{
-			"lanAccess":    cfg.LanAccess,
-			"bind":         n.bind,
-			"port":         n.port,
-			"published":    n.bind != "127.0.0.1" && n.bind != "localhost" && n.bind != "::1",
-			"configurable": n.configPath != "" && os.Getenv("BIND") == "",
+			"lanAccess": cfg.LanAccess,
+			"bind":      n.bind,
+			"port":      n.port,
+			// Escucha amplia con NOUMON_LAN_PRIVATE (servidor headless sin
+			// publicar) NO es "publicada": solo administración remota.
+			"published":    n.bind != "127.0.0.1" && n.bind != "localhost" && n.bind != "::1" && os.Getenv("NOUMON_LAN_PRIVATE") != "1",
+			"configurable": n.configPath != "" && (os.Getenv("BIND") == "" || os.Getenv("NOUMON_BIND_MANAGED") == "1"),
 			"supervised":   supervised,
 			"addresses":    lanAddresses(n.port),
 		})
@@ -43,7 +45,11 @@ func (n *networkInfo) handleNetwork(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "este servidor no dispone de configuracion persistente"})
 			return
 		}
-		if os.Getenv("BIND") != "" {
+		// Solo bloquea un BIND fijado por el operador; el que calcula el propio
+		// supervisor (NOUMON_BIND_MANAGED) es justo lo que este interruptor
+		// gobierna. Sin esta distinción, despublicar devolvía 409 en cualquier
+		// instalación supervisada ya publicada.
+		if os.Getenv("BIND") != "" && os.Getenv("NOUMON_BIND_MANAGED") != "1" {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "BIND esta fijado por el entorno del servidor; cambialo alli"})
 			return
 		}

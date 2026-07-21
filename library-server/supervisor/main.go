@@ -229,8 +229,23 @@ func (s *supervisor) coreEnv() []string {
 
 	// "Publicar en la red local" del Panel. Un BIND del entorno del operador
 	// tiene la última palabra; sin él, lanAccess abre a toda la LAN.
-	if os.Getenv("BIND") == "" && cfg.LanAccess {
-		extra["BIND"] = "0.0.0.0"
+	//
+	// En el paquete servidor (no-Windows: Pi/NAS headless) el proceso escucha
+	// SIEMPRE en la red: si la biblioteca no está publicada, se avisa al Core
+	// (NOUMON_LAN_PRIVATE) para que cierre la lectura remota pero mantenga el
+	// plano de administración — despublicar en remoto nunca deja fuera al admin.
+	if os.Getenv("BIND") == "" {
+		// NOUMON_BIND_MANAGED distingue este BIND (calculado por el supervisor,
+		// el Panel puede cambiarlo) de un BIND fijado por el operador en el
+		// entorno del servicio (ese sí manda y el Panel se inhibe).
+		if cfg.LanAccess {
+			extra["BIND"] = "0.0.0.0"
+			extra["NOUMON_BIND_MANAGED"] = "1"
+		} else if runtime.GOOS != "windows" {
+			extra["BIND"] = "0.0.0.0"
+			extra["NOUMON_BIND_MANAGED"] = "1"
+			extra["NOUMON_LAN_PRIVATE"] = "1"
+		}
 	}
 
 	// POOL_ROOT solo contiene biblioteca pesada. Las bases administrativas se
