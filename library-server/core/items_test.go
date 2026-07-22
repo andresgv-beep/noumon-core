@@ -39,6 +39,7 @@ func grantOpen(t *testing.T, s *Server, collection string) {
 	if err != nil {
 		t.Fatalf("grantOpen(%s): %v", collection, err)
 	}
+	s.invalidateAccessCache() // escritura por SQL directo; el PUT real invalida igual
 }
 
 func TestMediaItemContract(t *testing.T) {

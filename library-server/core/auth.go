@@ -283,6 +283,26 @@ func (s *Server) purgeSessions() {
 	s.store.db.Exec(`DELETE FROM media_tokens WHERE expires < ? OR session_token NOT IN (SELECT token FROM sessions)`, now.Unix())
 }
 
+// sessionCacheEntry cachea la resolución token→usuario del camino caliente de
+// /media (RENDIMIENTO-STREAMING §7, fix A): el vídeo/PDF genera cientos de
+// Ranges por reproducción y cada uno revalidaba la sesión contra SQLite.
+// user nil = token inválido (caché negativa: una cookie mala tampoco debe
+// costar una consulta por Range). El TTL corto es la ventana máxima en la que
+// una sesión recién borrada podría seguir sirviendo /media; el logout y el
+// cambio de contraseña invalidan además explícitamente.
+type sessionCacheEntry struct {
+	user    *User
+	expires time.Time
+}
+
+const sessionCacheTTL = 8 * time.Second
+
+func (s *Server) invalidateSessionCache() {
+	s.sessCacheMu.Lock()
+	s.sessCache = nil
+	s.sessCacheMu.Unlock()
+}
+
 // currentUser devuelve el usuario de la sesión (cookie) o nil si es anónimo.
 // Comprueba la CADUCIDAD en el servidor: una cookie de hace tres meses no vale
 // aunque el navegador siga mandándola.
@@ -298,6 +318,22 @@ func (s *Server) currentUser(r *http.Request) *User {
 	if token == "" && mediaToken == "" {
 		return nil
 	}
+
+	// Camino caliente: entrada viva en caché → cero SQLite para este Range.
+	cacheKey := token
+	if cacheKey == "" {
+		cacheKey = "mt:" + mediaToken
+	}
+	s.sessCacheMu.RLock()
+	if e, ok := s.sessCache[cacheKey]; ok && time.Now().Before(e.expires) {
+		s.sessCacheMu.RUnlock()
+		if e.user == nil {
+			return nil
+		}
+		u := *e.user // copia: nadie muta al usuario compartido de la caché
+		return &u
+	}
+	s.sessCacheMu.RUnlock()
 	var u User
 	var adm int
 	var sessionToken string
@@ -323,13 +359,35 @@ func (s *Server) currentUser(r *http.Request) *User {
 			Scan(&u.ID, &u.Username, &u.Age, &adm, &sessionToken, &lastSeen)
 	}
 	if err != nil {
+		s.storeSessionCache(cacheKey, nil)
 		return nil
 	}
 	if lastSeen < now.Add(-sessionTouchStep).Unix() {
 		_, _ = s.store.db.Exec(`UPDATE sessions SET last_seen = ? WHERE token = ?`, now.Unix(), sessionToken)
 	}
 	u.IsAdmin = adm == 1
-	return &u
+	s.storeSessionCache(cacheKey, &u)
+	out := u
+	return &out
+}
+
+func (s *Server) storeSessionCache(key string, u *User) {
+	s.sessCacheMu.Lock()
+	if s.sessCache == nil {
+		s.sessCache = map[string]sessionCacheEntry{}
+	}
+	// Poda perezosa: sin esto, un goteo de cookies inválidas distintas (bots,
+	// tokens rotados) haría crecer el mapa sin límite.
+	if len(s.sessCache) > 4096 {
+		s.sessCache = map[string]sessionCacheEntry{}
+	}
+	var cached *User
+	if u != nil {
+		cu := *u
+		cached = &cu
+	}
+	s.sessCache[key] = sessionCacheEntry{user: cached, expires: time.Now().Add(sessionCacheTTL)}
+	s.sessCacheMu.Unlock()
 }
 
 func requestSessionToken(r *http.Request) string {
@@ -495,6 +553,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	// filtración) y renovar la de esta petición para no quedar fuera.
 	s.store.db.Exec(`DELETE FROM sessions WHERE username = ?`, me.Username)
 	s.store.db.Exec(`DELETE FROM media_tokens WHERE username = ?`, me.Username)
+	s.invalidateSessionCache() // las sesiones borradas no deben sobrevivir en cache
 	token, err := s.newSession(me.Username)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -641,6 +700,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		s.store.db.Exec(`DELETE FROM media_tokens WHERE session_token = ?`, token)
 		s.store.db.Exec(`DELETE FROM sessions WHERE token = ?`, token)
 	}
+	s.invalidateSessionCache() // la sesion cerrada no debe sobrevivir en cache
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -657,6 +717,7 @@ func (s *Server) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.db.Exec(`DELETE FROM media_tokens WHERE username = ?`, me.Username)
 	s.store.db.Exec(`DELETE FROM sessions WHERE username = ?`, me.Username)
+	s.invalidateSessionCache() // cerrar todas: fuera tambien de la cache
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -703,6 +764,7 @@ func (s *Server) handleRefreshSession(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "no se pudo renovar la sesión"})
 		return
 	}
+	s.invalidateSessionCache() // el token rotado no debe seguir autenticando desde la caché
 	s.setSessionCookie(w, r, newToken)
 	writeJSON(w, http.StatusOK, map[string]string{"sessionToken": newToken})
 }

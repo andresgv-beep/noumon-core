@@ -54,6 +54,7 @@ func TestAnonymousBlockedAcrossRails(t *testing.T) {
 	// Ahora el admin ABRE solo el ZIM (open). El resto sigue cerrado.
 	s.store.db.Exec(`INSERT INTO collection_access (collection_id, access, min_age, updated) VALUES (?,?,?,?)`,
 		collectionIDForZIM("wikipedia_es"), "open", 0, now())
+	s.invalidateAccessCache() // escritura por SQL directo; el PUT real invalida igual
 	if !s.canSeeZim(nil, "wikipedia_es") {
 		t.Fatal("tras abrir el ZIM como 'open', el anónimo debería verlo")
 	}

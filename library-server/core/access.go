@@ -49,17 +49,15 @@ func validAccess(a string) bool {
 }
 
 // collectionAccess devuelve la config de una colección. Sin fila → blocked/0
-// (todo lo que añade el admin queda bloqueado hasta que lo abra).
+// (todo lo que añade el admin queda bloqueado hasta que lo abra). Resuelve
+// contra el mapa CACHEADO: el gate de /media lo llama en cada petición de
+// Range, y antes eso era una consulta SQLite por Range serializada en una
+// única conexión (RENDIMIENTO-STREAMING §3, fix B).
 func (s *Server) collectionAccess(id string) accessCfg {
-	cfg := accessCfg{Access: "blocked"}
-	if s.store == nil || s.store.db == nil {
-		return cfg // sin store no se puede comprobar nada → se cierra, no se abre
+	if cfg, ok := s.accessMap()[id]; ok {
+		return cfg
 	}
-	var dl int
-	s.store.db.QueryRow(`SELECT access, min_age, allow_download FROM collection_access WHERE collection_id = ?`, id).
-		Scan(&cfg.Access, &cfg.MinAge, &dl)
-	cfg.AllowDownload = dl == 1
-	return cfg
+	return accessCfg{Access: "blocked"}
 }
 
 // accessMap carga TODA la config de acceso de una vez (una query). Los filtros de
@@ -68,7 +66,21 @@ func (s *Server) collectionAccess(id string) accessCfg {
 // cientos de items se nota (auditoría O-1). Con el mapa en mano, canSeeCached
 // resuelve en memoria. La tabla es pequeña (una fila por colección), así que cargarla
 // entera es barato. Sin fila → blocked (misma regla que collectionAccess).
+//
+// El mapa además se CACHEA en memoria: la invalidación real es explícita (el
+// PUT del Panel llama a invalidateAccessCache) y el TTL corto es la red de
+// seguridad para escrituras que se salten ese camino (SQL directo, tests).
+const accessCacheTTL = 15 * time.Second
+
 func (s *Server) accessMap() map[string]accessCfg {
+	s.accessCacheMu.RLock()
+	if s.accessCache != nil && time.Since(s.accessCachedAt) < accessCacheTTL {
+		m := s.accessCache
+		s.accessCacheMu.RUnlock()
+		return m // solo-lectura por convención: nadie muta el mapa devuelto
+	}
+	s.accessCacheMu.RUnlock()
+
 	m := map[string]accessCfg{}
 	if s.store == nil || s.store.db == nil {
 		return m
@@ -87,7 +99,20 @@ func (s *Server) accessMap() map[string]accessCfg {
 			m[id] = cfg
 		}
 	}
+	s.accessCacheMu.Lock()
+	s.accessCache = m
+	s.accessCachedAt = time.Now()
+	s.accessCacheMu.Unlock()
 	return m
+}
+
+// invalidateAccessCache: tras cambiar el acceso de una colección, la siguiente
+// lectura recarga el mapa.
+func (s *Server) invalidateAccessCache() {
+	s.accessCacheMu.Lock()
+	s.accessCache = nil
+	s.accessCachedAt = time.Time{}
+	s.accessCacheMu.Unlock()
 }
 
 // canSeeCached resuelve el acceso contra un mapa ya cargado (sin tocar SQLite).
@@ -297,6 +322,7 @@ func (s *Server) handleCollectionsAccess(w http.ResponseWriter, r *http.Request)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
+		s.invalidateAccessCache() // el gate de /media debe ver el cambio YA
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "método no permitido"})

@@ -45,6 +45,18 @@ type Server struct {
 	// administración: despublicar nunca deja fuera al admin (§Red).
 	lanPrivate bool
 
+	// Cachés del camino caliente de /media (RENDIMIENTO-STREAMING §7): el vídeo
+	// y el PDF generan cientos de Ranges por reproducción y cada uno revalidaba
+	// sesión + permiso contra SQLite, serializado en UNA conexión. Se cachean
+	// los INSUMOS (sesión y mapa de acceso) con TTL corto; el gate se sigue
+	// ejecutando en cada petición, solo que contra memoria.
+	sessCacheMu sync.RWMutex
+	sessCache   map[string]sessionCacheEntry
+
+	accessCacheMu  sync.RWMutex
+	accessCache    map[string]accessCfg
+	accessCachedAt time.Time
+
 	// Control de carga (§6, rate-limit v1): kiwixSem limita las peticiones
 	// simultáneas al motor; searchGate limita búsquedas globales concurrentes
 	// (/api/search y /api/images son fan-out caro sobre Xapian → DoS barato).

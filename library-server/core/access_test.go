@@ -30,6 +30,7 @@ func setAccess(t *testing.T, s *Server, collection, level string, minAge int) {
 	if err != nil {
 		t.Fatalf("setAccess: %v", err)
 	}
+	s.invalidateAccessCache() // el test escribe por SQL directo; el PUT real invalida igual
 }
 
 func getAs(h http.Handler, path string, c *http.Cookie) *httptest.ResponseRecorder {

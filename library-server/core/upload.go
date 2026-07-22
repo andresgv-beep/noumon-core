@@ -183,7 +183,8 @@ func (s *Server) handleMediaUpdate(u *uploadDeps, md *mediaDeps) http.HandlerFun
 			}
 		}
 
-		md.invalidate() // el catálogo cacheado debe ver la ficha nueva
+		md.invalidate()           // el catálogo cacheado debe ver la ficha nueva
+		s.invalidateAccessCache() // y el gate, la fila de acceso sembrada
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "title": sc.Title})
 	}
 }
@@ -379,7 +380,8 @@ func (s *Server) handleUpload(u *uploadDeps, md *mediaDeps) http.HandlerFunc {
 		}
 
 		rel := strings.TrimPrefix(filepath.ToSlash(strings.TrimPrefix(dst, u.root)), "/")
-		md.invalidate() // el catálogo cacheado debe ver el item recién subido
+		md.invalidate()           // el catálogo cacheado debe ver el item recién subido
+		s.invalidateAccessCache() // y el gate, la fila de acceso sembrada
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok":         true,
 			"collection": appDir + "/" + collection,

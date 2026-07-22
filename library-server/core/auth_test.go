@@ -472,6 +472,7 @@ func TestEphemeralMediaTokenReplacesSessionTokenInURL(t *testing.T) {
 		t.Fatal("el token multimedia efímero no autentica la lectura")
 	}
 	_, _ = s.store.db.Exec(`UPDATE media_tokens SET expires = ? WHERE token = ?`, time.Now().Add(-time.Minute).Unix(), payload.Token)
+	s.invalidateSessionCache() // caducidad forzada por SQL directo; en vivo la ventana máxima es el TTL corto de la caché
 	if user := s.currentUser(mediaURL); user != nil {
 		t.Fatal("un token multimedia caducado siguió funcionando")
 	}
