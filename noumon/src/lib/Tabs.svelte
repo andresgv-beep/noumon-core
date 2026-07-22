@@ -46,8 +46,14 @@
   .top{display:flex;align-items:center;gap:6px;background:var(--panel-2);border-bottom:1px solid var(--border-soft);padding:0 12px 0 16px;height:100%}
   .brand{display:grid;place-items:center;width:32px;padding-right:6px;flex:none}
   .tabs{display:flex;align-items:center;gap:4px;flex:1;min-width:0;height:100%;padding-top:0;overflow:hidden}
-  .tabwrap{display:flex;align-items:center;max-width:210px;height:34px;border-radius:var(--r-md);color:var(--muted);font-size:13px;white-space:nowrap;border:1px solid transparent;transition:background .12s,color .12s,border-color .12s;overflow:hidden}
-  .tabwrap:hover{background:var(--panel);color:var(--ink-dim)}
+  /* Superficie sólida, no una caja dibujada. El ancho base ligeramente mayor
+     da aire al título y todavía puede encogerse cuando hay muchas pestañas.
+     Cómo se distingue la pestaña activa lo decide la PIEL (ver --tab-* en
+     app.css): moderno por superficie y sombra, retro por marco. El borde va
+     siempre puesto aunque sea transparente, para que activar una pestaña no
+     mueva un píxel. */
+  .tabwrap{display:flex;align-items:center;flex:0 1 180px;min-width:130px;max-width:220px;height:34px;border:1px solid transparent;border-radius:var(--r-md);background:var(--tab-off);color:var(--muted);font-size:13px;white-space:nowrap;transition:background .12s,color .12s,border-color .12s;overflow:hidden}
+  .tabwrap:hover{background:var(--tab-off-hover);color:var(--ink-dim)}
   .tab{display:flex;align-items:center;gap:9px;min-width:0;height:100%;padding:0 6px 0 11px;flex:1;text-align:left}
   .tab .ti{display:grid;place-items:center;color:var(--faint)}
   .tabwrap.active .ti{color:var(--accent-2)}
@@ -55,7 +61,7 @@
   .x{width:22px;height:100%;display:grid;place-items:center;color:var(--faint);opacity:0;transition:opacity .12s,background .12s;flex:none}
   .tabwrap:hover .x,.tabwrap.active .x{opacity:1}
   .x:hover{background:var(--raise);color:var(--ink)}
-  .tabwrap.active{background:var(--panel);color:var(--ink);border-color:var(--border-soft)}
+  .tabwrap.active{background:var(--tab-on);color:var(--ink);border-color:var(--tab-edge);box-shadow:var(--tab-shadow)}
   .newtab{width:30px;height:30px;border-radius:var(--r-md);display:grid;place-items:center;color:var(--muted);flex:none}
   .newtab:hover{background:var(--panel);color:var(--ink)}
   .actions{display:flex;align-items:center;gap:2px;flex:none;padding-left:8px}

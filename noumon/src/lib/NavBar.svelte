@@ -61,7 +61,7 @@
   .navbtn.on{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-2)}
   .navbtn:disabled{color:var(--faint);cursor:default}
   .navbtn:disabled:hover{background:none}
-  .address{flex:1;display:flex;align-items:center;gap:10px;height:36px;margin:0 6px;padding:0 8px 0 12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-md);color:var(--ink-dim);font-size:13.5px;min-width:0;position:relative;overflow:hidden}
+  .address{flex:1;display:flex;align-items:center;gap:10px;height:36px;margin:0 6px;padding:0 8px 0 12px;background:var(--ui-face);border:1px solid var(--ui-edge);border-radius:var(--r-md);color:var(--ink-dim);font-size:13.5px;min-width:0;position:relative;overflow:hidden}
   .loadbar{position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),var(--accent-2),transparent);background-size:45% 100%;background-repeat:no-repeat;animation:navload 1.05s ease-in-out infinite}
   @keyframes navload{0%{background-position:-45% 0}100%{background-position:145% 0}}
   @media (prefers-reduced-motion:reduce){.loadbar{animation:none;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--accent) 60%,transparent),transparent)}}
@@ -79,9 +79,9 @@
   .userbtn{width:36px;height:36px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;transition:background .12s}
   .userbtn:hover{background:var(--panel)}
   .uav{width:28px;height:28px;border-radius:var(--r-round);display:grid;place-items:center;color:#fff;font-size:11px;font-weight:650;border:1px solid rgba(255,255,255,.14)}
-  .idxbtn{display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-md);color:var(--ink-dim);font-size:13.5px;flex:none;transition:background .12s,color .12s,border-color .12s}
+  .idxbtn{display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;background:var(--ui-face);border:1px solid var(--ui-edge);border-radius:var(--r-md);color:var(--ink-dim);font-size:13.5px;flex:none;transition:background .12s,color .12s,border-color .12s}
   .idxbtn:hover{background:var(--raise);color:var(--ink)}
   .idxbtn :global(.ic){color:var(--muted)}
-  .idxbtn.on{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent-2);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+  .idxbtn.on{background:color-mix(in srgb,var(--accent) 18%,var(--ui-face));color:var(--accent-2);border-color:var(--ui-edge-on)}
   .idxbtn.on :global(.ic){color:var(--accent-2)}
 </style>

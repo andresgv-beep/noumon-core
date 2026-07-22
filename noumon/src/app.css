@@ -20,6 +20,19 @@
 :root{
   --ground:#151619; --panel:#1b1c21; --panel-2:#18191d; --card:#202127; --raise:#26272f;
   --border:#2d2e38; --border-soft:#262730;
+  /* ── Cromo de la ventana: cada piel dice cómo separa las cosas ──────────
+     MODERNO separa por SUPERFICIE: sin bordes, un tono por encima y sombra.
+     RETRO separa por MARCO: es su lenguaje, y sin borde se queda desnudo.
+     Por eso vive en tokens y no en cada componente: así tocar una piel no puede
+     contagiar a la otra.
+
+     La pestaña activa necesita token propio porque --raise NO vale: en oscuro es
+     un paso HACIA la luz, pero en las paletas claras va hacia la sombra, y la
+     activa acababa hundida en vez de flotando. */
+  --tab-on:#353642; --tab-off:transparent; --tab-off-hover:var(--panel);
+  --tab-shadow:var(--shadow); --tab-edge:transparent;
+  /* Barra de direcciones y botones (favoritos, índice) */
+  --ui-face:var(--card); --ui-edge:transparent; --ui-edge-on:transparent;
   --ink:#e9e9f0; --ink-dim:#c3c3cf; --muted:#83838f; --faint:#5c5c68;
   --accent:#7c6cf0;
   --so:#e8833a; --dk:#2f9fe6; --arch:#3d7bd6; --diablo:#c0402e; --syn:#2b8a6b; --book:#c98b5a;
@@ -35,6 +48,7 @@
 :root[data-theme="light"]{
   --ground:#eaecf1; --panel:#f7f8fb; --panel-2:#e6e8ee; --card:#f7f8fb; --raise:#e0e3ea;
   --border:#d5d8e1; --border-soft:#e3e5ec;
+  --tab-on:#ffffff; /* flota sobre la barra (#e6e8ee), no se hunde */
   --ink:#1b1c24; --ink-dim:#3c3d49; --muted:#6a6b78; --faint:#9a9ba7;
   --accent:#6a58e0;
   --icon-surface:#ffffff;
@@ -48,6 +62,13 @@
 :root[data-skin="retro"]{
   --r-sm:0px; --r-md:0px; --r-lg:0px; --r-pill:0px;
   --r-round:0px;
+  /* Retro separa por MARCO, no por sombra ni por tono: la pestaña activa se
+     reconoce por su borde, y la barra y los botones llevan el suyo. Estos son
+     sus valores de siempre; el moderno no los toca ni al revés. */
+  --tab-off:transparent; --tab-off-hover:var(--panel); --tab-on:var(--panel);
+  --tab-shadow:none; --tab-edge:var(--border-soft);
+  --ui-face:var(--panel); --ui-edge:var(--border);
+  --ui-edge-on:color-mix(in srgb,var(--accent) 40%,transparent);
   --font:ui-monospace,"Cascadia Code","Consolas","Courier New",monospace;
   --font-read:Georgia,"Iowan Old Style","Times New Roman",serif;
   --mono:var(--font);

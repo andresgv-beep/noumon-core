@@ -42,8 +42,8 @@
 
 <style>
   .favwrap{position:relative;flex:none}
-  .favbtn{display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-md);color:var(--ink-dim);font-size:13.5px;transition:background .12s,color .12s}
-  .favbtn.compact{height:28px;padding:0 10px;font-size:12.5px;background:transparent}
+  .favbtn{display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;background:var(--ui-face);border:1px solid var(--ui-edge);border-radius:var(--r-md);color:var(--ink-dim);font-size:13.5px;transition:background .12s,color .12s}
+  .favbtn.compact{height:28px;padding:0 10px;font-size:12.5px;background:var(--ui-face)}
   .favbtn.compact:hover,.favbtn.compact.on{background:var(--raise)}
   .favbtn:hover,.favbtn.on{background:var(--raise);color:var(--ink)}
   .favbtn :global(.ic){color:var(--accent-2)}
