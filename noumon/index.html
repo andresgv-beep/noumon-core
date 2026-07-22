@@ -26,11 +26,373 @@
           var accent = localStorage.getItem('noumon-accent');
           if (accent && /^#[0-9a-f]{6}$/i.test(accent)) root.style.setProperty('--accent', accent);
         } catch (e) {}
+
+        // ── Arranque ────────────────────────────────────────────────────────
+        // El momento de marca vive AQUÍ, en el cliente, y no en el shell de
+        // escritorio: allí solo se veía con el servidor caído, porque cuando el
+        // servicio ya está en marcha el shell entrega la SPA directamente. Aquí
+        // se ve siempre y en cualquier equipo, también desde el navegador.
+        //
+        // Tres caminos, decididos antes del primer pintado:
+        //   'boot'  → toca la secuencia completa (una vez por sesión).
+        //   'velo'  → el shell YA la tocó mientras esperaba al servidor; aquí
+        //             solo se funde su negro con el tema del usuario.
+        //   (nada)  → recarga dentro de la misma sesión: entrar y ya.
+        try {
+          var root2 = document.documentElement;
+          if (sessionStorage.getItem('noumon-boot')) {
+            sessionStorage.removeItem('noumon-boot');
+            sessionStorage.setItem('noumon-booted', '1');
+            root2.setAttribute('data-velo', '');
+            addEventListener('DOMContentLoaded', function () {
+              setTimeout(function () { root2.removeAttribute('data-velo'); }, 700);
+            });
+          } else if (!sessionStorage.getItem('noumon-booted')) {
+            sessionStorage.setItem('noumon-booted', '1');
+            root2.setAttribute('data-booting', '');
+          }
+        } catch (e) {}
       })();
     </script>
+    <style>
+      /* Velo del relevo: cubre el primer pintado con el negro del arranque y se
+         funde. pointer-events:none para no tragarse ni un clic. */
+      html[data-velo]::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        background: #0b0b11;
+        pointer-events: none;
+        animation: noumon-velo 0.46s ease 0.05s forwards;
+      }
+      @keyframes noumon-velo { to { opacity: 0; } }
+
+      /* ── Escenografía del arranque ───────────────────────────────────────
+         Paleta FIJA (oscuro + neón lila), deliberadamente ajena al tema del
+         usuario: el arranque es de Noumon. Su tema entra debajo al difuminarse.
+         La COLOCACIÓN no está aquí: la calcula el guion midiendo el Inicio real,
+         para que logo, wordmark y buscador caigan justo donde van a quedarse. */
+      #boot { display: none; }
+      html[data-booting] #boot {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 2147483646;
+        background: #0b0b11;
+        opacity: 1;
+        transition: opacity 0.34s ease;
+      }
+      html[data-booting] body { overflow: hidden; }
+      html[data-booting] #boot.gone { opacity: 0; }
+      /* Encadenado: la llegada del Inicio espera bajo el telón y arranca justo
+         cuando este se levanta, en vez de gastarse sin que nadie la vea. */
+      html[data-booting] #app * { animation-play-state: paused !important; }
+
+      #boot .mark, #boot .wordmark, #boot .shell, #boot .flash { position: fixed; }
+      /* El logo nace INVISIBLE y con medidas puestas. Sin esto, el navegador
+         pinta el <img> del SVG a su tamaño por defecto (300x150) en la esquina
+         mientras el guion todavía está midiendo el Inicio: se veía un logo
+         enorme que luego saltaba a su sitio. Solo se muestra al empezar a rodar,
+         y para entonces ya entra desde fuera del borde. */
+      #boot .mark {
+        width: 104px; height: 104px; opacity: 0;
+        filter: drop-shadow(0 0 14px rgba(139, 124, 246, 0.35));
+      }
+      #boot.colocado .mark { opacity: 1; }
+      #boot.reveal .mark { filter: drop-shadow(0 0 26px #8b7cf6); }
+      #boot .spin, #boot .spin img { display: block; width: 100%; height: 100%; }
+      #boot .flash {
+        width: 10px; height: 10px; border-radius: 50%; opacity: 0;
+        transform: translate(-50%, -50%); background: #8b7cf6;
+        box-shadow: 0 0 40px 18px #8b7cf6, 0 0 110px 65px rgba(139, 124, 246, 0.28);
+      }
+      #boot.reveal .flash { animation: boot-burst 0.55s ease-out both; }
+      #boot .wordmark { color: #f3f1f8; opacity: 0; white-space: nowrap; }
+      #boot.word .wordmark { animation: boot-rise 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+      #boot .shell {
+        box-sizing: border-box; background: rgba(32, 33, 39, 0.74);
+        display: flex; align-items: center; gap: 10px; padding: 0 16px;
+        color: #92939e; opacity: 0;
+      }
+      #boot.search .shell { animation: boot-rise 0.34s ease-out both; }
+      #boot .tracer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      #boot .line, #boot .halo {
+        vector-effect: non-scaling-stroke; fill: none; stroke-linecap: round;
+        stroke-linejoin: round; opacity: 0; stroke-dasharray: 100 100; stroke-dashoffset: 100;
+      }
+      #boot .halo {
+        stroke: #8b7cf6; stroke-width: 7;
+        filter: blur(3px) drop-shadow(0 0 10px #8b7cf6) drop-shadow(0 0 20px #8b7cf6);
+      }
+      #boot .line {
+        stroke: #b3a8fa; stroke-width: 2.6;
+        filter: drop-shadow(0 0 4px #8b7cf6) drop-shadow(0 0 10px #8b7cf6);
+      }
+      #boot.search .line { animation: boot-draw 1.05s cubic-bezier(0.3, 0, 0.2, 1) forwards; }
+      #boot.search .halo { animation: boot-halo 1.05s cubic-bezier(0.3, 0, 0.2, 1) forwards; }
+      @keyframes boot-burst {
+        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2); }
+        22% { opacity: 1; }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(7); }
+      }
+      @keyframes boot-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+      @keyframes boot-draw {
+        0% { opacity: 0; stroke-dashoffset: 100; } 6% { opacity: 0.95; }
+        50% { stroke-dashoffset: 0; opacity: 0.95; } 72% { opacity: 0.95; }
+        100% { stroke-dashoffset: 0; opacity: 0; }
+      }
+      @keyframes boot-halo {
+        0% { opacity: 0; stroke-dashoffset: 100; } 6% { opacity: 0.5; }
+        50% { stroke-dashoffset: 0; opacity: 0.5; } 72% { opacity: 0.5; }
+        100% { stroke-dashoffset: 0; opacity: 0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html[data-velo]::after { animation-duration: 0.2s; }
+        #boot .flash, #boot .line, #boot .halo { display: none; }
+      }
+    </style>
   </head>
   <body>
+    <div id="boot" aria-hidden="true">
+      <div class="mark"><span class="spin"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='%238b7cf6'%3E%3Cpath d='M94.22 62.68L91.28 66.16L88.15 69.24L84.86 71.91L81.47 74.18L78.01 76.05L74.52 77.52L71.03 78.63L67.59 79.37L64.22 79.77L60.96 79.85L57.81 79.63L54.82 79.14L51.99 78.39L49.34 77.42L46.88 76.25L44.64 74.91L42.60 73.41L40.78 71.80L39.18 70.08L37.81 68.29L36.65 66.45L35.70 64.57L34.96 62.69L34.42 60.81L34.08 58.97L33.91 57.16L34.63 56.84L34.95 58.48L35.43 60.12L36.08 61.74L36.90 63.34L37.90 64.90L39.07 66.39L40.41 67.80L41.92 69.11L43.59 70.29L45.40 71.34L47.36 72.24L49.44 72.96L51.64 73.50L53.94 73.83L56.31 73.94L58.74 73.82L61.21 73.47L63.70 72.86L66.17 72.00L68.60 70.89L70.98 69.51L73.26 67.87L75.43 65.98L77.45 63.85L79.30 61.47L80.95 58.88Z'/%3E%3Cpath d='M61.13 94.63L56.64 93.83L52.41 92.66L48.45 91.15L44.79 89.34L41.45 87.28L38.42 84.99L35.73 82.53L33.36 79.92L31.33 77.20L29.63 74.41L28.24 71.58L27.17 68.74L26.40 65.92L25.92 63.14L25.71 60.43L25.75 57.81L26.02 55.30L26.51 52.92L27.20 50.67L28.06 48.58L29.08 46.66L30.23 44.90L31.49 43.32L32.85 41.92L34.27 40.69L35.75 39.65L36.39 40.11L35.13 41.20L33.95 42.44L32.87 43.82L31.90 45.33L31.05 46.97L30.34 48.73L29.79 50.60L29.41 52.56L29.22 54.59L29.22 56.69L29.42 58.83L29.84 61.00L30.47 63.17L31.33 65.32L32.42 67.44L33.74 69.48L35.28 71.44L37.05 73.29L39.03 75.00L41.21 76.55L43.59 77.92L46.15 79.08L48.87 80.01L51.73 80.70L54.71 81.11L57.79 81.24Z'/%3E%3Cpath d='M16.91 81.95L15.36 77.67L14.26 73.41L13.59 69.23L13.33 65.16L13.44 61.23L13.91 57.47L14.69 53.90L15.77 50.55L17.11 47.43L18.67 44.56L20.43 41.95L22.36 39.60L24.42 37.52L26.58 35.71L28.82 34.17L31.11 32.90L33.42 31.88L35.73 31.12L38.02 30.59L40.26 30.30L42.43 30.21L44.53 30.33L46.53 30.63L48.42 31.10L50.20 31.73L51.84 32.48L51.76 33.27L50.19 32.73L48.53 32.32L46.79 32.07L44.99 31.99L43.15 32.07L41.27 32.34L39.38 32.80L37.49 33.45L35.63 34.30L33.81 35.35L32.06 36.59L30.39 38.04L28.83 39.67L27.40 41.50L26.11 43.50L25.00 45.66L24.07 47.98L23.35 50.43L22.86 53.00L22.61 55.67L22.62 58.41L22.89 61.21L23.44 64.03L24.28 66.85L25.41 69.64L26.84 72.37Z'/%3E%3Cpath d='M5.78 37.32L8.72 33.84L11.85 30.76L15.14 28.09L18.53 25.82L21.99 23.95L25.48 22.48L28.97 21.37L32.41 20.63L35.78 20.23L39.04 20.15L42.19 20.37L45.18 20.86L48.01 21.61L50.66 22.58L53.12 23.75L55.36 25.09L57.40 26.59L59.22 28.20L60.82 29.92L62.19 31.71L63.35 33.55L64.30 35.43L65.04 37.31L65.58 39.19L65.92 41.03L66.09 42.84L65.37 43.16L65.05 41.52L64.57 39.88L63.92 38.26L63.10 36.66L62.10 35.10L60.93 33.61L59.59 32.20L58.08 30.89L56.41 29.71L54.60 28.66L52.64 27.76L50.56 27.04L48.36 26.50L46.06 26.17L43.69 26.06L41.26 26.18L38.79 26.53L36.30 27.14L33.83 28.00L31.40 29.11L29.02 30.49L26.74 32.13L24.57 34.02L22.55 36.15L20.70 38.53L19.05 41.12Z'/%3E%3Cpath d='M38.87 5.37L43.36 6.17L47.59 7.34L51.55 8.85L55.21 10.66L58.55 12.72L61.58 15.01L64.27 17.47L66.64 20.08L68.67 22.80L70.37 25.59L71.76 28.42L72.83 31.26L73.60 34.08L74.08 36.86L74.29 39.57L74.25 42.19L73.98 44.70L73.49 47.08L72.80 49.33L71.94 51.42L70.92 53.34L69.77 55.10L68.51 56.68L67.15 58.08L65.73 59.31L64.25 60.35L63.61 59.89L64.87 58.80L66.05 57.56L67.13 56.18L68.10 54.67L68.95 53.03L69.66 51.27L70.21 49.40L70.59 47.44L70.78 45.41L70.78 43.31L70.58 41.17L70.16 39.00L69.53 36.83L68.67 34.68L67.58 32.56L66.26 30.52L64.72 28.56L62.95 26.71L60.97 25.00L58.79 23.45L56.41 22.08L53.85 20.92L51.13 19.99L48.27 19.30L45.29 18.89L42.21 18.76Z'/%3E%3Cpath d='M83.09 18.05L84.64 22.33L85.74 26.59L86.41 30.77L86.67 34.84L86.56 38.77L86.09 42.53L85.31 46.10L84.23 49.45L82.89 52.57L81.33 55.44L79.57 58.05L77.64 60.40L75.58 62.48L73.42 64.29L71.18 65.83L68.89 67.10L66.58 68.12L64.27 68.88L61.98 69.41L59.74 69.70L57.57 69.79L55.47 69.67L53.47 69.37L51.58 68.90L49.80 68.27L48.16 67.52L48.24 66.73L49.81 67.27L51.47 67.68L53.21 67.93L55.01 68.01L56.85 67.93L58.73 67.66L60.62 67.20L62.51 66.55L64.37 65.70L66.19 64.65L67.94 63.41L69.61 61.96L71.17 60.33L72.60 58.50L73.89 56.50L75.00 54.34L75.93 52.02L76.65 49.57L77.14 47.00L77.39 44.33L77.38 41.59L77.11 38.79L76.56 35.97L75.72 33.15L74.59 30.36L73.16 27.63Z'/%3E%3Ccircle cx='50' cy='50' r='11' fill-opacity='0.45'/%3E%3C/svg%3E" alt="" /></span></div>
+      <div class="flash"></div>
+      <span class="wordmark">Noumon</span>
+      <div class="shell">
+        <em style="font-style:normal">Busca en todas tus colecciones&hellip;</em>
+        <svg class="tracer"><g><path class="halo" pathLength="100"/><path class="halo" pathLength="100"/><path class="line" pathLength="100"/><path class="line" pathLength="100"/></g></svg>
+      </div>
+    </div>
     <div id="app"></div>
+    <script>
+      // Secuencia del arranque.
+      //
+      // La idea: el arranque NO inventa una composición propia. Mide el Inicio
+      // real que está montándose debajo y se coloca EXACTAMENTE encima de su
+      // logo, su wordmark y su buscador. Así la luz rodea la barra de verdad y,
+      // al levantarse el telón, no se mueve nada: lo que había ya estaba ahí.
+      //
+      // La rodadura hasta ese sitio se ve SIEMPRE: es la firma de Noumon al
+      // encender, no un relleno mientras carga algo.
+      (function () {
+        var root = document.documentElement;
+        if (!root.hasAttribute('data-booting')) return;
+        var boot = document.getElementById('boot');
+        var mark = boot.querySelector('.mark');
+        var spin = boot.querySelector('.spin');
+        var flash = boot.querySelector('.flash');
+        var word = boot.querySelector('.wordmark');
+        var shell = boot.querySelector('.shell');
+        var tracer = boot.querySelector('.tracer');
+        var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        // Caja SIN transformaciones. Dos trampas que hay que esquivar juntas:
+        // las animaciones de llegada del Inicio están pausadas en su fotograma 0
+        // (escaladas y giradas), así que medir tal cual daría la pose inicial y
+        // no el sitio definitivo; y el logo es un <svg>, que NO tiene offsetLeft
+        // ni offsetWidth (son de HTMLElement), así que sumar offsets tampoco
+        // vale. Se apaga la animación un instante, se mide y se restaura: pasa
+        // bajo el telón, invisible, y funciona igual para SVG que para HTML.
+        function caja(el) {
+          var antes = el.style.animation;
+          el.style.animation = 'none';
+          var r = el.getBoundingClientRect();
+          el.style.animation = antes;
+          return { left: r.left, top: r.top, width: r.width, height: r.height };
+        }
+        function poner(el, c) {
+          el.style.left = c.left + 'px'; el.style.top = c.top + 'px';
+          el.style.width = c.width + 'px'; el.style.height = c.height + 'px';
+        }
+
+        // Si el Inicio no llega a tiempo (otra vista, arranque lento), se usa una
+        // composición equivalente centrada: el arranque nunca se queda colgado.
+        function respaldo() {
+          var w = innerWidth, h = innerHeight, lado = Math.min(104, w * 0.22);
+          var barra = Math.min(600, w * 0.9);
+          return {
+            logo: { left: (w - lado) / 2, top: h * 0.3, width: lado, height: lado },
+            word: { left: (w - barra) / 2, top: h * 0.3 + lado + 13, width: barra, height: 65 },
+            barra: { left: (w - barra) / 2, top: h * 0.3 + lado + 13 + 65 + 28, width: barra, height: 46 },
+            radio: '14px', fuente: null
+          };
+        }
+
+        function medir() {
+          var logo = document.querySelector('#app .lockup .logo');
+          var wm = document.querySelector('#app .lockup .wordmark');
+          var barra = document.querySelector('#app .bigsearch');
+          if (!logo || !wm || !barra) return null;
+          var cb = caja(barra), cl = caja(logo);
+          if (!cb.width || !cl.width) return null; // montado pero aún sin medidas
+          var cs = getComputedStyle(wm);
+          return {
+            logo: cl, word: caja(wm), barra: cb,
+            radio: getComputedStyle(barra).borderRadius,
+            fuente: {
+              family: cs.fontFamily, size: cs.fontSize, weight: cs.fontWeight,
+              spacing: cs.letterSpacing, line: cs.lineHeight
+            }
+          };
+        }
+
+        function colocar(m) {
+          poner(mark, m.logo);
+          flash.style.left = (m.logo.left + m.logo.width / 2) + 'px';
+          flash.style.top = (m.logo.top + m.logo.height / 2) + 'px';
+          poner(word, m.word);
+          word.style.height = 'auto';
+          if (m.fuente) {
+            word.style.font = m.fuente.weight + ' ' + m.fuente.size + '/' + m.fuente.line + ' ' + m.fuente.family;
+            word.style.letterSpacing = m.fuente.spacing;
+          } else {
+            word.style.font = '620 72px/0.9 system-ui, "Segoe UI", sans-serif';
+            word.style.letterSpacing = '-0.055em';
+          }
+          poner(shell, m.barra);
+          shell.style.borderRadius = m.radio;
+          shell.style.fontSize = Math.max(13, Math.round(m.barra.height * 0.32)) + 'px';
+          trazar();
+        }
+
+        // La luz se traza en píxeles REALES de la barra, con su mismo radio: un
+        // viewBox estirado deformaba las esquinas y el neón quedaba por fuera.
+        function trazar() {
+          var w = shell.offsetWidth, h = shell.offsetHeight;
+          if (!w || !h) return;
+          tracer.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+          var i = 1.3;
+          var r = Math.min((parseFloat(getComputedStyle(shell).borderRadius) || 11) - i / 2, h / 2 - i);
+          var der = 'M ' + (w / 2) + ' ' + i + ' H ' + (w - i - r) + ' Q ' + (w - i) + ' ' + i + ' ' + (w - i) + ' ' + (i + r) +
+            ' V ' + (h - i - r) + ' Q ' + (w - i) + ' ' + (h - i) + ' ' + (w - i - r) + ' ' + (h - i) + ' H ' + (w / 2);
+          var izq = 'M ' + (w / 2) + ' ' + i + ' H ' + (i + r) + ' Q ' + i + ' ' + i + ' ' + i + ' ' + (i + r) +
+            ' V ' + (h - i - r) + ' Q ' + i + ' ' + (h - i) + ' ' + (i + r) + ' ' + (h - i) + ' H ' + (w / 2);
+          var p = tracer.querySelectorAll('path');
+          p[0].setAttribute('d', der); p[1].setAttribute('d', izq);
+          p[2].setAttribute('d', der); p[3].setAttribute('d', izq);
+        }
+
+        // El Inicio no se queda quieto al montarse: llegan favoritos y
+        // bibliotecas, aparece la barra de marcadores (empuja 40 px hacia abajo)
+        // y el sidebar abre su columna de 262 px con una transición de .2s que
+        // desliza todo el contenido. Por eso hay que seguir midiendo... pero
+        // aplicando el cambio CON TRANSICIÓN: reposicionar a saltos cada 120 ms
+        // se veía como un tirón en plena animación.
+        var vigilante = setInterval(function () {
+          var m = medir();
+          if (m) colocar(m);
+        }, 120);
+
+        function deslizarse() {
+          var t = 'left .2s ease, top .2s ease, width .2s ease, height .2s ease';
+          mark.style.transition = t; word.style.transition = t;
+          shell.style.transition = t; flash.style.transition = t;
+        }
+
+        // ¿Está el layout quieto? Dos medidas seguidas iguales bastan: es lo que
+        // separa "ya se colocó" de "todavía se está acomodando".
+        function quieto(a, b) {
+          if (!a || !b) return false;
+          function ig(p, q) {
+            return Math.abs(p.left - q.left) < 0.5 && Math.abs(p.top - q.top) < 0.5 &&
+              Math.abs(p.width - q.width) < 0.5;
+          }
+          return ig(a.logo, b.logo) && ig(a.word, b.word) && ig(a.barra, b.barra);
+        }
+
+        // Levantar el telón es IRRENUNCIABLE: pase lo que pase con la animación,
+        // el usuario tiene que acabar viendo su biblioteca. Por eso quitar el
+        // telón vive aparte y es idempotente, y hay un seguro que lo dispara
+        // aunque la secuencia se haya quedado a medias.
+        var fuera = false;
+        function quitarTelon() {
+          if (fuera) return;
+          fuera = true;
+          clearInterval(vigilante);
+          boot.classList.add('gone');
+          setTimeout(function () {
+            // Quitar data-booting suelta a la vez el telón y las animaciones de
+            // llegada del Inicio, que estaban esperando debajo.
+            root.removeAttribute('data-booting');
+            if (boot.parentNode) boot.parentNode.removeChild(boot);
+          }, 340);
+        }
+        // Seguro de última instancia: si algo corta la secuencia —una animación
+        // que nunca termina porque la ventana estaba en segundo plano, un fallo
+        // a media secuencia—, a los 6 s se entra igual. Nunca una pantalla negra.
+        setTimeout(quitarTelon, 6000);
+
+        function salir(espera) { setTimeout(quitarTelon, espera); }
+
+        var rematado = false;
+        function rematar() {
+          if (rematado) return;
+          rematado = true;
+          boot.classList.add('reveal');
+          setTimeout(function () { boot.classList.add('word'); }, 120);
+          setTimeout(function () { trazar(); boot.classList.add('search'); }, 300);
+          salir(1320);
+        }
+
+        function arrancar(m) {
+          colocar(m);
+          // A partir de aquí cualquier reacomodo del Inicio se sigue deslizando,
+          // no dando un tirón: el arranque acompaña al layout en vez de perseguirlo.
+          setTimeout(deslizarse, 0);
+          addEventListener('resize', function () { var n = medir(); if (n) colocar(n); });
+          if (reduce) { boot.classList.add('colocado'); salir(220); return; }
+
+          var giro = spin.animate
+            ? spin.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+                { duration: 2200, iterations: Infinity, easing: 'linear' })
+            : null;
+
+          // Rueda desde fuera del borde izquierdo hasta SU sitio definitivo.
+          var desde = -(m.logo.left + m.logo.width + 60);
+          var rodada = mark.animate(
+            [{ transform: 'translateX(' + desde + 'px)' }, { transform: 'translateX(0)' }],
+            { duration: 1000, easing: 'cubic-bezier(.22,.85,.24,1)', fill: 'both' });
+          // Recién ahora se muestra, y con la rodadura ya aplicada: aparece
+          // fuera del borde izquierdo, nunca de golpe en el centro.
+          boot.classList.add('colocado');
+
+          // La rodadura avisa al terminar, pero no se le confía el turno: si la
+          // ventana estaba en segundo plano el navegador suspende la animación y
+          // ese aviso no llega nunca. El relevo también salta por tiempo.
+          setTimeout(rematar, 1300);
+          rodada.finished.then(function () {
+            if (giro) { // el giro remata una vuelta entera en vez de frenar en seco
+              var deg = (giro.currentTime % 2200) / 2200 * 360;
+              giro.cancel();
+              spin.animate([{ transform: 'rotate(' + deg + 'deg)' }, { transform: 'rotate(360deg)' }],
+                { duration: 520, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+            }
+            rematar();
+          }).catch(function () { rematar(); });
+        }
+
+        // Esperar a que el Inicio exista Y esté quieto antes de rodar: arrancar
+        // sobre un layout que aún se está acomodando era lo que descolocaba la
+        // animación (sobre todo con el sidebar abierto, que se recuerda entre
+        // sesiones y desliza 262 px al aplicarse). Como el telón ya está negro
+        // desde el primer fotograma, esta espera no se ve.
+        var limite = Date.now() + 2500;   // sin Inicio a tiempo → composición de respaldo
+        var tope = Date.now() + 1200;     // quieto o no, no esperamos más de esto
+        var previa = null;
+        (function esperar() {
+          var m = medir();
+          if (m) {
+            colocar(m); // colocado desde ya: al arrancar no hay salto inicial
+            if (quieto(m, previa) || Date.now() > tope) { arrancar(m); return; }
+            previa = m;
+          } else if (Date.now() > limite) {
+            arrancar(respaldo());
+            return;
+          }
+          setTimeout(esperar, 110);
+        })();
+      })();
+    </script>
     <script type="module" src="/src/main.js"></script>
     <script type="module">
       if (import.meta.env.PROD && 'serviceWorker' in navigator && !window.__NOUMON_LIBRARY_SHELL__) {

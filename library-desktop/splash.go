@@ -5,6 +5,21 @@ import (
 	"net/http"
 )
 
+// serveSplash pinta el ARRANQUE de Noumon: el logo rueda desde el lateral hasta
+// el centro, gira mientras se espera al servidor, y al conectar destella, saca
+// el wordmark y una luz que rodea el buscador antes de entrar en la interfaz.
+//
+// Decisiones que conviene no perder (acordadas con Andrés):
+//
+//   - Es un MOMENTO DE MARCA FIJO: oscuro + neón lila para todo el mundo, como
+//     el logo de una consola al encender. NO se viste con el tema del usuario;
+//     al terminar se difumina y debajo entra su tema (ver el velo de index.html).
+//   - La RODADURA ES LA ESPERA: no hay barra de progreso que finja saber cuánto
+//     falta. Si el servidor tarda, el logo sigue girando en el centro.
+//   - La entrada se ve SIEMPRE, aunque el servidor conteste al instante: el
+//     recorrido del lateral al centro es la firma del arranque, no un relleno.
+//   - Ya no hay <meta refresh>: recargar cada segundo reiniciaba la animación.
+//     Se sondea /api/health con fetch y solo se navega al estar listo.
 func serveSplash(w http.ResponseWriter, remote bool, target string) {
 	message := "Conectando con el servicio local de Noumon Server..."
 	if remote {
@@ -12,7 +27,15 @@ func serveSplash(w http.ResponseWriter, remote bool, target string) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(pageStart + `<meta http-equiv="refresh" content="1"><title>Noumon</title>` + pageStyle + `</head><body>` + chromeBar + `<main><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>Noumon</h1><div class="bar"></div><p>` + template.HTMLEscapeString(message) + `</p></main>` + chromeScript + `</body></html>`))
+	_, _ = w.Write([]byte(pageStart + `<title>Noumon</title>` + bootStyle + `</head><body class="bootbody">` + chromeBar + `
+<div class="stage" id="stage">
+  <div class="mark" id="mark"><span class="spin" id="spin"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""></span></div>
+  <div class="flash"></div>
+  <div class="wordmark">Noumon</div>
+  <div class="shell" id="shell"><span class="ico">&#9906;</span><em>Busca en todas tus colecciones&hellip;</em><svg class="tracer" id="tracer"><g><path class="halo" pathLength="100"/><path class="halo" pathLength="100"/><path class="line" pathLength="100"/><path class="line" pathLength="100"/></g></svg></div>
+  <p class="status" id="status">` + template.HTMLEscapeString(message) + `</p>
+</div>
+` + bootScript + chromeScript + `</body></html>`))
 }
 
 func serveSetup(w http.ResponseWriter, message string) {
@@ -59,9 +82,116 @@ if(form)form.addEventListener('submit',async function(event){
 const pageStart = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
 
 const pageStyle = `<style>
-html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#0e0e14;color:#e9e9f0;font:15px/1.45 system-ui,Segoe UI,sans-serif}main{width:min(440px,calc(100% - 48px));display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px}img{width:82px;height:82px}h1{font-size:22px;margin:0}p{color:#9393a0;margin:0}.bar{width:190px;height:3px;border-radius:3px;overflow:hidden;background:#23232e;position:relative}.bar:after{content:"";position:absolute;inset:0;width:40%;border-radius:3px;background:linear-gradient(90deg,#7c6cf0,#f0468a);animation:slide 1s ease-in-out infinite}@keyframes slide{0%{left:-40%}100%{left:100%}}form{width:100%;display:flex;flex-direction:column;gap:11px;margin-top:12px}input,button{box-sizing:border-box;width:100%;height:46px;border-radius:11px;font:inherit}input{border:1px solid #353543;background:#181820;color:#fff;padding:0 14px;outline:none}input:focus{border-color:#8b5cf6}button{border:0;background:linear-gradient(135deg,#6f5ee8,#9b4fe1);color:#fff;font-weight:650;cursor:pointer}button:disabled{opacity:.55;cursor:wait}button.ghost{width:auto;height:38px;padding:0 18px;background:transparent;border:1px solid #353543;color:#b9b9c6;font-weight:500;margin-top:8px}button.ghost:hover{border-color:#8b5cf6;color:#fff}small{min-height:20px;color:#f08094}.retry{animation:pulse 1.6s ease-in-out infinite}@keyframes pulse{50%{opacity:.4}}
-#chrome{position:fixed;top:0;left:0;right:0;height:38px;display:flex;align-items:stretch;--wails-draggable:drag}#chrome .space{flex:1}#chrome .wc{--wails-draggable:no-drag;width:46px;height:100%;border:0;border-radius:0;background:transparent;color:#9393a0;font:13px/1 system-ui,sans-serif;cursor:pointer}#chrome .wc:hover{background:#23232e;color:#fff}#chrome .wc.close:hover{background:#d3305a;color:#fff}
+html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#0e0e14;color:#e9e9f0;font:15px/1.45 system-ui,Segoe UI,sans-serif}main{width:min(440px,calc(100% - 48px));display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px}img{width:82px;height:82px}h1{font-size:22px;margin:0}p{color:#9393a0;margin:0}form{width:100%;display:flex;flex-direction:column;gap:11px;margin-top:12px}input,button{box-sizing:border-box;width:100%;height:46px;border-radius:11px;font:inherit}input{border:1px solid #353543;background:#181820;color:#fff;padding:0 14px;outline:none}input:focus{border-color:#8b5cf6}button{border:0;background:linear-gradient(135deg,#6f5ee8,#9b4fe1);color:#fff;font-weight:650;cursor:pointer}button:disabled{opacity:.55;cursor:wait}button.ghost{width:auto;height:38px;padding:0 18px;background:transparent;border:1px solid #353543;color:#b9b9c6;font-weight:500;margin-top:8px}button.ghost:hover{border-color:#8b5cf6;color:#fff}small{min-height:20px;color:#f08094}.retry{animation:pulse 1.6s ease-in-out infinite}@keyframes pulse{50%{opacity:.4}}
+` + chromeCSS + `
 </style>`
+
+const chromeCSS = `#chrome{position:fixed;top:0;left:0;right:0;height:38px;display:flex;align-items:stretch;--wails-draggable:drag}#chrome .space{flex:1}#chrome .wc{--wails-draggable:no-drag;width:46px;height:100%;border:0;border-radius:0;background:transparent;color:#9393a0;font:13px/1 system-ui,sans-serif;cursor:pointer}#chrome .wc:hover{background:#23232e;color:#fff}#chrome .wc.close:hover{background:#d3305a;color:#fff}`
+
+// bootStyle: la escenografía del arranque. Paleta FIJA (oscuro + neón lila),
+// deliberadamente ajena al tema del usuario: el arranque es de Noumon, no del
+// usuario; su tema entra después, al levantarse el velo de index.html.
+const bootStyle = `<style>
+html,body{height:100%;margin:0;overflow:hidden;background:#0b0b11}
+.bootbody{font:15px/1.45 system-ui,Segoe UI,sans-serif;color:#e9e9f0}
+.stage{position:fixed;inset:0;opacity:1;transition:opacity .3s ease}
+.stage.gone{opacity:0}
+.mark{position:absolute;left:50%;top:46%;width:clamp(62px,8vw,104px);height:clamp(62px,8vw,104px);transform:translate(-50%,-50%);animation:roll-in 1s cubic-bezier(.22,.85,.24,1) both;filter:drop-shadow(0 0 14px rgba(139,124,246,.35))}
+.stage.reveal .mark{filter:drop-shadow(0 0 26px #8b7cf6)}
+.spin,.spin img{display:block;width:100%;height:100%}
+@keyframes roll-in{from{transform:translate(calc(-50% - 46vw),-50%)}to{transform:translate(-50%,-50%)}}
+.flash{position:absolute;left:50%;top:46%;width:10px;height:10px;border-radius:50%;opacity:0;transform:translate(-50%,-50%);background:#8b7cf6;box-shadow:0 0 40px 18px #8b7cf6,0 0 110px 65px rgba(139,124,246,.28)}
+.stage.reveal .flash{animation:burst .55s ease-out both}
+.wordmark{position:absolute;left:50%;top:58%;transform:translate(-50%,10px);font-size:clamp(40px,7vw,78px);font-weight:550;letter-spacing:-.05em;color:#f3f1f8;opacity:0}
+.stage.word .wordmark{animation:rise .42s cubic-bezier(.2,.8,.2,1) both}
+.shell{position:absolute;left:50%;top:76%;width:min(52%,620px);height:54px;box-sizing:border-box;transform:translate(-50%,10px);border-radius:11px;background:rgba(32,33,39,.74);display:flex;align-items:center;gap:12px;padding:0 18px;color:#92939e;opacity:0}
+.shell em{font-style:normal;font-size:13px}
+.stage.search .shell{animation:rise .34s ease-out both}
+.tracer{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.line,.halo{vector-effect:non-scaling-stroke;fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:0;stroke-dasharray:100 100;stroke-dashoffset:100}
+.halo{stroke:#8b7cf6;stroke-width:7;filter:blur(3px) drop-shadow(0 0 10px #8b7cf6) drop-shadow(0 0 20px #8b7cf6)}
+.line{stroke:#b3a8fa;stroke-width:2.6;filter:drop-shadow(0 0 4px #8b7cf6) drop-shadow(0 0 10px #8b7cf6)}
+.stage.search .line{animation:draw 1.05s cubic-bezier(.3,0,.2,1) forwards}
+.stage.search .halo{animation:halo 1.05s cubic-bezier(.3,0,.2,1) forwards}
+.status{position:absolute;left:0;right:0;bottom:32px;margin:0;text-align:center;font-size:12.5px;color:#6f7080;opacity:0;transition:opacity .5s ease}
+.status.on{opacity:1}
+@keyframes burst{0%{opacity:0;transform:translate(-50%,-50%) scale(.2)}22%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(7)}}
+@keyframes rise{to{opacity:1;transform:translate(-50%,0)}}
+@keyframes draw{0%{opacity:0;stroke-dashoffset:100}6%{opacity:.95}50%{stroke-dashoffset:0;opacity:.95}72%{opacity:.95}100%{stroke-dashoffset:0;opacity:0}}
+@keyframes halo{0%{opacity:0;stroke-dashoffset:100}6%{opacity:.5}50%{stroke-dashoffset:0;opacity:.5}72%{opacity:.5}100%{stroke-dashoffset:0;opacity:0}}
+@media(prefers-reduced-motion:reduce){.mark{animation:none}.flash,.line,.halo{display:none}}
+` + chromeCSS + `
+</style>`
+
+// bootScript gobierna la secuencia. Dos relojes independientes que tienen que
+// coincidir para entrar: el de la ANIMACIÓN (la rodadura hasta el centro, que se
+// ve siempre) y el del SERVIDOR (/api/health). El que llegue último manda.
+const bootScript = `<script>
+(function(){
+ var stage=document.getElementById('stage'),mark=document.getElementById('mark'),spin=document.getElementById('spin');
+ var shell=document.getElementById('shell'),tracer=document.getElementById('tracer'),status=document.getElementById('status');
+ var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ var rolled=reduce,ready=false,done=false,started=Date.now();
+
+ // La luz se traza en pixeles REALES de la barra, con su mismo radio: un
+ // viewBox 100x100 estirado deformaba las esquinas y el neon quedaba flotando
+ // por fuera del reborde.
+ function layout(){
+  var w=shell.clientWidth,h=shell.clientHeight;if(!w||!h)return;
+  tracer.setAttribute('viewBox','0 0 '+w+' '+h);
+  var i=1.3,r=Math.min((parseFloat(getComputedStyle(shell).borderRadius)||11)-i/2,h/2-i);
+  var right='M '+(w/2)+' '+i+' H '+(w-i-r)+' Q '+(w-i)+' '+i+' '+(w-i)+' '+(i+r)+' V '+(h-i-r)+' Q '+(w-i)+' '+(h-i)+' '+(w-i-r)+' '+(h-i)+' H '+(w/2);
+  var left='M '+(w/2)+' '+i+' H '+(i+r)+' Q '+i+' '+i+' '+i+' '+(i+r)+' V '+(h-i-r)+' Q '+i+' '+(h-i)+' '+(i+r)+' '+(h-i)+' H '+(w/2);
+  var p=tracer.querySelectorAll('path');
+  p[0].setAttribute('d',right);p[1].setAttribute('d',left);p[2].setAttribute('d',right);p[3].setAttribute('d',left);
+ }
+ layout();addEventListener('resize',layout);
+
+ // El giro ES el indicador de espera: sustituye a la barra de progreso, que
+ // fingia saber cuanto faltaba cuando nadie puede saberlo.
+ var idle=null;
+ if(!reduce&&spin.animate)idle=spin.animate([{transform:'rotate(0deg)'},{transform:'rotate(360deg)'}],{duration:2200,iterations:Infinity,easing:'linear'});
+ if(reduce)mark.style.transform='translate(-50%,-50%)';
+
+ mark.addEventListener('animationend',function(){rolled=true;maybe();});
+ setTimeout(function(){if(!done)status.classList.add('on');},2200);
+
+ function maybe(){if(rolled&&ready&&!done){done=true;finish();}}
+
+ function finish(){
+  status.classList.remove('on');
+  if(idle){ // el giro remata una vuelta entera en vez de frenar en seco
+   var deg=(idle.currentTime%2200)/2200*360;
+   idle.cancel();
+   spin.animate([{transform:'rotate('+deg+'deg)'},{transform:'rotate(360deg)'}],{duration:520,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
+  }
+  if(reduce){leave(240);return;}
+  stage.classList.add('reveal');
+  setTimeout(function(){stage.classList.add('word');},120);
+  setTimeout(function(){layout();stage.classList.add('search');},300);
+  leave(1320);
+ }
+
+ // El escenario se difumina y debajo entra el cliente ya vestido con el tema
+ // del usuario: index.html levanta un velo del mismo negro y lo funde.
+ function leave(wait){
+  setTimeout(function(){
+   try{sessionStorage.setItem('noumon-boot','1');}catch(e){}
+   stage.classList.add('gone');
+   setTimeout(function(){location.replace('/');},280);
+  },wait);
+ }
+
+ async function ping(){
+  if(done)return;
+  try{var r=await fetch('/api/health',{cache:'no-store'});if(r.ok){ready=true;maybe();return;}}catch(e){}
+  // Agotada la gracia del shell, recargar cede el paso a la pagina de
+  // desconexion (reintentar / conectar con otro servidor), que ya existe.
+  if(Date.now()-started>11000)location.reload();
+ }
+ setInterval(ping,350);ping();
+})();
+</script>`
 
 // chromeBar dibuja una franja superior arrastrable con los controles de
 // ventana: la app es frameless y normalmente los pinta la SPA, así que sin

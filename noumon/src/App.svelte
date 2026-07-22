@@ -22,7 +22,13 @@
 
   let libraries = $state([]);
   let accountOpen = $state(false);
-  let sidebarOpen = $state(loadBool('noumon-sidebar', true));
+  // El sidebar SIEMPRE empieza cerrado, aunque lo dejaras abierto. Noumon abre
+  // en un Inicio centrado —logo, wordmark y buscador— y el arranque se coloca
+  // sobre ellos: con la columna de 262 px puesta, esa composición nace pegada a
+  // la derecha en vez de centrada en la ventana. Se abre cuando hace falta, como
+  // el panel de un navegador. Dentro de la sesión el estado se mantiene; lo que
+  // no sobrevive es el cierre de la ventana.
+  let sidebarOpen = $state(false);
 
   // Al iniciar/cerrar sesión cambia TODO lo dependiente del usuario: el catálogo
   // (visibilidad por nivel/edad) y el estado personal (favoritos, marcas de nota/etiqueta).
@@ -94,7 +100,7 @@
     if (i >= 0) { const f = favorites[i]; favorites.splice(i, 1); readerState.deleteFavorite(f.lib, f.path, f.itemId); }
   }
   function openFav(fav) { if (fav.itemId) openItemById(fav.itemId); else openArticle(fav.lib, fav.path); }
-  function toggleSidebar() { sidebarOpen = !sidebarOpen; saveBool('noumon-sidebar', sidebarOpen); }
+  function toggleSidebar() { sidebarOpen = !sidebarOpen; } // no se guarda: cada arranque empieza cerrado
   function toggleIndex() { indexOpen = !indexOpen; saveBool('noumon-index', indexOpen); }
 
   // ── Vistas del sidebar (Favoritos/Reciente/Historial/Notas/…) ────────────────
