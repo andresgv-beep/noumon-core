@@ -521,7 +521,29 @@ func main() {
 	} else {
 		log.Printf("auth: token Noumon requerido en escrituras (POST)")
 	}
-	log.Fatal(http.ListenAndServe(addr, s.middleware(mux)))
+	log.Fatal(newHTTPServer(addr, s.middleware(mux)).ListenAndServe())
+}
+
+// newHTTPServer: el servidor HTTP con los plazos puestos a mano.
+//
+// Sin plazos (el `http.ListenAndServe` de toda la vida), un cliente que
+// desaparece a media reproducción —portátil que se suspende, móvil que sale del
+// wifi, ventana que se cuelga— deja su conexión y su goroutine abiertas PARA
+// SIEMPRE. En un equipo que se reinicia a diario no se nota; en una Pi encendida
+// semanas, se van acumulando hasta que un día deja de responder.
+//
+// ⚠ WriteTimeout se queda a CERO A PROPÓSITO. Es la trampa clásica: parece la
+// opción responsable, pero mide la respuesta ENTERA, y aquí una respuesta puede
+// ser un vídeo de dos horas o un ZIM enorme. Ponerlo cortaría la reproducción a
+// mitad de película. La protección contra clientes lentos es IdleTimeout, que
+// solo mira conexiones OCIOSAS. Hay una prueba que falla si alguien lo cambia.
+func newHTTPServer(addr string, h http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second, // cabeceras a medias no retienen un socket
+		IdleTimeout:       90 * time.Second, // barre keep-alives de clientes que se fueron
+	}
 }
 
 // middleware: logging + auth por canal (§6).
