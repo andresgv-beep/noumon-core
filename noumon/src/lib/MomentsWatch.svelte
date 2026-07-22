@@ -389,7 +389,7 @@
   .ic { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
   /* Player real 16:9 */
-  .player { position: relative; aspect-ratio: 16/9; border-radius:var(--r-pill); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); background: #000; }
+  .player { position: relative; aspect-ratio: 16/9; border-radius:var(--r-lg); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); background: #000; }
   .player video { width: 100%; height: 100%; display: block; background: #000; object-fit: contain; cursor: pointer; }
 
   /* Botón grande de play cuando está pausado */

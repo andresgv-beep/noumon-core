@@ -54,7 +54,7 @@
 <style>
   .scrim{position:fixed;inset:0;z-index:100;background:color-mix(in srgb,#000 55%,transparent);backdrop-filter:blur(2px);display:grid;place-items:center;padding:24px;animation:fade .12s ease}
   @keyframes fade{from{opacity:0}to{opacity:1}}
-  .card{width:100%;max-width:620px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-pill);box-shadow:0 24px 70px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden;animation:pop .14s ease}
+  .card{width:100%;max-width:620px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 24px 70px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden;animation:pop .14s ease}
   @keyframes pop{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
   .nhead{display:flex;align-items:center;gap:12px;padding:16px 16px 14px;border-bottom:1px solid var(--border)}
   .ntile{width:34px;height:34px;border-radius:var(--r-md);flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-2)}

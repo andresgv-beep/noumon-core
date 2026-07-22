@@ -106,7 +106,7 @@
   .radius-label output{color:var(--ink);font-weight:600}
   .radius-label input{width:100%;accent-color:var(--accent);cursor:pointer;margin-top:9px}
   .range-ends{display:flex;justify-content:space-between;color:var(--faint);font-size:10.5px;margin-top:1px}
-  .map-wrap{position:absolute;inset:0 0 0 36%;overflow:hidden;border-radius:var(--r-pill);
+  .map-wrap{position:absolute;inset:0 0 0 36%;overflow:hidden;border-radius:var(--r-lg);
     -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%),linear-gradient(180deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);
     -webkit-mask-composite:source-in;
     mask-image:linear-gradient(90deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%),linear-gradient(180deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);
