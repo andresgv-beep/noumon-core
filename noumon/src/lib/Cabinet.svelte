@@ -9,14 +9,13 @@
   // navegador anidado. Importar/gestionar cola vive en el Panel de Control.
 
   import { onMount } from 'svelte';
-  import { getCollections, getCollectionItems } from './libraryApi.js';
+  import { getSurfaceItems } from './libraryApi.js';
   import { getRecent } from './readerStateApi.js';
   import { t } from './i18n.svelte.js';
 
   let { onOpenItem } = $props();
 
   let items = $state([]);
-  let collections = $state([]);
   let loading = $state(true);
   let errMsg = $state('');
   let query = $state('');
@@ -43,17 +42,9 @@
   async function load() {
     loading = true; errMsg = '';
     try {
-      collections = (await getCollections()).filter((c) => c.kind === 'media');
-      const groups = await Promise.all(collections.map(async (collection) => {
-        const list = await getCollectionItems(collection.id);
-        return list.map((it) => ({ ...it, sectionId: collection.id, sectionName: collection.title }));
-      }));
-      // Dedup por id (las colecciones media se solapan: la raíz contiene los mismos
-      // items que sus subcarpetas). Los vídeos NO son de aquí (viven en Moments).
-      const seen = new Set();
-      items = groups.flat()
-        .filter((it) => it.source?.provider === 'cabinet')
-        .filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true)));
+      // UNA petición por superficie: catálogo cacheado del servidor, filtrado
+      // por proveedor y permisos, sin duplicados y con sectionId/sectionName.
+      items = await getSurfaceItems('cabinet');
       pickFeatured(); // rota el destacado en cada carga de Cabinet
       await loadContinue();
     }

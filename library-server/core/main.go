@@ -365,11 +365,11 @@ func main() {
 	// Mitad lectora: escanea las fichas del pool y sirve los ficheros locales
 	// (ver media.go). Comparte la raíz con las descargas.
 	md := &mediaDeps{root: downloadRoot}
-	s.registerMediaRoutes(mux, md)                                                                       // /api/media + /media/* — detrás del gate de acceso
-	mux.HandleFunc("/api/images", s.handleImageSearch(md))                                               // imágenes: ZIM + portadas/logos de vídeos
-	adminMux.HandleFunc("/api/admin/media/delete", s.handleMediaDelete(md))                              // borrar item del pool (admin)
-	adminMux.HandleFunc("/api/admin/upload", s.handleUpload(&uploadDeps{root: downloadRoot}))            // carga manual (Moments/Cabinet)
-	adminMux.HandleFunc("/api/admin/media/update", s.handleMediaUpdate(&uploadDeps{root: downloadRoot})) // editar ficha
+	s.registerMediaRoutes(mux, md)                                                                           // /api/media + /media/* — detrás del gate de acceso
+	mux.HandleFunc("/api/images", s.handleImageSearch(md))                                                   // imágenes: ZIM + portadas/logos de vídeos
+	adminMux.HandleFunc("/api/admin/media/delete", s.handleMediaDelete(md))                                  // borrar item del pool (admin)
+	adminMux.HandleFunc("/api/admin/upload", s.handleUpload(&uploadDeps{root: downloadRoot}, md))            // carga manual (Moments/Cabinet)
+	adminMux.HandleFunc("/api/admin/media/update", s.handleMediaUpdate(&uploadDeps{root: downloadRoot}, md)) // editar ficha
 	s.registerItemRoutes(mux, md)
 
 	// Inventario del pool para el Panel de Control (POOL-CONTRACT.md §6). Read-only.

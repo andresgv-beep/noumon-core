@@ -22,11 +22,100 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 // mediaDeps: raíz de descargas (misma que el download handler). Se inyecta desde main.
 type mediaDeps struct {
 	root string // DOWNLOAD_ROOT, absoluta y resuelta
+
+	// Caché GLOBAL del catálogo (solo metadatos), compartida entre usuarios.
+	// Antes cada petición recorría DOWNLOAD_ROOT entero releyendo sidecars:
+	// con N colecciones y M usuarios eso eran N×M escaneos casi simultáneos.
+	// Los PERMISOS nunca viven aquí: cada petición aplica filterMediaItems /
+	// canSee sobre el resultado (access.go), así que la caché jamás mezcla
+	// visibilidad entre usuarios. Protegido por mu; una sola goroutine
+	// reconstruye (anti-estampida) y las demás esperan su resultado.
+	mu       sync.Mutex
+	catalog  []mediaItem
+	builtAt  time.Time
+	building bool
+	waiters  []chan struct{}
+}
+
+// TTL de seguridad: detecta cambios externos en el pool (copias a mano, etc.)
+// sin necesidad de tocar el Panel. Las mutaciones propias (subir/editar/borrar)
+// invalidan al instante, así que esto es solo la red de seguridad.
+const mediaCatalogTTL = 30 * time.Second
+
+// catalogAll devuelve el catálogo completo desde la caché, reconstruyéndolo si
+// caducó. Si ya hay una reconstrucción en marcha, espera y reutiliza su
+// resultado en lugar de lanzar otro escaneo (efecto estampida).
+func (m *mediaDeps) catalogAll() ([]mediaItem, error) {
+	m.mu.Lock()
+	for {
+		if m.catalog != nil && time.Since(m.builtAt) < mediaCatalogTTL {
+			out := m.catalog
+			m.mu.Unlock()
+			return out, nil
+		}
+		if !m.building {
+			break
+		}
+		ch := make(chan struct{})
+		m.waiters = append(m.waiters, ch)
+		m.mu.Unlock()
+		<-ch
+		m.mu.Lock()
+	}
+	m.building = true
+	m.mu.Unlock()
+
+	items, err := m.scan("")
+
+	m.mu.Lock()
+	m.building = false
+	if err == nil {
+		m.catalog = items
+		m.builtAt = time.Now()
+	}
+	for _, ch := range m.waiters {
+		close(ch)
+	}
+	m.waiters = nil
+	m.mu.Unlock()
+	return items, err
+}
+
+// itemsFor sustituye a scan() para los lectores: sirve desde la caché y acota
+// a una colección (o sus hijas) con el mismo criterio que hacía el escaneo.
+// Devuelve siempre un slice propio: los llamantes ordenan/recortan sin tocar
+// el catálogo compartido.
+func (m *mediaDeps) itemsFor(collection string) ([]mediaItem, error) {
+	all, err := m.catalogAll()
+	if err != nil {
+		return nil, err
+	}
+	collection = filepath.ToSlash(strings.Trim(collection, "/"))
+	out := make([]mediaItem, 0, len(all))
+	for _, it := range all {
+		if collection != "" && it.Collection != collection &&
+			!strings.HasPrefix(it.Collection, collection+"/") {
+			continue
+		}
+		out = append(out, it)
+	}
+	return out, nil
+}
+
+// invalidate se llama tras subir, editar o borrar contenido: la siguiente
+// lectura reconstruye el catálogo.
+func (m *mediaDeps) invalidate() {
+	m.mu.Lock()
+	m.catalog = nil
+	m.builtAt = time.Time{}
+	m.mu.Unlock()
 }
 
 // mediaItem = lo que ve el lector por cada item del pool. Espejo del
@@ -82,7 +171,7 @@ func (s *Server) gateMediaList(m *mediaDeps) http.HandlerFunc {
 			return
 		}
 		collection := strings.TrimSpace(r.URL.Query().Get("collection"))
-		items, err := m.scan(collection)
+		items, err := m.itemsFor(collection)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -151,7 +240,7 @@ func (m *mediaDeps) handleMediaList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	collection := strings.TrimSpace(r.URL.Query().Get("collection"))
-	items, err := m.scan(collection)
+	items, err := m.itemsFor(collection)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -323,6 +412,10 @@ func (m *mediaDeps) handleMediaFile(w http.ResponseWriter, r *http.Request) {
 	if strings.EqualFold(filepath.Ext(abs), ".vtt") {
 		w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
 	}
+	// Caché PRIVADA con revalidación: el navegador puede reutilizar portadas y
+	// recursos (304 vía If-Modified-Since, que ServeContent ya gestiona) sin que
+	// ninguna caché compartida guarde contenido con permisos.
+	w.Header().Set("Cache-Control", "private, no-cache")
 	// ServeContent pone Content-Type por extensión y gestiona Range/If-Modified.
 	http.ServeContent(w, r, filepath.Base(abs), info.ModTime(), f)
 }
@@ -425,6 +518,7 @@ func (s *Server) handleMediaDelete(md *mediaDeps) http.HandlerFunc {
 		}
 		_ = os.Remove(sidecarAbs)
 		cleanEmptyCollectionDir(dir)
+		md.invalidate() // el catálogo cacheado no debe seguir listando lo borrado
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
 }

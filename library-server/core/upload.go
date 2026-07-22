@@ -74,7 +74,7 @@ func (u *uploadDeps) resolve(rel string) (string, error) {
 
 // handleMediaUpdate edita la ficha de un item ya en el pool (metadatos + imágenes
 // + visibilidad). El fichero de media NO se cambia (para eso, borrar y re-subir).
-func (s *Server) handleMediaUpdate(u *uploadDeps) http.HandlerFunc {
+func (s *Server) handleMediaUpdate(u *uploadDeps, md *mediaDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "método no permitido"})
@@ -183,6 +183,7 @@ func (s *Server) handleMediaUpdate(u *uploadDeps) http.HandlerFunc {
 			}
 		}
 
+		md.invalidate() // el catálogo cacheado debe ver la ficha nueva
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "title": sc.Title})
 	}
 }
@@ -205,7 +206,7 @@ func writeJSONFileOverwrite(path string, v any) error {
 	return nil
 }
 
-func (s *Server) handleUpload(u *uploadDeps) http.HandlerFunc {
+func (s *Server) handleUpload(u *uploadDeps, md *mediaDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "método no permitido"})
@@ -378,6 +379,7 @@ func (s *Server) handleUpload(u *uploadDeps) http.HandlerFunc {
 		}
 
 		rel := strings.TrimPrefix(filepath.ToSlash(strings.TrimPrefix(dst, u.root)), "/")
+		md.invalidate() // el catálogo cacheado debe ver el item recién subido
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok":         true,
 			"collection": appDir + "/" + collection,

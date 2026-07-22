@@ -51,6 +51,15 @@ export async function getCollectionItems(id) {
   return data.items || [];
 }
 
+// Todos los items de una superficie (moments | cabinet) en UNA petición: el
+// servidor sirve de su catálogo cacheado, filtra permisos y trae sectionName.
+// Sustituye al patrón "getCollections + una petición por colección".
+export async function getSurfaceItems(provider) {
+  const r = await serverFetch(`/api/items/surface?provider=${encodeURIComponent(provider)}`);
+  const data = await jsonOrError(r);
+  return data.items || [];
+}
+
 export async function getItem(id) {
   const r = await serverFetch(`/api/items/${encodeURIComponent(id)}`);
   return jsonOrError(r);

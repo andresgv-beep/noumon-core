@@ -12,7 +12,7 @@ import (
 
 func TestHandleUpload_MomentsVideo(t *testing.T) {
 	root := t.TempDir()
-	h := (&Server{}).handleUpload(&uploadDeps{root: root})
+	h := (&Server{}).handleUpload(&uploadDeps{root: root}, &mediaDeps{root: root})
 
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
@@ -79,7 +79,7 @@ func TestHandleMediaUpdate(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "v.mp4"), []byte("bytes"), 0o644)
 	os.WriteFile(filepath.Join(dir, "v.json"), []byte(`{"template":"video","media":"v.mp4","title":"viejo","author":"antiguo","source":"moments"}`), 0o644)
 
-	h := (&Server{}).handleMediaUpdate(&uploadDeps{root: root})
+	h := (&Server{}).handleMediaUpdate(&uploadDeps{root: root}, &mediaDeps{root: root})
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
 	mw.WriteField("id", "Moments/General/v.json")
@@ -112,7 +112,7 @@ func TestHandleMediaUpdate(t *testing.T) {
 
 func TestHandleUpload_Rejects(t *testing.T) {
 	root := t.TempDir()
-	h := (&Server{}).handleUpload(&uploadDeps{root: root})
+	h := (&Server{}).handleUpload(&uploadDeps{root: root}, &mediaDeps{root: root})
 
 	post := func(source, filename string) int {
 		var body bytes.Buffer
@@ -143,7 +143,7 @@ func TestHandleUpload_Rejects(t *testing.T) {
 func TestHandleUploadDefaultsToBlocked(t *testing.T) {
 	root := t.TempDir()
 	s := testAuthServer(t, "")
-	h := s.handleUpload(&uploadDeps{root: root})
+	h := s.handleUpload(&uploadDeps{root: root}, &mediaDeps{root: root})
 
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
@@ -169,7 +169,7 @@ func TestHandleUploadDefaultsToBlocked(t *testing.T) {
 func TestHandleUploadRejectsActiveCoverAndUsesDetectedExtension(t *testing.T) {
 	post := func(t *testing.T, root, coverName string, coverBody []byte) *httptest.ResponseRecorder {
 		t.Helper()
-		h := (&Server{}).handleUpload(&uploadDeps{root: root})
+		h := (&Server{}).handleUpload(&uploadDeps{root: root}, &mediaDeps{root: root})
 		var body bytes.Buffer
 		mw := multipart.NewWriter(&body)
 		mw.WriteField("source", "cabinet")

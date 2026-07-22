@@ -137,7 +137,65 @@ func (s *Server) registerItemRoutes(mux *http.ServeMux, media *mediaDeps) {
 	mux.HandleFunc("/api/collections/", s.handleCollectionSub(media))
 	mux.HandleFunc("/api/items/search", s.handleItemSearch(media))
 	mux.HandleFunc("/api/items/resolve", s.handleItemResolve(media))
+	mux.HandleFunc("/api/items/surface", s.handleSurfaceItems(media))
 	mux.HandleFunc("/api/items/", s.handleItemSub(media))
+}
+
+// handleSurfaceItems: los items de una superficie completa (Moments o Cabinet)
+// en UNA petición, en lugar de "1 + una por colección" desde el cliente. Sirve
+// del catálogo cacheado, aplica los permisos del usuario actual y enriquece
+// cada item con el título de su colección (cabeceras de sección de la UI).
+// Sin duplicados por construcción: una sola pasada sobre el catálogo.
+func (s *Server) handleSurfaceItems(media *mediaDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "metodo no permitido"})
+			return
+		}
+		provider := strings.TrimSpace(r.URL.Query().Get("provider"))
+		if provider != "moments" && provider != "cabinet" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider debe ser moments o cabinet"})
+			return
+		}
+		items, err := media.itemsFor("")
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		items = s.filterMediaItems(s.currentUser(r), items)
+
+		// Título visible por colección: el mismo que enseña /api/collections.
+		titles := map[string]string{}
+		if cols, colErr := s.allCollections(media); colErr == nil {
+			for _, c := range cols {
+				if rel, ok := decodeOpaque(strings.TrimPrefix(c.ID, "col:media:")); ok && c.Kind == "media" {
+					titles[rel] = c.Title
+				}
+			}
+		}
+
+		type surfaceItem struct {
+			Item
+			SectionID   string `json:"sectionId"`
+			SectionName string `json:"sectionName"`
+		}
+		out := make([]surfaceItem, 0, len(items))
+		for _, it := range items {
+			if it.Source != provider {
+				continue
+			}
+			name := titles[it.Collection]
+			if name == "" {
+				name = it.Collection
+			}
+			out = append(out, surfaceItem{
+				Item:        mediaToItem(it),
+				SectionID:   "col:media:" + encodeOpaque(it.Collection),
+				SectionName: name,
+			})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": out})
+	}
 }
 
 // Resuelve una dirección estable library://<provider>/<sourceId> al Item local.
@@ -153,7 +211,7 @@ func (s *Server) handleItemResolve(media *mediaDeps) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "falta provider o sourceId"})
 			return
 		}
-		items, err := media.scan("")
+		items, err := media.itemsFor("")
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -236,7 +294,7 @@ func (s *Server) handleCollectionItems(w http.ResponseWriter, r *http.Request, m
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "collection id invalido"})
 			return
 		}
-		items, err := media.scan(collection)
+		items, err := media.itemsFor(collection)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -407,7 +465,7 @@ func (s *Server) findItem(media *mediaDeps, id string) (Item, bool, error) {
 		}
 		return zimToItem(Library{ID: lib}, itemPath, titleFromPath(itemPath), "", "", 0), true, nil
 	case strings.HasPrefix(id, "media:"):
-		items, err := media.scan("")
+		items, err := media.itemsFor("")
 		if err != nil {
 			return Item{}, false, err
 		}
@@ -422,7 +480,7 @@ func (s *Server) findItem(media *mediaDeps, id string) (Item, bool, error) {
 }
 
 func (m *mediaDeps) collections() ([]Collection, error) {
-	items, err := m.scan("")
+	items, err := m.itemsFor("")
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +613,7 @@ func mediaMatch(q, nq string, qTokens []string, it mediaItem) (score int, ok boo
 }
 
 func (m *mediaDeps) search(q string) ([]FederatedSearchResult, error) {
-	items, err := m.scan("")
+	items, err := m.itemsFor("")
 	if err != nil {
 		return nil, err
 	}
@@ -589,7 +647,7 @@ func (m *mediaDeps) search(q string) ([]FederatedSearchResult, error) {
 // canal (avatar) de cada canal que casa + la PORTADA de cada vídeo que casa. Así
 // buscar un autor saca su logo y las portadas de todos sus vídeos.
 func (m *mediaDeps) searchImages(q string, visible func(mediaItem) bool) ([]ImageHit, error) {
-	items, err := m.scan("")
+	items, err := m.itemsFor("")
 	if err != nil {
 		return nil, err
 	}

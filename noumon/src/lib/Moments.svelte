@@ -7,7 +7,7 @@
   // App aparte de "Archivo local" (Archives). Un vídeo se abre como PESTAÑA
   // (MomentsWatch) vía onOpenItem.
   import { onMount } from 'svelte';
-  import { getCollections, getCollectionItems } from './libraryApi.js';
+  import { getSurfaceItems } from './libraryApi.js';
   import { videoProgress, clearAllProgress } from './videoProgress.svelte.js';
   import { channelFaves, toggleFave, isFave } from './channelFaves.svelte.js';
   import { t } from './i18n.svelte.js';
@@ -25,15 +25,9 @@
   async function load() {
     loading = true; errMsg = '';
     try {
-      const cols = (await getCollections()).filter((c) => c.kind === 'media');
-      const groups = await Promise.all(cols.map(async (c) => {
-        const list = await getCollectionItems(c.id);
-        return list.map((it) => ({ ...it, sectionName: c.title }));
-      }));
-      const seen = new Set();
-      items = groups.flat()
-        .filter((it) => it.source?.provider === 'moments')
-        .filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true)));
+      // UNA petición por superficie: el servidor sirve del catálogo cacheado,
+      // ya filtrado por proveedor y permisos, sin duplicados y con sectionName.
+      items = await getSurfaceItems('moments');
     } catch (e) {
       errMsg = e.message || t('moments.error');
     } finally {
