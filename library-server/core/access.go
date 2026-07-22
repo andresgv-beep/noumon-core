@@ -73,11 +73,31 @@ func (s *Server) collectionAccess(id string) accessCfg {
 const accessCacheTTL = 15 * time.Second
 
 func (s *Server) accessMap() map[string]accessCfg {
+	now := time.Now()
 	s.accessCacheMu.RLock()
-	if s.accessCache != nil && time.Since(s.accessCachedAt) < accessCacheTTL {
+	if s.accessCache != nil && now.Sub(s.accessCachedAt) < accessCacheTTL {
 		m := s.accessCache
 		s.accessCacheMu.RUnlock()
+		s.accessHits.Add(1)
 		return m // solo-lectura por convención: nadie muta el mapa devuelto
+	}
+	s.accessCacheMu.RUnlock()
+	s.accessMisses.Add(1)
+
+	// Solo una goroutine reconstruye. Al adquirir el mutex volvemos a mirar:
+	// otro lector puede haber publicado el mapa mientras esperábamos. Sin esta
+	// segunda comprobación, todos los Range que vieran vencer el TTL harían la
+	// misma query y volverían a formar cola sobre MaxOpenConns(1).
+	s.accessBuildMu.Lock()
+	defer s.accessBuildMu.Unlock()
+	now = time.Now()
+	s.accessCacheMu.RLock()
+	if s.accessCache != nil && now.Sub(s.accessCachedAt) < accessCacheTTL {
+		m := s.accessCache
+		s.accessCacheMu.RUnlock()
+		s.accessWaits.Add(1)
+		s.accessHits.Add(1)
+		return m
 	}
 	s.accessCacheMu.RUnlock()
 
@@ -85,6 +105,7 @@ func (s *Server) accessMap() map[string]accessCfg {
 	if s.store == nil || s.store.db == nil {
 		return m
 	}
+	s.accessBuilds.Add(1)
 	rows, err := s.store.db.Query(`SELECT collection_id, access, min_age, allow_download FROM collection_access`)
 	if err != nil {
 		return m
@@ -109,6 +130,10 @@ func (s *Server) accessMap() map[string]accessCfg {
 // invalidateAccessCache: tras cambiar el acceso de una colección, la siguiente
 // lectura recarga el mapa.
 func (s *Server) invalidateAccessCache() {
+	// Esperar a una reconstrucción en curso impide que publique un snapshot
+	// anterior justo después de una mutación administrativa.
+	s.accessBuildMu.Lock()
+	defer s.accessBuildMu.Unlock()
 	s.accessCacheMu.Lock()
 	s.accessCache = nil
 	s.accessCachedAt = time.Time{}

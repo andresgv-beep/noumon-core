@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -41,6 +43,93 @@ func getAs(h http.Handler, path string, c *http.Cookie) *httptest.ResponseRecord
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	return w
+}
+
+func TestAccessCacheExpiryBuildsOnceForConcurrentReaders(t *testing.T) {
+	s, _ := accessTestServer(t, t.TempDir())
+	setAccess(t, s, "Publica", "open", 0)
+	id := collectionIDForMedia("Publica")
+	if !canSeeCached(nil, s.accessMap(), id) { // primera construcción
+		t.Fatal("la colección abierta no se cargó")
+	}
+	before := s.accessBuilds.Load()
+	s.accessCacheMu.Lock()
+	s.accessCachedAt = time.Now().Add(-accessCacheTTL - time.Second)
+	s.accessCacheMu.Unlock()
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	errs := make(chan string, 64)
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if !canSeeCached(nil, s.accessMap(), id) {
+				errs <- "lector no vio la colección abierta"
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for msg := range errs {
+		t.Error(msg)
+	}
+	if got := s.accessBuilds.Load() - before; got != 1 {
+		t.Fatalf("reconstrucciones concurrentes = %d; quiero exactamente 1", got)
+	}
+}
+
+func TestConcurrentWarmMediaRangesStayOffSQLite(t *testing.T) {
+	root := t.TempDir()
+	seedCollection(t, root, "Moments/Canal", "video.mp4", strings.Repeat("0123456789", 100),
+		sidecar{Template: "video", Title: "Vídeo", Source: "moments"})
+	s, media := accessTestServer(t, root)
+	setAccess(t, s, "Moments/Canal", "login", 0)
+	cookie := sessionFor(t, s, "streamer", 30, false)
+	mux := http.NewServeMux()
+	s.registerMediaRoutes(mux, media)
+
+	requestRange := func() int {
+		r := httptest.NewRequest(http.MethodGet, "/media/Moments/Canal/video.mp4", nil)
+		r.Header.Set("Range", "bytes=0-31")
+		r.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		return w.Code
+	}
+	if code := requestRange(); code != http.StatusPartialContent {
+		t.Fatalf("Range de calentamiento: %d", code)
+	}
+	sessionMisses := s.sessMisses.Load()
+	accessBuilds := s.accessBuilds.Load()
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	codes := make(chan int, 64)
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			codes <- requestRange()
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(codes)
+	for code := range codes {
+		if code != http.StatusPartialContent {
+			t.Errorf("Range concurrente: %d", code)
+		}
+	}
+	if got := s.sessMisses.Load(); got != sessionMisses {
+		t.Fatalf("los Range calientes tocaron resolución SQLite: misses antes=%d después=%d", sessionMisses, got)
+	}
+	if got := s.accessBuilds.Load(); got != accessBuilds {
+		t.Fatalf("los Range calientes reconstruyeron permisos: builds antes=%d después=%d", accessBuilds, got)
+	}
 }
 
 // Los BYTES: /media/<ruta> de una colección bloqueada no se sirven ni al anónimo

@@ -2,9 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -96,5 +100,106 @@ func TestMediaCatalogStampede(t *testing.T) {
 	close(errs)
 	for err := range errs {
 		t.Fatalf("lector concurrente falló: %v", err)
+	}
+}
+
+func TestMediaCatalogInvalidateDuringBuildCannotPublishStaleSnapshot(t *testing.T) {
+	root := t.TempDir()
+	writeSidecar(t, root, "Cabinet/Libros/a.json", "Libro A", "cabinet")
+	m := &mediaDeps{root: root}
+
+	scanned := make(chan struct{})
+	release := make(chan struct{})
+	var hookCalls atomic.Int32
+	m.afterScan = func() {
+		if hookCalls.Add(1) == 1 {
+			close(scanned) // el primer snapshot ya se construyó, pero no se publicó
+			<-release
+		}
+	}
+
+	type result struct {
+		items []mediaItem
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		items, err := m.itemsFor("")
+		done <- result{items: items, err: err}
+	}()
+	<-scanned
+	writeSidecar(t, root, "Cabinet/Libros/b.json", "Libro B", "cabinet")
+	m.invalidate()
+	close(release)
+
+	r := <-done
+	if r.err != nil {
+		t.Fatal(r.err)
+	}
+	if len(r.items) != 2 {
+		t.Fatalf("se publicó un snapshot viejo: items=%d, quiero 2", len(r.items))
+	}
+	if builds := m.catalogBuilds.Load(); builds != 2 {
+		t.Fatalf("reconstrucciones=%d, quiero 2 (vieja descartada + nueva)", builds)
+	}
+}
+
+func TestMediaCatalogIndexesProviderIDAndCollectionMetadata(t *testing.T) {
+	root := t.TempDir()
+	writeSidecar(t, root, "Moments/Canal/a.json", "Vídeo", "moments")
+	writeSidecar(t, root, "Cabinet/Libros/b.json", "Libro", "cabinet")
+	meta, _ := json.Marshal(collectionMeta{Title: "Biblioteca fina", Source: "cabinet"})
+	if err := os.WriteFile(filepath.Join(root, "Cabinet", "Libros", "collection.json"), meta, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := &mediaDeps{root: root}
+	catalog, err := m.catalogSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(catalog.providerItems("moments")); got != 1 {
+		t.Fatalf("items Moments=%d, quiero 1", got)
+	}
+	if got := len(catalog.providerItems("cabinet")); got != 1 {
+		t.Fatalf("items Cabinet=%d, quiero 1", got)
+	}
+	if got := catalog.collections["Cabinet/Libros"].Title; got != "Biblioteca fina" {
+		t.Fatalf("título cacheado=%q", got)
+	}
+	item := catalog.providerItems("cabinet")[0]
+	id := itemIDForMedia(strings.Trim(strings.TrimPrefix(item.MediaURL, "/media/"), "/"))
+	indexed, ok, err := m.itemForID(id)
+	if err != nil || !ok || indexed.Title != "Libro" {
+		t.Fatalf("índice por ID: ok=%v err=%v item=%+v", ok, err, indexed)
+	}
+}
+
+func TestSurfaceItemsUsesMediaSnapshotWithoutZIMCatalog(t *testing.T) {
+	root := t.TempDir()
+	writeSidecar(t, root, "Cabinet/Libros/b.json", "Libro", "cabinet")
+	meta, _ := json.Marshal(collectionMeta{Title: "Colección desde RAM", Source: "cabinet"})
+	if err := os.WriteFile(filepath.Join(root, "Cabinet", "Libros", "collection.json"), meta, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, media := accessTestServer(t, root)
+	setAccess(t, s, "Cabinet/Libros", "open", 0)
+	// s.kiwix queda nil deliberadamente: el endpoint no debe tocar el catálogo ZIM.
+	h := s.handleSurfaceItems(media)
+	w := httptest.NewRecorder()
+	h(w, httptest.NewRequest(http.MethodGet, "/api/items/surface?provider=cabinet", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("surface: %d %s", w.Code, w.Body.String())
+	}
+	var payload struct {
+		Items []struct {
+			Title       string `json:"title"`
+			SectionName string `json:"sectionName"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Items) != 1 || payload.Items[0].Title != "Libro" || payload.Items[0].SectionName != "Colección desde RAM" {
+		t.Fatalf("respuesta inesperada: %+v", payload.Items)
 	}
 }

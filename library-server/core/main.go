@@ -50,12 +50,20 @@ type Server struct {
 	// sesión + permiso contra SQLite, serializado en UNA conexión. Se cachean
 	// los INSUMOS (sesión y mapa de acceso) con TTL corto; el gate se sigue
 	// ejecutando en cada petición, solo que contra memoria.
-	sessCacheMu sync.RWMutex
-	sessCache   map[string]sessionCacheEntry
+	sessCacheMu    sync.RWMutex
+	sessCache      map[string]sessionCacheEntry
+	sessGeneration uint64
+	sessHits       atomic.Uint64
+	sessMisses     atomic.Uint64
 
 	accessCacheMu  sync.RWMutex
+	accessBuildMu  sync.Mutex
 	accessCache    map[string]accessCfg
 	accessCachedAt time.Time
+	accessHits     atomic.Uint64
+	accessMisses   atomic.Uint64
+	accessBuilds   atomic.Uint64
+	accessWaits    atomic.Uint64
 
 	// Control de carga (§6, rate-limit v1): kiwixSem limita las peticiones
 	// simultáneas al motor; searchGate limita búsquedas globales concurrentes
@@ -382,6 +390,7 @@ func main() {
 	adminMux.HandleFunc("/api/admin/media/delete", s.handleMediaDelete(md))                                  // borrar item del pool (admin)
 	adminMux.HandleFunc("/api/admin/upload", s.handleUpload(&uploadDeps{root: downloadRoot}, md))            // carga manual (Moments/Cabinet)
 	adminMux.HandleFunc("/api/admin/media/update", s.handleMediaUpdate(&uploadDeps{root: downloadRoot}, md)) // editar ficha
+	adminMux.HandleFunc("/api/admin/cache/metrics", s.handleCacheMetrics(md))                                // métricas sin tokens/rutas
 	s.registerItemRoutes(mux, md)
 
 	// Inventario del pool para el Panel de Control (POOL-CONTRACT.md §6). Read-only.

@@ -566,3 +566,78 @@ func TestSessionRefreshRotatesSecretWithoutExtendingAbsoluteTTL(t *testing.T) {
 		t.Fatalf("la rotación amplió el TTL absoluto: antes=%d después=%d", createdBefore, createdAfter)
 	}
 }
+
+func TestAdminPasswordResetInvalidatesWarmSessionCache(t *testing.T) {
+	s := testAuthServer(t, "")
+	adminCookie := sessionFor(t, s, "admin-reset", 40, true)
+	victim, err := s.createUser("victima-reset", "password!9", 30, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	victimToken, err := s.newSession(victim.Username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	victimReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	victimReq.AddCookie(&http.Cookie{Name: sessionCookie, Value: victimToken})
+	if s.currentUser(victimReq) == nil { // precarga token -> User en RAM
+		t.Fatal("la sesión de prueba no autenticó antes del reset")
+	}
+
+	r := httptest.NewRequest(http.MethodPut, "/api/admin/users/"+strconv.FormatInt(victim.ID, 10)+"/password",
+		strings.NewReader(`{"password":"nueva-clave!9"}`))
+	r.AddCookie(adminCookie)
+	w := httptest.NewRecorder()
+	s.handleAdminUserOp(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("reset admin: %d %s", w.Code, w.Body.String())
+	}
+	if s.currentUser(victimReq) != nil {
+		t.Fatal("la sesión cacheada sobrevivió al reset administrativo")
+	}
+}
+
+func TestAdminDeleteUserInvalidatesWarmSessionCache(t *testing.T) {
+	s := testAuthServer(t, "")
+	adminCookie := sessionFor(t, s, "admin-delete", 40, true)
+	victim, err := s.createUser("victima-delete", "password!9", 30, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	victimToken, err := s.newSession(victim.Username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	victimReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	victimReq.AddCookie(&http.Cookie{Name: sessionCookie, Value: victimToken})
+	if s.currentUser(victimReq) == nil {
+		t.Fatal("la sesión de prueba no autenticó antes del borrado")
+	}
+
+	r := httptest.NewRequest(http.MethodDelete, "/api/admin/users/"+strconv.FormatInt(victim.ID, 10), nil)
+	r.AddCookie(adminCookie)
+	w := httptest.NewRecorder()
+	s.handleAdminUserOp(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete admin: %d %s", w.Code, w.Body.String())
+	}
+	if s.currentUser(victimReq) != nil {
+		t.Fatal("la sesión cacheada sobrevivió al borrado del usuario")
+	}
+}
+
+func TestSessionInvalidationRejectsInflightCachePublication(t *testing.T) {
+	s := testAuthServer(t, "")
+	u := &User{ID: 7, Username: "en-vuelo", Age: 30}
+	s.sessCacheMu.RLock()
+	oldGeneration := s.sessGeneration
+	s.sessCacheMu.RUnlock()
+	s.invalidateSessionCache()
+	s.storeSessionCache("token-viejo", u, oldGeneration)
+	s.sessCacheMu.RLock()
+	_, cached := s.sessCache["token-viejo"]
+	s.sessCacheMu.RUnlock()
+	if cached {
+		t.Fatal("una consulta iniciada antes de la revocación repobló la caché")
+	}
+}

@@ -1,8 +1,26 @@
 # Rendimiento del streaming en multiusuario (vídeo / PDF)
 
-> Estado: diagnóstico + plan. El problema está identificado y confirmado en
-> código; el arreglo aún NO está aplicado. Este documento existe para poder
-> mantener el multiusuario sin volver a reconstruir el análisis desde cero.
+> Estado (2026-07-22): arreglos aplicados y cubiertos por pruebas automáticas;
+> pendiente validar la mejora con carga real de 3–4 clientes. El código confirma
+> el coste repetido original, pero el peso exacto de SQLite frente a red, disco y
+> cliente debe decidirse con las métricas descritas en el §8.
+
+---
+
+## 0. Implementación actual
+
+- Sesión cacheada durante 8 s; logout, logout global, cambio/reset de contraseña,
+  rotación y borrado de usuario invalidan RAM inmediatamente.
+- Mapa de acceso cacheado durante 15 s, con invalidación explícita y reconstrucción
+  única anti-estampida al vencer el TTL.
+- Catálogo RAM inmutable, versionado e indexado por proveedor, colección e ID.
+  Una mutación durante un escaneo hace que el snapshot viejo se descarte.
+- Moments y Cabinet usan una petición a `/api/items/surface`; sus metadatos de
+  colección salen del mismo snapshot, sin consultar Kiwix ni releerlos por visita.
+- `GET /api/admin/cache/metrics` expone contadores agregados de hits, misses,
+  builds, esperas y tiempo de construcción; nunca tokens, usuarios o rutas.
+- `SetMaxOpenConns(1)` se mantiene. Tampoco se añade aún una caché de bytes de
+  1 GB: primero se mide esta capa junto a la caché de ficheros del sistema operativo.
 
 ---
 
@@ -11,9 +29,9 @@
 Con varios usuarios reproduciendo vídeo (o paginando un PDF grande) **a la vez**,
 la reproducción va a tirones / se ralentiza. Con un solo usuario no se nota.
 
-La pista "solo en multiusuario" es la clave del diagnóstico: apunta a un recurso
-**compartido y serializado** que se satura cuando varias reproducciones tiran de
-él en paralelo. Ese recurso es SQLite.
+La pista "solo en multiusuario" apunta a un recurso compartido y serializado.
+El código mostró SQLite como candidato claro; la validación con métricas debe
+separar su impacto del disco, la red y la capacidad de los clientes.
 
 ---
 
@@ -23,9 +41,9 @@ Un `<video>` (y el visor de PDF por páginas) **no descarga el fichero de una ve
 El navegador pide el contenido en trozos con cabeceras `Range` (`bytes=0-...`,
 luego `bytes=1048576-...`, etc.), y **cada seek del usuario dispara más Ranges**.
 
-Resultado: **una sola reproducción genera cientos o miles de peticiones HTTP**
-al endpoint `/media/`. Multiplicado por usuarios simultáneos, es un chorro
-constante de peticiones. Todo lo que cueste "algo" *por petición* se multiplica
+Resultado: una reproducción puede generar muchas peticiones HTTP al endpoint
+`/media/`, según navegador, formato, duración y seeks. Multiplicado por usuarios,
+es un flujo constante de peticiones. Todo lo que cueste "algo" *por petición* se multiplica
 por ese factor y se convierte en el cuello de botella. Una imagen o una descarga
 normal no tienen este perfil (una petición y ya); el vídeo/PDF sí.
 
@@ -38,8 +56,8 @@ Por **cada** Range se ejecuta:
 
 | Paso | Operación | Coste | Fichero |
 |------|-----------|-------|---------|
-| 1 | `s.currentUser(r)` → `SELECT` JOIN sessions+users por token | **1 lectura SQLite** | auth.go:289 |
-| 2 | `canSeeMediaPath` → `collectionAccess` → `SELECT` en `collection_access` | **1 lectura SQLite** | access.go:53 / :192 |
+| 1 | `s.currentUser(r)` → caché token→usuario | RAM normalmente; SQLite en miss | auth.go |
+| 2 | `canSeeMediaPath` → mapa de acceso cacheado | RAM normalmente; una query global en miss | access.go |
 | 3 | `UPDATE sessions SET last_seen` — **solo** si pasó `sessionTouchStep` (5 min) | escritura, ya throttleada | auth.go:328 |
 | 4 | `os.Open` + `Stat` + `http.ServeContent` (con Range) | E/S de disco, barata | media.go:385 |
 
@@ -50,9 +68,9 @@ Los pasos 3 y 4 **no** son el problema:
 - El paso 4 es lo que el endpoint debe hacer; `ServeContent` gestiona Range e
   `If-Modified-Since` correctamente.
 
-El problema son los **pasos 1 y 2: dos lecturas a SQLite en cada Range**, para
-revalidar permisos que **no cambian durante una reproducción**. Es trabajo
-repetido cientos de veces por el mismo resultado.
+Antes del arreglo, los pasos 1 y 2 eran dos lecturas SQLite por Range para
+revalidar resultados que normalmente no cambian durante una reproducción. Ahora
+el gate sigue ejecutándose, pero usa los insumos cacheados en el caso normal.
 
 ---
 
@@ -67,18 +85,16 @@ PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA synchronous=NORMAL;
 ```
 
 Esto es razonable como decisión general (WAL + una conexión evita los
-"database is locked" en la Pi con SD). **Pero** convierte el problema del §3 en el
-cuello de botella real:
+"database is locked" en la Pi con SD). **Pero** podía convertir el coste del §3
+en un cuello de botella:
 
 - WAL permite que varias lecturas no se bloqueen *a nivel de fichero*.
 - Con `MaxOpenConns(1)`, el driver de Go **serializa igualmente** todas las
   consultas sobre esa única conexión: van de una en una.
 
-Así que las 2 lecturas × N usuarios × cientos de Ranges **hacen cola sobre una
-sola conexión**. Ahí es donde el vídeo del segundo y tercer usuario empieza a ir
-a tirones: no está esperando al disco del vídeo, está esperando su turno para
-preguntar "¿este usuario puede ver esto?" — una pregunta cuya respuesta no ha
-cambiado desde el Range anterior.
+Así, las lecturas de N usuarios podían hacer cola sobre una sola conexión para
+preguntar repetidamente "¿este usuario puede ver esto?". Las métricas permiten
+comprobar si esa cola era dominante o coexistía con límites de disco/red.
 
 ---
 
@@ -104,14 +120,13 @@ Junto a `collectionAccess` (access.go) hay este comentario:
 > SQLite, que en la Pi con listados de cientos de items se nota (auditoría O-1).
 > Con el mapa en mano, `canSeeCached` resuelve en memoria.
 
-Es decir: **el mismo patrón N+1 ya se detectó y se arregló para los listados**
-(cachear la config de acceso en memoria con `accessMap` + `canSeeCached`). El
-streaming se quedó fuera de ese arreglo y sigue yendo a la BD por Range. La
-solución de §7 es, en parte, extender esa misma idea al camino de `/media`.
+Ese precedente se extendió al camino de `/media`: `collectionAccess` resuelve
+ahora contra `accessMap`, que conserva un snapshot en memoria e impide que varios
+lectores reconstruyan el mismo mapa simultáneamente.
 
 ---
 
-## 7. Plan de arreglo (por orden de impacto / menor riesgo)
+## 7. Diseño aplicado y decisión sobre el Fix C
 
 Principio rector: **no relajar el gate**. Se sigue comprobando sesión y permiso
 en cada petición; solo se cambia *contra qué* se comprueban — una caché de vida
@@ -125,17 +140,17 @@ El mayor ahorro por sí solo.
 - `currentUser` mira la caché antes de tocar la BD; si hay entrada viva, la usa.
 - Durante una reproducción, los cientos de Ranges de ese usuario reusan la misma
   entrada → **0 lecturas SQLite** para la sesión en el caso normal.
-- Al hacer logout / borrar sesión, invalidar la entrada (o dejar que el TTL corto
-  la expire; 5–10 s de ventana es aceptable y coherente con el modelo actual).
+- Las revocaciones internas invalidan la caché inmediatamente; el TTL no sustituye
+  esa garantía.
 - El `UPDATE last_seen` (throttleado a 5 min) puede quedarse como está o moverse
   a que lo dispare la caché al refrescar.
 
 ### Fix B — usar `accessMap`/`canSeeCached` en el gate de streaming
 Reutiliza lo que YA existe y está probado (§6).
-- `canSeeMediaPath` / `canDownloadMediaPath` deben resolver contra el mapa de
-  acceso cacheado, no contra `collectionAccess` (que va a la BD).
-- La config de acceso cambia poquísimo; el mapa se cachea con invalidación en el
-  PUT del panel (mismo mecanismo que ya usa `accessMap` para los listados).
+- `canSeeMediaPath` / `canDownloadMediaPath` resuelven contra el mapa de acceso
+  cacheado; `collectionAccess` ya no consulta una fila SQLite por Range.
+- La config se invalida en el PUT del panel y al sembrar acceso durante uploads.
+- Una sola goroutine reconstruye el mapa al vencer; las demás reutilizan el resultado.
 - Resultado: **0 lecturas SQLite** para el permiso de colección en el caso normal.
 
 Con A+B, el camino caliente de un Range pasa de **2 lecturas SQLite** a **0** en
@@ -151,11 +166,11 @@ Si tras A+B aún se quiere más margen concurrente:
 - **No hacer C sin A+B**: A+B quitan la mayor parte de las consultas, así que
   puede que C ni haga falta. Medir antes.
 
-### Orden recomendado
-1. **Fix A** (sesión cacheada) — el que más quita, riesgo bajo.
-2. **Fix B** (permiso cacheado) — reutiliza código existente, riesgo bajo.
-3. Medir con 3–4 reproducciones simultáneas. Si va fino, parar aquí.
-4. **Fix C** solo si hace falta y con separación lectura/escritura bien hecha.
+### Estado de ejecución
+1. **Fix A** aplicado, incluida revocación administrativa inmediata.
+2. **Fix B** aplicado con single-builder para evitar estampidas periódicas.
+3. Catálogo RAM versionado e indexado aplicado para Moments/Cabinet.
+4. **Fix C** aplazado hasta medir con 3–4 reproducciones simultáneas.
 
 ---
 
@@ -163,9 +178,9 @@ Si tras A+B aún se quiere más margen concurrente:
 
 - Reproducir 3–4 vídeos a la vez desde clientes/sesiones distintas y comprobar
   que no hay tirones ni buffering cruzado (que el seek de uno no frene a otro).
-- Contar consultas: instrumentar (temporalmente) un contador en `currentUser` y
-  `collectionAccess` y confirmar que durante una reproducción quedan casi planos
-  tras el primer Range (deberían dispararse una vez y luego servir de caché).
+- Consultar `GET /api/admin/cache/metrics` antes y después. Confirmar que los hits
+  crecen, que `access.builds` aumenta una sola vez por expiración y que los misses
+  quedan casi planos después de calentar las cachés.
 - Caso PDF: abrir un PDF grande y paginar rápido mientras otro usuario reproduce
   vídeo; ambos deben mantenerse fluidos.
 
@@ -173,9 +188,8 @@ Si tras A+B aún se quiere más margen concurrente:
 
 ## 9. Notas de seguridad (para no romper el gate al optimizar)
 
-- El TTL de la caché de sesión debe ser **corto** (5–10 s): es la ventana máxima
-  en la que una sesión ya caducada/borrada podría seguir sirviendo. Aceptable
-  para /media; no ampliar sin pensarlo.
+- El TTL de sesión es corto (8 s) como red de seguridad para cambios externos.
+  Las revocaciones realizadas por la aplicación invalidan RAM inmediatamente.
 - La caché de permisos de colección **debe invalidarse** cuando el panel cambia
   el acceso de una colección (ya hay mecanismo: `accessMap` se invalida en el PUT).
 - No cachear la decisión final "puede ver X fichero" por ruta completa sin TTL:
@@ -190,8 +204,7 @@ Si tras A+B aún se quiere más margen concurrente:
 
 ## 10. Resumen en una línea
 
-El streaming va a tirones en multiusuario porque revalida sesión + permiso contra
-SQLite en cada petición de Range y todas esas consultas se serializan sobre una
-única conexión; la solución es cachear en memoria la sesión (TTL corto) y el mapa
-de acceso (ya existe para listados), dejando el gate igual de estricto pero sin
-tocar el disco en el caso normal.
+El camino normal de un Range conserva el gate, pero resuelve sesión y permiso en
+RAM; las reconstrucciones son únicas, las revocaciones internas son inmediatas y
+el catálogo de Moments/Cabinet es un snapshot versionado compartido. Falta medir
+en carga real antes de atribuir toda la mejora o cualquier resto a SQLite.

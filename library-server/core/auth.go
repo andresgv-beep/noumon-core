@@ -299,6 +299,7 @@ const sessionCacheTTL = 8 * time.Second
 
 func (s *Server) invalidateSessionCache() {
 	s.sessCacheMu.Lock()
+	s.sessGeneration++
 	s.sessCache = nil
 	s.sessCacheMu.Unlock()
 }
@@ -325,8 +326,10 @@ func (s *Server) currentUser(r *http.Request) *User {
 		cacheKey = "mt:" + mediaToken
 	}
 	s.sessCacheMu.RLock()
+	cacheGeneration := s.sessGeneration
 	if e, ok := s.sessCache[cacheKey]; ok && time.Now().Before(e.expires) {
 		s.sessCacheMu.RUnlock()
+		s.sessHits.Add(1)
 		if e.user == nil {
 			return nil
 		}
@@ -334,6 +337,7 @@ func (s *Server) currentUser(r *http.Request) *User {
 		return &u
 	}
 	s.sessCacheMu.RUnlock()
+	s.sessMisses.Add(1)
 	var u User
 	var adm int
 	var sessionToken string
@@ -359,20 +363,26 @@ func (s *Server) currentUser(r *http.Request) *User {
 			Scan(&u.ID, &u.Username, &u.Age, &adm, &sessionToken, &lastSeen)
 	}
 	if err != nil {
-		s.storeSessionCache(cacheKey, nil)
+		s.storeSessionCache(cacheKey, nil, cacheGeneration)
 		return nil
 	}
 	if lastSeen < now.Add(-sessionTouchStep).Unix() {
 		_, _ = s.store.db.Exec(`UPDATE sessions SET last_seen = ? WHERE token = ?`, now.Unix(), sessionToken)
 	}
 	u.IsAdmin = adm == 1
-	s.storeSessionCache(cacheKey, &u)
+	s.storeSessionCache(cacheKey, &u, cacheGeneration)
 	out := u
 	return &out
 }
 
-func (s *Server) storeSessionCache(key string, u *User) {
+func (s *Server) storeSessionCache(key string, u *User, generation uint64) {
 	s.sessCacheMu.Lock()
+	if generation != s.sessGeneration {
+		// Una revocación coincidió con la consulta SQLite: esta petición ya
+		// estaba en vuelo, pero no debe repoblar RAM para peticiones posteriores.
+		s.sessCacheMu.Unlock()
+		return
+	}
 	if s.sessCache == nil {
 		s.sessCache = map[string]sessionCacheEntry{}
 	}
@@ -894,6 +904,7 @@ func (s *Server) handleAdminUserOp(w http.ResponseWriter, r *http.Request) {
 			s.store.db.Exec(`DELETE FROM media_tokens WHERE username = ?`, uname)
 			s.store.db.Exec(`DELETE FROM sessions WHERE username = ?`, uname)
 		}
+		s.invalidateSessionCache() // la revocación administrativa debe ser inmediata
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		return
 	}
@@ -944,6 +955,7 @@ func (s *Server) handleAdminUserOp(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	s.invalidateSessionCache() // DeleteUserData eliminó sus sesiones: fuera también de RAM
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

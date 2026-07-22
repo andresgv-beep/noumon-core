@@ -157,22 +157,13 @@ func (s *Server) handleSurfaceItems(media *mediaDeps) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider debe ser moments o cabinet"})
 			return
 		}
-		items, err := media.itemsFor("")
+		catalog, err := media.catalogSnapshot()
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
+		items := catalog.providerItems(provider)
 		items = s.filterMediaItems(s.currentUser(r), items)
-
-		// Título visible por colección: el mismo que enseña /api/collections.
-		titles := map[string]string{}
-		if cols, colErr := s.allCollections(media); colErr == nil {
-			for _, c := range cols {
-				if rel, ok := decodeOpaque(strings.TrimPrefix(c.ID, "col:media:")); ok && c.Kind == "media" {
-					titles[rel] = c.Title
-				}
-			}
-		}
 
 		type surfaceItem struct {
 			Item
@@ -181,13 +172,8 @@ func (s *Server) handleSurfaceItems(media *mediaDeps) http.HandlerFunc {
 		}
 		out := make([]surfaceItem, 0, len(items))
 		for _, it := range items {
-			if it.Source != provider {
-				continue
-			}
-			name := titles[it.Collection]
-			if name == "" {
-				name = it.Collection
-			}
+			meta := catalog.collections[it.Collection]
+			name := firstNonEmpty(meta.Title, collectionTitle(it.Collection))
 			out = append(out, surfaceItem{
 				Item:        mediaToItem(it),
 				SectionID:   "col:media:" + encodeOpaque(it.Collection),
@@ -465,39 +451,36 @@ func (s *Server) findItem(media *mediaDeps, id string) (Item, bool, error) {
 		}
 		return zimToItem(Library{ID: lib}, itemPath, titleFromPath(itemPath), "", "", 0), true, nil
 	case strings.HasPrefix(id, "media:"):
-		items, err := media.itemsFor("")
+		it, ok, err := media.itemForID(id)
 		if err != nil {
 			return Item{}, false, err
 		}
-		for _, it := range items {
-			item := mediaToItem(it)
-			if item.ID == id {
-				return item, true, nil
-			}
+		if ok {
+			return mediaToItem(it), true, nil
 		}
 	}
 	return Item{}, false, nil
 }
 
 func (m *mediaDeps) collections() ([]Collection, error) {
-	items, err := m.itemsFor("")
+	catalog, err := m.catalogSnapshot()
 	if err != nil {
 		return nil, err
 	}
-	byCollection := map[string][]mediaItem{}
-	for _, item := range items {
-		byCollection[item.Collection] = append(byCollection[item.Collection], item)
-	}
-	keys := make([]string, 0, len(byCollection))
-	for key := range byCollection {
+	keys := make([]string, 0, len(catalog.byCollection))
+	for key := range catalog.byCollection {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 
 	out := make([]Collection, 0, len(keys))
 	for _, key := range keys {
-		list := byCollection[key]
-		meta := m.collectionMetadata(key)
+		indices := catalog.byCollection[key]
+		list := make([]mediaItem, 0, len(indices))
+		for _, i := range indices {
+			list = append(list, catalog.items[i])
+		}
+		meta := catalog.collections[key]
 		out = append(out, Collection{
 			ID:          collectionIDForMedia(key),
 			Source:      ItemSourceInfo{Provider: firstNonEmpty(meta.Source, "local"), ProviderItemID: meta.SourceID, OriginalURL: meta.SourceURL},

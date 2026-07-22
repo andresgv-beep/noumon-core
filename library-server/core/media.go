@@ -23,8 +23,29 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+// mediaCatalog es un snapshot INMUTABLE del catálogo de medios. Los mapas
+// guardan índices sobre items en vez de copias, de modo que el coste de RAM es
+// proporcional al catálogo y no al número de usuarios o peticiones.
+type mediaCatalog struct {
+	items        []mediaItem
+	byID         map[string]int
+	byProvider   map[string][]int
+	byCollection map[string][]int
+	collections  map[string]collectionMeta
+}
+
+func (c *mediaCatalog) providerItems(provider string) []mediaItem {
+	idx := c.byProvider[provider]
+	out := make([]mediaItem, 0, len(idx))
+	for _, i := range idx {
+		out = append(out, c.items[i])
+	}
+	return out
+}
 
 // mediaDeps: raíz de descargas (misma que el download handler). Se inyecta desde main.
 type mediaDeps struct {
@@ -37,11 +58,21 @@ type mediaDeps struct {
 	// canSee sobre el resultado (access.go), así que la caché jamás mezcla
 	// visibilidad entre usuarios. Protegido por mu; una sola goroutine
 	// reconstruye (anti-estampida) y las demás esperan su resultado.
-	mu       sync.Mutex
-	catalog  []mediaItem
-	builtAt  time.Time
-	building bool
-	waiters  []chan struct{}
+	mu         sync.Mutex
+	catalog    *mediaCatalog
+	builtAt    time.Time
+	generation uint64
+	building   bool
+	waiters    []chan struct{}
+
+	// Hook de sincronización para pruebas: producción siempre lo deja nil.
+	afterScan func()
+
+	catalogHits       atomic.Uint64
+	catalogMisses     atomic.Uint64
+	catalogBuilds     atomic.Uint64
+	catalogWaits      atomic.Uint64
+	catalogBuildNanos atomic.Uint64
 }
 
 // TTL de seguridad: detecta cambios externos en el pool (copias a mano, etc.)
@@ -49,43 +80,96 @@ type mediaDeps struct {
 // invalidan al instante, así que esto es solo la red de seguridad.
 const mediaCatalogTTL = 30 * time.Second
 
-// catalogAll devuelve el catálogo completo desde la caché, reconstruyéndolo si
+// buildCatalog recorre el pool una vez y construye todos los índices y metadatos
+// que consumen Moments, Cabinet y las rutas de items.
+func (m *mediaDeps) buildCatalog() (*mediaCatalog, error) {
+	started := time.Now()
+	m.catalogBuilds.Add(1)
+	items, err := m.scan("")
+	if err != nil {
+		return nil, err
+	}
+	c := &mediaCatalog{
+		items:        items,
+		byID:         make(map[string]int, len(items)),
+		byProvider:   make(map[string][]int),
+		byCollection: make(map[string][]int),
+		collections:  make(map[string]collectionMeta),
+	}
+	for i, it := range items {
+		relMedia := strings.Trim(strings.TrimPrefix(it.MediaURL, "/media/"), "/")
+		c.byID[itemIDForMedia(relMedia)] = i
+		c.byProvider[it.Source] = append(c.byProvider[it.Source], i)
+		c.byCollection[it.Collection] = append(c.byCollection[it.Collection], i)
+		if _, ok := c.collections[it.Collection]; !ok {
+			c.collections[it.Collection] = m.collectionMetadata(it.Collection)
+		}
+	}
+	m.catalogBuildNanos.Add(uint64(time.Since(started)))
+	if m.afterScan != nil {
+		m.afterScan()
+	}
+	return c, nil
+}
+
+// catalogSnapshot devuelve el catálogo desde la caché, reconstruyéndolo si
 // caducó. Si ya hay una reconstrucción en marcha, espera y reutiliza su
-// resultado en lugar de lanzar otro escaneo (efecto estampida).
-func (m *mediaDeps) catalogAll() ([]mediaItem, error) {
+// resultado en lugar de lanzar otro escaneo (efecto estampida). generation
+// evita que invalidate() se pierda si coincide con un escaneo en curso.
+func (m *mediaDeps) catalogSnapshot() (*mediaCatalog, error) {
 	m.mu.Lock()
 	for {
 		if m.catalog != nil && time.Since(m.builtAt) < mediaCatalogTTL {
 			out := m.catalog
 			m.mu.Unlock()
+			m.catalogHits.Add(1)
 			return out, nil
 		}
 		if !m.building {
 			break
 		}
+		m.catalogWaits.Add(1)
 		ch := make(chan struct{})
 		m.waiters = append(m.waiters, ch)
 		m.mu.Unlock()
 		<-ch
 		m.mu.Lock()
 	}
+	m.catalogMisses.Add(1)
 	m.building = true
+	generation := m.generation
 	m.mu.Unlock()
 
-	items, err := m.scan("")
-
-	m.mu.Lock()
-	m.building = false
-	if err == nil {
-		m.catalog = items
+	for {
+		catalog, err := m.buildCatalog()
+		m.mu.Lock()
+		if err != nil {
+			m.building = false
+			m.wakeCatalogWaitersLocked()
+			m.mu.Unlock()
+			return nil, err
+		}
+		if generation != m.generation {
+			// Hubo una subida/edición/borrado durante el escaneo. No publiques
+			// el resultado potencialmente viejo: reconstruye sobre el disco actual.
+			generation = m.generation
+			m.mu.Unlock()
+			continue
+		}
+		m.catalog = catalog
 		m.builtAt = time.Now()
+		m.building = false
+		m.wakeCatalogWaitersLocked()
+		m.mu.Unlock()
+		return catalog, nil
 	}
+}
+
+func (m *mediaDeps) wakeCatalogWaitersLocked() {
 	for _, ch := range m.waiters {
 		close(ch)
 	}
 	m.waiters = nil
-	m.mu.Unlock()
-	return items, err
 }
 
 // itemsFor sustituye a scan() para los lectores: sirve desde la caché y acota
@@ -93,13 +177,13 @@ func (m *mediaDeps) catalogAll() ([]mediaItem, error) {
 // Devuelve siempre un slice propio: los llamantes ordenan/recortan sin tocar
 // el catálogo compartido.
 func (m *mediaDeps) itemsFor(collection string) ([]mediaItem, error) {
-	all, err := m.catalogAll()
+	catalog, err := m.catalogSnapshot()
 	if err != nil {
 		return nil, err
 	}
 	collection = filepath.ToSlash(strings.Trim(collection, "/"))
-	out := make([]mediaItem, 0, len(all))
-	for _, it := range all {
+	out := make([]mediaItem, 0, len(catalog.items))
+	for _, it := range catalog.items {
 		if collection != "" && it.Collection != collection &&
 			!strings.HasPrefix(it.Collection, collection+"/") {
 			continue
@@ -109,10 +193,23 @@ func (m *mediaDeps) itemsFor(collection string) ([]mediaItem, error) {
 	return out, nil
 }
 
+func (m *mediaDeps) itemForID(id string) (mediaItem, bool, error) {
+	catalog, err := m.catalogSnapshot()
+	if err != nil {
+		return mediaItem{}, false, err
+	}
+	i, ok := catalog.byID[id]
+	if !ok {
+		return mediaItem{}, false, nil
+	}
+	return catalog.items[i], true, nil
+}
+
 // invalidate se llama tras subir, editar o borrar contenido: la siguiente
 // lectura reconstruye el catálogo.
 func (m *mediaDeps) invalidate() {
 	m.mu.Lock()
+	m.generation++
 	m.catalog = nil
 	m.builtAt = time.Time{}
 	m.mu.Unlock()
