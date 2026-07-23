@@ -103,6 +103,91 @@ CREATE TABLE IF NOT EXISTS zim_content_trust (
   enabled       INTEGER NOT NULL DEFAULT 0,
   updated       INTEGER NOT NULL
 );
+-- Studio: dominio de autoría separado de las rutas administrativas.
+-- Todas las tablas son aditivas para que un cliente/servidor antiguo pueda
+-- seguir usando la misma biblioteca ignorándolas.
+CREATE TABLE IF NOT EXISTS user_capabilities (
+  user_id       INTEGER PRIMARY KEY,
+  can_author    INTEGER NOT NULL DEFAULT 0,
+  can_publish   INTEGER NOT NULL DEFAULT 0,
+  quota_bytes   INTEGER NOT NULL DEFAULT 2147483648,
+  updated       INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS studio_documents (
+  id                  TEXT PRIMARY KEY,
+  owner_user_id       INTEGER,
+  template_key        TEXT NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'draft',
+  title               TEXT NOT NULL,
+  summary             TEXT NOT NULL DEFAULT '',
+  language            TEXT NOT NULL DEFAULT '',
+  author_label        TEXT NOT NULL DEFAULT '',
+  tags_json           TEXT NOT NULL DEFAULT '[]',
+  classification_json TEXT NOT NULL DEFAULT '{}',
+  metadata_json       TEXT NOT NULL DEFAULT '{}',
+  content_json        TEXT NOT NULL,
+  plain_text          TEXT NOT NULL DEFAULT '',
+  published_plain_text TEXT NOT NULL DEFAULT '',
+  cover_asset_id      TEXT,
+  revision            INTEGER NOT NULL DEFAULT 1,
+  published_revision  INTEGER,
+  publication_kind    TEXT,
+  publication_target  TEXT,
+  created             INTEGER NOT NULL,
+  updated             INTEGER NOT NULL,
+  published           INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_studio_documents_owner_status_updated
+  ON studio_documents(owner_user_id, status, updated DESC);
+CREATE TABLE IF NOT EXISTS studio_revisions (
+  document_id    TEXT NOT NULL,
+  revision       INTEGER NOT NULL,
+  editor_user_id INTEGER,
+  editor_label   TEXT NOT NULL DEFAULT '',
+  snapshot_json  TEXT NOT NULL,
+  created        INTEGER NOT NULL,
+  PRIMARY KEY (document_id, revision)
+);
+CREATE TABLE IF NOT EXISTS studio_assets (
+  id            TEXT PRIMARY KEY,
+  document_id   TEXT NOT NULL,
+  owner_user_id INTEGER,
+  filename      TEXT NOT NULL,
+  mime_type     TEXT NOT NULL,
+  size_bytes    INTEGER NOT NULL,
+  sha256        TEXT NOT NULL,
+  state         TEXT NOT NULL DEFAULT 'staged',
+  created       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_studio_assets_document ON studio_assets(document_id);
+CREATE INDEX IF NOT EXISTS idx_studio_assets_sha256 ON studio_assets(sha256);
+CREATE TABLE IF NOT EXISTS studio_publish_targets (
+  user_id       INTEGER NOT NULL,
+  collection_id TEXT NOT NULL,
+  PRIMARY KEY (user_id, collection_id)
+);
+CREATE TABLE IF NOT EXISTS studio_links (
+  source_document_id TEXT NOT NULL,
+  target_item_id     TEXT NOT NULL,
+  PRIMARY KEY (source_document_id, target_item_id)
+);
+CREATE TABLE IF NOT EXISTS studio_facets (
+  document_id TEXT NOT NULL,
+  facet       TEXT NOT NULL,
+  value       TEXT NOT NULL,
+  PRIMARY KEY (document_id, facet, value)
+);
+CREATE INDEX IF NOT EXISTS idx_studio_facets_lookup ON studio_facets(facet, value, document_id);
+CREATE TABLE IF NOT EXISTS content_origins (
+  document_id        TEXT PRIMARY KEY,
+  origin_content_id  TEXT NOT NULL,
+  origin_creator_key TEXT NOT NULL,
+  origin_version     TEXT NOT NULL,
+  origin_url         TEXT NOT NULL DEFAULT '',
+  forked_from        TEXT NOT NULL DEFAULT '',
+  imported           INTEGER NOT NULL,
+  UNIQUE (origin_creator_key, origin_content_id)
+);
 `
 
 // Los índices sobre item_id NO van en el schema de arriba: en un upgrade in-place
@@ -145,6 +230,10 @@ func openStore(path string) (*Store, error) {
 		return nil, err
 	}
 	if err := st.ensureColumn("sessions", "last_seen", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := st.ensureColumn("studio_documents", "published_plain_text", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		db.Close()
 		return nil, err
 	}

@@ -15,7 +15,7 @@
     {#each tabs as tab (tab.id)}
       <div class="tabwrap" class:active={tab.id === activeId}>
         <button class="tab" onclick={() => onActivate?.(tab.id)}>
-          <span class="ti"><Icon name={tab.kind === 'home' ? 'home' : (tab.kind === 'view' ? 'list' : 'book')} size={14} /></span>
+          <span class="ti"><Icon name={tab.kind === 'home' ? 'home' : (tab.view === 'studio' ? 'edit' : (tab.kind === 'view' ? 'list' : 'book'))} size={14} /></span>
           <span class="lbl">{tab.titleKey ? t(tab.titleKey) : tab.title}</span>
         </button>
         <button class="x" title={t('common.close')} onclick={() => onClose?.(tab.id)}><Icon name="close" size={13} /></button>

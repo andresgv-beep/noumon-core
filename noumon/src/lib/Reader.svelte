@@ -6,6 +6,9 @@
   import TagsView from './TagsView.svelte';
   import Cabinet from './Cabinet.svelte';
   import Moments from './Moments.svelte';
+  import Studio from './Studio.svelte';
+  import Documents from './Documents.svelte';
+  import DocumentPage from './DocumentPage.svelte';
   import ItemPage from './ItemPage.svelte';
   import MomentsWatch from './MomentsWatch.svelte';
   import Icon from './Icon.svelte';
@@ -214,9 +217,15 @@
     <Cabinet {onOpenItem} />
   {:else if tab.kind === 'view' && tab.view === 'moments'}
     <Moments {onOpenItem} />
+  {:else if tab.kind === 'view' && tab.view === 'studio'}
+    <Studio />
+  {:else if tab.kind === 'view' && tab.view === 'documents'}
+    <Documents {onOpenItem} />
   {:else if tab.kind === 'item'}
     {#if tab.open?.provider === 'moments'}
       <MomentsWatch {tab} {onOpenItem} {onOpenView} />
+    {:else if tab.open?.provider === 'studio'}
+      <DocumentPage {tab} />
     {:else}
       <ItemPage {tab} {onOpenItem} />
     {/if}

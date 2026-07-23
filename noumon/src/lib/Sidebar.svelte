@@ -8,7 +8,9 @@
   import { t } from './i18n.svelte.js';
   import { profile, profileInitials, profileGradient } from './profile.svelte.js';
 
-  let { libraries = [], activeLib = null, activeView = 'home', user = null, onOpenLibrary, onOpenHome, onOpenView, onAccount } = $props();
+  let { libraries = [], activeLib = null, activeView = 'home', user = null,
+        studioCapabilities = { canAuthor: false },
+        onOpenLibrary, onOpenHome, onOpenView, onAccount } = $props();
 
   // key = valor de tab.view; 'home' abre el inicio (buscador + guardados).
   const NAV = [
@@ -49,6 +51,16 @@
   </div>
 
   <div class="libs scroll thin">
+    <div class="lib" class:active={activeView === 'documents'}>
+      <button class="libopen" onclick={() => onOpenView?.('documents')} title={t('menu.documents')}>
+        <span class="documents-icon"><Icon name="note" size={16} /></span>
+        <span class="meta">
+          <span class="nm">{t('menu.documents')}</span>
+          <span class="sub">{t('documents.sidebarSub')}</span>
+        </span>
+      </button>
+      <button class="star" class:on={siteShown('documents')} title={siteShown('documents') ? t('side.unpinSite') : t('side.pinSite')} onclick={() => toggleSite('documents')}><Icon name="star" size={15} /></button>
+    </div>
     <div class="lib" class:active={activeView === 'cabinet'}>
       <button class="libopen" onclick={() => onOpenView?.('cabinet')} title={t('menu.cabinet')}>
         <BrandIcon kind="cabinet" size={26} radius={7} />
@@ -69,6 +81,17 @@
       </button>
       <button class="star" class:on={siteShown('moments')} title={siteShown('moments') ? t('side.unpinSite') : t('side.pinSite')} onclick={() => toggleSite('moments')}><Icon name="star" size={15} /></button>
     </div>
+    {#if studioCapabilities.canAuthor}
+      <div class="lib" class:active={activeView === 'studio'}>
+        <button class="libopen" onclick={() => onOpenView?.('studio')} title={t('menu.studio')}>
+          <span class="studio-icon"><Icon name="edit" size={16} /></span>
+          <span class="meta">
+            <span class="nm">{t('menu.studio')}</span>
+            <span class="sub">{t('studio.sidebarSub')}</span>
+          </span>
+        </button>
+      </div>
+    {/if}
     {#each libraries as lib}
       <div class="lib" class:active={activeLib === lib.id}>
         <button class="libopen" onclick={() => onOpenLibrary?.(lib)} title={lib.name}>
@@ -127,6 +150,8 @@
   .star.on{color:var(--accent-2)}
   .star.on :global(.ic){fill:var(--accent-2);stroke:var(--accent-2)}
   .empty{padding:14px;color:var(--faint);font-size:13px}
+  .studio-icon{width:26px;height:26px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;background:color-mix(in srgb,var(--accent) 18%,var(--panel-2));color:var(--accent-2);border:1px solid var(--accent-line)}
+  .documents-icon{width:26px;height:26px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;background:color-mix(in srgb,#5a92d8 17%,var(--panel-2));color:#79a9e4;border:1px solid color-mix(in srgb,#5a92d8 35%,var(--border))}
   .foot{padding:8px 10px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
   .footbtn{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--r-md);color:var(--ink-dim);font-size:14px;text-align:left;transition:background .12s,color .12s}
   .footbtn :global(.ic){color:var(--muted)}

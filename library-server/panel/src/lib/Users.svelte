@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { listUsers, createUser, deleteUser, resetPassword } from './api.js'
+  import { listUsers, createUser, deleteUser, resetPassword, getStudioCapabilities, setStudioCapabilities } from './api.js'
   import { t } from './i18n.svelte.js'
 
   let { me } = $props()
@@ -55,6 +55,8 @@
   let loading = $state(true)
   let err = $state('')
   let flash = $state('')
+  let studioCaps = $state({})
+  let studioBusy = $state({})
 
   // formulario de alta
   let show = $state(false)
@@ -67,7 +69,15 @@
 
   async function load() {
     loading = true; err = ''
-    try { users = await listUsers() } catch (e) { err = e.message } finally { loading = false }
+    try {
+      users = await listUsers()
+      const entries = await Promise.all(users.map(async (u) => {
+        if (u.isAdmin) return [u.id, { canAuthor: true, canPublish: true }]
+        try { return [u.id, await getStudioCapabilities(u.id)] }
+        catch { return [u.id, { canAuthor: false, canPublish: false, quotaBytes: 2147483648 }] }
+      }))
+      studioCaps = Object.fromEntries(entries)
+    } catch (e) { err = e.message } finally { loading = false }
   }
   onMount(load)
 
@@ -93,6 +103,24 @@
   }
 
   const initials = (n) => (n || '?').slice(0, 2).toUpperCase()
+
+  async function changeStudio(u, field, value) {
+    if (u.isAdmin || studioBusy[u.id]) return
+    const current = studioCaps[u.id] || { canAuthor: false, canPublish: false, quotaBytes: 2147483648 }
+    const next = { ...current, [field]: value }
+    if (field === 'canAuthor' && !value) next.canPublish = false
+    if (field === 'canPublish' && value) next.canAuthor = true
+    studioBusy = { ...studioBusy, [u.id]: true }
+    try {
+      const response = await setStudioCapabilities(u.id, next)
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).errorCode || t('users.failed'))
+      studioCaps = { ...studioCaps, [u.id]: await response.json() }
+    } catch (e) {
+      flash = e.message
+    } finally {
+      studioBusy = { ...studioBusy, [u.id]: false }
+    }
+  }
 </script>
 
 <div class="toolbar">
@@ -140,6 +168,21 @@
           {#if me && u.id === me.id}<span class="badge b-info">{t('users.badgeYou')}</span>{/if}
         </div>
         <div class="cpath">{u.isAdmin ? t('users.adminDesc') : t('users.ageDesc', { age: u.age })}</div>
+        <div class="studio-perms">
+          <span>{t('users.studio')}</span>
+          <label>
+            <input type="checkbox" checked={u.isAdmin || !!studioCaps[u.id]?.canAuthor}
+              disabled={u.isAdmin || studioBusy[u.id]}
+              onchange={(e) => changeStudio(u, 'canAuthor', e.currentTarget.checked)} />
+            {t('users.canAuthor')}
+          </label>
+          <label>
+            <input type="checkbox" checked={u.isAdmin || !!studioCaps[u.id]?.canPublish}
+              disabled={u.isAdmin || studioBusy[u.id]}
+              onchange={(e) => changeStudio(u, 'canPublish', e.currentTarget.checked)} />
+            {t('users.canPublish')}
+          </label>
+        </div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn" onclick={() => (resetId === u.id ? (resetId = null) : openReset(u))}>
@@ -193,4 +236,7 @@
   .tmphint { font-size: 12px; color: var(--ink-dim); line-height: 1.5; margin-bottom: 8px; }
   .tmpbox { display: flex; align-items: center; gap: 8px; }
   .tmpbox code { flex: 1; background: var(--window-bg); border: 1px solid var(--line-bright); border-radius: 7px; padding: 8px 10px; font-size: 13px; color: var(--signal); letter-spacing: .02em; user-select: all; }
+  .studio-perms{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:11px;color:var(--ink-faint)}
+  .studio-perms>span{font-weight:650;color:var(--ink-dim)}
+  .studio-perms label{display:flex;align-items:center;gap:5px;cursor:pointer}
 </style>

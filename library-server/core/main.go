@@ -29,15 +29,18 @@ import (
 
 // Server mantiene la conexión con el motor y la config del shim.
 type Server struct {
-	kiwix   *url.URL
-	proxy   *httputil.ReverseProxy
-	http    *http.Client
-	token   string  // token de sesión Noumon. Vacío = auth desactivada (dev LAN).
-	store   *Store  // capa de gestión persistida (favoritos, notas, historial)
-	geo     *sql.DB // índice FTS5 de geocoding (plugin Maps); nil si no hay geo.db
-	geoPath string
-	mapsDir string
-	geoMu   sync.RWMutex
+	kiwix          *url.URL
+	proxy          *httputil.ReverseProxy
+	http           *http.Client
+	token          string  // token de sesión Noumon. Vacío = auth desactivada (dev LAN).
+	store          *Store  // capa de gestión persistida (favoritos, notas, historial)
+	geo            *sql.DB // índice FTS5 de geocoding (plugin Maps); nil si no hay geo.db
+	geoPath        string
+	mapsDir        string
+	geoMu          sync.RWMutex
+	studioRoot     string
+	studioUploadMu sync.Mutex
+	studioUploads  map[string]studioUploadGrant
 
 	// lanPrivate: el proceso escucha en la red pero la biblioteca NO está
 	// publicada (paquete servidor headless con lanAccess=false). El middleware
@@ -311,6 +314,12 @@ func main() {
 		downloadRoot = absRoot
 	}
 	os.MkdirAll(downloadRoot, 0o755)
+	studioRoot := resolvePoolPath("STUDIO_ROOT", poolRoot, "studio", filepath.Join(filepath.Dir(dbPath), "studio"))
+	if absRoot, aerr := filepath.Abs(studioRoot); aerr == nil {
+		studioRoot = absRoot
+	}
+	os.MkdirAll(studioRoot, 0o755)
+	s.studioRoot = studioRoot
 
 	// Carpeta de ZIMs del pool + gestión (admin_zim.go). Se crea aquí, antes del
 	// motor de descargas, para engancharle el auto-registro: al terminar una
@@ -392,6 +401,7 @@ func main() {
 	adminMux.HandleFunc("/api/admin/media/update", s.handleMediaUpdate(&uploadDeps{root: downloadRoot}, md)) // editar ficha
 	adminMux.HandleFunc("/api/admin/cache/metrics", s.handleCacheMetrics(md))                                // métricas sin tokens/rutas
 	s.registerItemRoutes(mux, md)
+	s.registerStudioRoutes(mux)
 
 	// Inventario del pool para el Panel de Control (POOL-CONTRACT.md §6). Read-only.
 	// zim/models viven detrás de kiwix/translate; el shim solo los reporta para el
@@ -405,6 +415,7 @@ func main() {
 			{key: "zim", engine: "kiwix", path: zimDir},
 			{key: "models", engine: "translate", path: resolvePoolPath("MODELS_DIR", poolRoot, "models", "")},
 			{key: "downloads", engine: "media", path: downloadRoot},
+			{key: "studio", engine: "studio", path: studioRoot},
 			{key: "maps", engine: "maps", path: mapsDir},
 			{key: "db", engine: "shim", path: filepath.Dir(dbPath)},
 		},
@@ -437,6 +448,7 @@ func main() {
 	newAdminCatalog(mgr, zimDir).registerRoutes(adminMux) // catálogo remoto de kiwix → descarga al pool
 	s.registerAdminUserRoutes(adminMux)                   // alta/baja de cuentas (auth.go)
 	s.registerAccessRoutes(adminMux)                      // acceso por colección: nivel + edad (access.go)
+	s.registerStudioAdminRoutes(adminMux)                 // permisos de autor y publicación de Studio
 
 	// Identidad: PÚBLICA. Login y register tienen que ser alcanzables sin sesión.
 	s.registerAuthRoutes(mux)
@@ -636,7 +648,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		//   · sesión válida — el Panel y el lector nunca mandan X-Noumon-Token.
 		write := r.Method != http.MethodGet && r.Method != http.MethodHead
 		if s.token != "" && write && !strings.HasPrefix(r.URL.Path, "/api/auth/") {
-			if !s.hasMachineToken(r) && s.currentUser(r) == nil {
+			if !s.hasMachineToken(r) && s.currentUser(r) == nil && !studioDirectUploadRequest(r) {
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "necesitas iniciar sesión"})
 				return
 			}
@@ -699,13 +711,27 @@ func requestTokenOnly(r *http.Request) bool {
 	auth := strings.TrimSpace(r.Header.Get("Authorization"))
 	bearer := len(auth) > 7 && strings.EqualFold(auth[:7], "Bearer ")
 	st := strings.TrimSpace(r.URL.Query().Get("st")) != ""
-	if !bearer && !st {
+	upload := studioDirectUploadRequest(r)
+	if !bearer && !st && !upload {
 		return false
 	}
 	if _, err := r.Cookie(sessionCookie); err == nil {
 		return false // hay cookie de sesión → no es "solo token"
 	}
 	return true
+}
+
+func studioDirectUploadRequest(r *http.Request) bool {
+	if r.Method != http.MethodPost || strings.TrimSpace(r.URL.Query().Get("ut")) == "" {
+		return false
+	}
+	const prefix = "/api/studio/documents/"
+	if !strings.HasPrefix(r.URL.Path, prefix) {
+		return false
+	}
+	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, prefix), "/")
+	documentID, sub, found := strings.Cut(rest, "/")
+	return found && studioIDRE.MatchString(documentID) && sub == "assets"
 }
 
 // mapDataHandler publica exclusivamente los archivos de teselas que consume

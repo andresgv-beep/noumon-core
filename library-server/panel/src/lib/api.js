@@ -73,6 +73,13 @@ export const authLogout = () => postJSON('/api/auth/logout', {})
 export const authLogoutAll = () => postJSON('/api/auth/logout-all', {})
 export const authRefresh = () => postJSON('/api/auth/refresh', {})
 export const listUsers = () => getJSON('/api/admin/users').then((d) => d.users || [])
+export const getStudioCapabilities = (id) => getJSON(`/api/admin/studio/capabilities/${id}`)
+export const setStudioCapabilities = (id, capabilities) =>
+  fetch(`/api/admin/studio/capabilities/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(capabilities),
+  })
 export const createUser = (u) => postJSON('/api/admin/users', u)
 export const deleteUser = (id) =>
   fetch(`/api/admin/users/${id}`, { method: 'DELETE' })

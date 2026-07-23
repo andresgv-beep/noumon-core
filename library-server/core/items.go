@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"mime"
 	"net/http"
 	"os"
@@ -295,6 +296,22 @@ func (s *Server) handleCollectionItems(w http.ResponseWriter, r *http.Request, m
 			"items": []Item{},
 			"note":  "esta coleccion ZIM se enumera mediante busqueda; listado completo pendiente del motor",
 		})
+	case collectionID == studioDocumentsCollectionID:
+		documents, err := s.store.listPublishedStudioDocuments()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		items := make([]Item, 0, len(documents))
+		for _, summary := range documents {
+			doc, err := s.store.publishedStudioDocument(summary.ID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			items = append(items, studioDocumentToItem(doc))
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "coleccion no encontrada"})
 	}
@@ -392,6 +409,11 @@ func (s *Server) handleItemSearch(media *mediaDeps) http.HandlerFunc {
 			// título y snippet de lo que el usuario no puede abrir.
 			results = append(results, s.filterSearchResults(user, mediaResults)...)
 		}
+		if s.canSeeCollectionID(user, studioDocumentsCollectionID) {
+			if studioResults, serr := s.store.searchPublishedStudioDocuments(q); serr == nil {
+				results = append(results, studioResults...)
+			}
+		}
 		sort.SliceStable(results, func(i, j int) bool {
 			if results[i].Score != results[j].Score {
 				return results[i].Score > results[j].Score
@@ -413,6 +435,23 @@ func (s *Server) allCollections(media *mediaDeps) ([]Collection, error) {
 	mediaCollections, mediaErr := media.collections()
 	if mediaErr == nil {
 		out = append(out, mediaCollections...)
+	}
+	var studioCount int
+	if studioErr := s.store.db.QueryRow(`
+		SELECT COUNT(*) FROM studio_documents
+		WHERE published_revision IS NOT NULL AND status!='archived'`).Scan(&studioCount); studioErr == nil && studioCount > 0 {
+		out = append(out, Collection{
+			ID: studioDocumentsCollectionID,
+			Source: ItemSourceInfo{
+				Provider: "studio", ProviderItemID: "documents",
+			},
+			Kind: "documents", Title: "Documentos",
+			Description: "Publicaciones locales creadas con Noumon Studio",
+			ItemCount:   studioCount, Preview: Preview{Kind: "icon", Icon: "note"},
+			Capabilities: ItemCapabilities{
+				Open: true, Search: true, Preview: true,
+			},
+		})
 	}
 	if len(out) == 0 {
 		if err != nil {
@@ -458,6 +497,19 @@ func (s *Server) findItem(media *mediaDeps, id string) (Item, bool, error) {
 		if ok {
 			return mediaToItem(it), true, nil
 		}
+	case strings.HasPrefix(id, "studio:"):
+		documentID := strings.TrimPrefix(id, "studio:")
+		if !studioIDRE.MatchString(documentID) {
+			return Item{}, false, nil
+		}
+		doc, err := s.store.publishedStudioDocument(documentID)
+		if err != nil {
+			if errors.Is(err, errStudioNotFound) {
+				return Item{}, false, nil
+			}
+			return Item{}, false, err
+		}
+		return studioDocumentToItem(doc), true, nil
 	}
 	return Item{}, false, nil
 }

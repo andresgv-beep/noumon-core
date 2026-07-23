@@ -15,12 +15,14 @@
   import { t } from './lib/i18n.svelte.js';
   import { serverPath } from './lib/connection.js';
   import { initShell } from './lib/shell.svelte.js';
+  import { getStudioCapabilities } from './lib/studioApi.js';
   import './lib/theme.svelte.js'; // inicializa el tema (data-theme) + listener del sistema
 
   const loadBool = (k, def) => { try { const v = localStorage.getItem(k); return v === null ? def : v === '1'; } catch (e) { return def; } };
   const saveBool = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (e) {} };
 
   let libraries = $state([]);
+  let studioCapabilities = $state({ available: false, canAuthor: false, canPublish: false });
   let accountOpen = $state(false);
   // El sidebar SIEMPRE empieza cerrado, aunque lo dejaras abierto. Noumon abre
   // en un Inicio centrado —logo, wordmark y buscador— y el arranque se coloca
@@ -38,7 +40,11 @@
     try { const ns = await readerState.listNotes(); notedPaths = new Set(ns.map((n) => noteKey(n.lib, n.path, n.itemId))); } catch (e) {}
     try { taggedPaths = new Set(await readerState.getTaggedKeys()); } catch (e) {}
   }
-  async function onAuthChanged() { await reloadLibraries(); await reloadPersonal(); }
+  async function refreshStudio() {
+    try { studioCapabilities = await getStudioCapabilities(); }
+    catch (e) { studioCapabilities = { available: false, canAuthor: false, canPublish: false }; }
+  }
+  async function onAuthChanged() { await reloadLibraries(); await reloadPersonal(); await refreshStudio(); }
   let indexOpen = $state(loadBool('noumon-index', true));
   let tabs = $state([]);
   let activeId = $state(null);
@@ -165,6 +171,7 @@
     initShell(); // ¿corremos dentro de la app de escritorio? (window.runtime de Wails)
     newTab();
     await refreshAuth(); // fija identidad antes de cargar estado personal
+    await refreshStudio();
     try { libraries = await getLibraries(); } catch (e) { /* motor caído: home vacío */ }
     // Favoritos desde el shim (SQLite); migra una vez los de localStorage si existían.
     try {
@@ -394,7 +401,7 @@
       <BookmarksBar {favorites} {libraries} onOpen={openFav} onToggleHome={toggleHome} onRemoveFav={removeFav} />
     </div>
   {/if}
-  <div class="r-side"><Sidebar {libraries} activeLib={active?.lib} {activeView} user={auth.user}
+  <div class="r-side"><Sidebar {libraries} activeLib={active?.lib} {activeView} user={auth.user} {studioCapabilities}
       onOpenLibrary={openLibrary} onOpenHome={goHome} onOpenView={openView} onAccount={() => (accountOpen = true)} /></div>
   <div class="r-main">
     {#if active}
