@@ -65,6 +65,18 @@ export async function getItem(id) {
   return jsonOrError(r);
 }
 
+// Resolución segura para itemRef: solo consume metadatos cuando el servidor
+// confirma acceso. En 401/403 no se parsea ni se propaga ninguna respuesta.
+export async function resolveItemReference(id, { signal } = {}) {
+  const r = await serverFetch(`/api/items/${encodeURIComponent(id)}`, { signal });
+  if (r.ok) return { state: 'available', item: await jsonOrError(r) };
+  if (r.status === 401 || r.status === 403) return { state: 'restricted', item: null };
+  if (r.status === 404) return { state: 'missing', item: null };
+  const error = new Error(`HTTP ${r.status}`);
+  error.status = r.status;
+  throw error;
+}
+
 export async function resolveProviderItem(provider, sourceId) {
   const q = new URLSearchParams({ provider, sourceId });
   const r = await serverFetch(`/api/items/resolve?${q.toString()}`);

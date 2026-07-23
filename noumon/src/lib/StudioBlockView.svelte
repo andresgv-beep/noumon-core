@@ -1,6 +1,7 @@
 <script>
   import StudioBlockView from './StudioBlockView.svelte';
   import StudioImage from './StudioImage.svelte';
+  import StudioItemReference from './StudioItemReference.svelte';
 
   let { block, documentId, onOpenItem } = $props();
 
@@ -52,10 +53,12 @@
     {/each}
   </div>
 {:else if block.type === 'itemRef'}
-  <button class="item-ref" disabled={!onOpenItem} onclick={() => onOpenItem?.(block.itemId)}>
-    <small>{block.kindSnapshot || 'Noumon'}</small>
-    <b>{block.titleSnapshot || block.itemId}</b>
-  </button>
+  <StudioItemReference
+    itemId={block.itemId}
+    titleSnapshot={block.titleSnapshot}
+    kindSnapshot={block.kindSnapshot}
+    {onOpenItem}
+  />
 {:else if block.type === 'divider'}
   <hr />
 {/if}
@@ -77,10 +80,6 @@
   .callout{margin:24px 0;padding:16px 18px;border-left:4px solid var(--accent);border-radius:var(--r-md);background:var(--raise)}
   .callout>b{display:block;margin-bottom:5px}.callout>p{margin:0}
   .columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(18px,4vw,42px);margin:26px 0}
-  .item-ref{display:flex;width:100%;flex-direction:column;align-items:flex-start;gap:3px;margin:22px 0;padding:14px 16px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--raise);color:var(--ink);text-align:left}
-  .item-ref:not(:disabled){cursor:pointer}.item-ref:not(:disabled):hover{border-color:var(--accent-line);background:color-mix(in srgb,var(--accent) 8%,var(--raise))}
-  .item-ref:disabled{opacity:.75}
-  .item-ref small{font-family:var(--font-sans,system-ui,sans-serif);color:var(--muted);text-transform:uppercase;font-size:9px;letter-spacing:.1em}
   hr{border:0;border-top:1px solid var(--border);margin:32px 0}
   @media(max-width:680px){.columns{grid-template-columns:1fr}}
 </style>

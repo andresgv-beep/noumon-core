@@ -250,6 +250,39 @@ func TestItemOpenRespectsAccess(t *testing.T) {
 	}
 }
 
+// La resolución viva de un itemRef usa este endpoint. Un 403 puede indicar que
+// el snapshot enlaza contenido restringido, pero su respuesta no puede incluir
+// el título vigente ni ningún otro metadato del Item.
+func TestItemResolutionDoesNotLeakRestrictedMetadata(t *testing.T) {
+	root := t.TempDir()
+	seedCollection(t, root, "Privado", "informe.pdf", "fake pdf",
+		sidecar{Template: "pdf", Title: "Título vivo confidencial"})
+	s, md := accessTestServer(t, root)
+	items, err := md.scan("")
+	if err != nil || len(items) != 1 {
+		t.Fatalf("scan: %v (%d items)", err, len(items))
+	}
+	item := mediaToItem(items[0])
+	mux := http.NewServeMux()
+	s.registerItemRoutes(mux, md)
+
+	blocked := getAs(mux, "/api/items/"+item.ID, nil)
+	if blocked.Code != http.StatusForbidden {
+		t.Fatalf("resolución restringida: quiero 403, tengo %d", blocked.Code)
+	}
+	if strings.Contains(blocked.Body.String(), item.Title) ||
+		strings.Contains(blocked.Body.String(), item.CollectionID) {
+		t.Fatalf("la resolución restringida filtró metadatos: %s", blocked.Body.String())
+	}
+
+	setAccess(t, s, "Privado", "open", 0)
+	visible := getAs(mux, "/api/items/"+item.ID, nil)
+	if visible.Code != http.StatusOK || !strings.Contains(visible.Body.String(), item.Title) {
+		t.Fatalf("la resolución autorizada no devolvió el Item: %d %s",
+			visible.Code, visible.Body.String())
+	}
+}
+
 // Un fichero suelto en la raíz de DOWNLOAD_ROOT: su "colección" es ".", y tiene
 // que resolverse igual que la calcula media.go/toItem (si no, el gate miraría
 // una fila que no existe y se abriría o cerraría por accidente).

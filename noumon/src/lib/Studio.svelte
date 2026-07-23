@@ -38,8 +38,12 @@
   let imageInput = $state(null);
   let saveTimer;
   let savedTimer;
+  let recoveryTimer;
+  let retryTimer;
   let savePromise = null;
   let changeVersion = 0;
+  let retryAttempt = 0;
+  let studioActive = false;
   let openingSequence = 0;
   let linkSearchTimer;
   let linkAbort;
@@ -48,6 +52,7 @@
   const content = () => selected?.content || { schemaVersion: 1, presentation: {}, classification: {}, blocks: [] };
 
   onMount(() => {
+    studioActive = true;
     load();
     const beforeUnload = (event) => {
       if (!dirty) return;
@@ -60,15 +65,28 @@
         saveNow();
       }
     };
+    const online = () => {
+      if (!dirty || !offline) return;
+      retryAttempt = 0;
+      scheduleRetry(0);
+    };
     window.addEventListener('beforeunload', beforeUnload);
     window.addEventListener('keydown', keydown);
+    window.addEventListener('online', online);
     return () => {
+      studioActive = false;
       clearTimeout(saveTimer);
       clearTimeout(savedTimer);
+      clearTimeout(retryTimer);
       clearTimeout(linkSearchTimer);
       linkAbort?.abort();
+      // La copia local se encola primero; si el flush al servidor termina bien,
+      // clearStudioRecovery se ejecutará después sobre la misma cola.
+      void persistRecoveryNow();
+      void flushCurrent();
       window.removeEventListener('beforeunload', beforeUnload);
       window.removeEventListener('keydown', keydown);
+      window.removeEventListener('online', online);
     };
   });
 
@@ -168,16 +186,47 @@
   function touch() {
     if (!selected || selected.status === 'archived') return;
     dirty = true;
-    offline = false;
     saved = false;
     changeVersion++;
-    saveStudioRecovery(selected);
+    scheduleRecovery();
     scheduleSave();
+  }
+
+  function scheduleRecovery(delay = 300) {
+    clearTimeout(recoveryTimer);
+    recoveryTimer = setTimeout(() => {
+      recoveryTimer = null;
+      if (selected && dirty) void saveStudioRecovery(selected);
+    }, delay);
+  }
+
+  async function persistRecoveryNow() {
+    clearTimeout(recoveryTimer);
+    recoveryTimer = null;
+    if (selected && dirty) await saveStudioRecovery(selected);
   }
 
   function scheduleSave(delay = 1200) {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, delay);
+  }
+
+  function clearRetry() {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    retryAttempt = 0;
+  }
+
+  function scheduleRetry(delay) {
+    if (!studioActive || !dirty || !offline) return;
+    clearTimeout(retryTimer);
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const wait = delay ?? Math.min(30000, 1000 * (2 ** retryAttempt));
+    retryAttempt = Math.min(retryAttempt + 1, 5);
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      if (studioActive && dirty && offline) void saveNow();
+    }, wait);
   }
 
   function documentInput(document) {
@@ -212,6 +261,8 @@
     savePromise = (async () => {
       try {
         const updated = normalizeDocument(await updateStudioDocument(documentId, input));
+        clearRetry();
+        offline = false;
         documents = documents.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
         if (showRevisions) loadRevisions(documentId);
         if (selected?.id !== documentId) return true;
@@ -220,6 +271,8 @@
           selected = updated;
           dirty = false;
           saved = true;
+          clearTimeout(recoveryTimer);
+          recoveryTimer = null;
           await clearStudioRecovery(documentId);
           clearTimeout(savedTimer);
           savedTimer = setTimeout(() => { saved = false; }, 1800);
@@ -230,15 +283,20 @@
           selected.revision = updated.revision;
           selected.updated = updated.updated;
           dirty = true;
-          saveStudioRecovery(selected);
+          scheduleRecovery(0);
           scheduleSave(0);
         }
         return true;
       } catch (e) {
         offline = !e.status;
         if (e.status === 409) error = 'studio.conflict';
-        else if (offline) error = 'studio.offline';
+        else if (offline) {
+          error = 'studio.offline';
+          await persistRecoveryNow();
+          scheduleRetry();
+        }
         else error = e.code || e.message;
+        if (!offline) clearRetry();
         return false;
       } finally {
         saving = false;
