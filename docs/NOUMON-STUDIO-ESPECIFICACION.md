@@ -1,7 +1,7 @@
 # Noumon Studio — especificación técnica previa
 
 **Estado:** propuesta para revisión, sin implementación  
-**Fecha:** 2026-07-21  
+**Fecha:** 2026-07-21 · actualizada 2026-07-23 con decisiones de interfaz
 **Proyecto analizado:** `noumon-core`  
 **Objetivo:** incorporar a Noumon un estudio de creación, previsualización y publicación de conocimiento sin convertir el cliente en administrador del servidor.
 
@@ -169,6 +169,10 @@ El cuerpo se almacenará como JSON versionado y neutral respecto al editor:
 ```json
 {
   "schemaVersion": 1,
+  "presentation": {
+    "contentWidth": "reading",
+    "fontPreset": "editorial"
+  },
   "blocks": [
     { "id": "b1", "type": "heading", "level": 1, "text": "Sistema hidráulico" },
     { "id": "b2", "type": "paragraph", "text": "Procedimiento de inspección..." },
@@ -189,9 +193,18 @@ Bloques permitidos en el MVP:
 - `code`;
 - `callout`;
 - `divider`;
+- `columns`, limitado a dos columnas y apilado automáticamente en pantallas
+  estrechas;
 - `itemRef` para enlazar otro Item de Noumon.
 
 No se admite `html`, `script`, iframes arbitrarios, atributos de evento ni URLs `javascript:`. El servidor valida el esquema, limita profundidad/tamaños y extrae el texto indexable a partir de bloques conocidos.
+
+`presentation` permite personalizar la página con presets versionados y
+compatibles con todas las pieles: ancho de lectura, ancho amplio o márgenes
+editoriales; y tipografía editorial o sans. No acepta CSS, fuentes remotas,
+colores arbitrarios ni valores libres. De este modo dos documentos pueden tener
+composiciones claramente distintas sin perder accesibilidad, adaptación móvil
+ni coherencia con Modern/Retro y claro/oscuro.
 
 Un `itemRef` conservará además de `itemId` una instantánea mínima del título y tipo visibles en el momento de insertarlo:
 
@@ -313,7 +326,9 @@ Las plantillas oficiales definen campos, bloques iniciales, reglas de validació
 - idioma;
 - etiquetas;
 - portada opcional;
-- cuerpo por bloques.
+- cuerpo componible por bloques;
+- presets de ancho, márgenes y tipografía;
+- reordenación, duplicado y eliminación de bloques.
 
 Se publica como Item nativo Studio y se renderiza con `StudioDocument.svelte`.
 
@@ -511,6 +526,75 @@ La vista Usuarios del Panel incorporará una sección de autoría, no solo dos c
 Activar publicación activa también autoría. Desactivar autoría desactiva publicación y retira sus destinos asignados. Un administrador posee ambas capacidades, pero la protección de espacio libre también se le aplica. Cada cambio de capacidades, destinos o cuota queda registrado en la auditoría.
 
 El selector solo enumera colecciones válidas y muestra su nivel de acceso actual; no expone carpetas físicas. El servidor vuelve a validar los destinos en cada publicación aunque el cliente conserve una lista antigua.
+
+### 10.5 Decisiones de interfaz cerradas
+
+Estas decisiones completan y concretan 10.1–10.3. Su contrato visual está en el
+[mockup interactivo de Studio](mockups/noumon-studio-concept.html).
+
+**Entrada y ventana**
+
+- Studio aparece como apartado propio del sidebar, encima de
+  **BIBLIOTECAS**.
+- Se abre en una pestaña dedicada y no reemplaza el contenido que el usuario
+  estaba leyendo.
+- Su inicio muestra **Crear** —Documento, Cabinet y Moments— y
+  **Seguir creando**, con los borradores recientes y su estado.
+- El tipo se elige al crear el borrador. Dentro del editor no existe un
+  conmutador que transforme un Documento en Cabinet o Moments.
+
+**Shell de Studio**
+
+- La barra superior deja de ser navegación: desaparece el recuadro de
+  dirección y su espacio pasa a mostrar título, estado de guardado,
+  previsualización y publicación.
+- La salida hacia el inicio de Studio permanece visible para que el editor no
+  se sienta como una ruta sin retorno.
+- La parte fija contiene volver, estado, previsualizar y publicar. La parte
+  contextual muestra herramientas de bloques en Documento, ficha/archivo en
+  Cabinet y vídeo/miniatura/capítulos en Moments.
+- La shell usa superficies rellenas coherentes con Noumon. Los bordes se
+  reservan para campos, zonas de arrastre, validaciones y separaciones con
+  función.
+
+**Sidebar contextual**
+
+- En Inicio, el sidebar muestra la biblioteca de borradores y un resumen de
+  estados.
+- Durante la edición cambia al contexto del contenido activo: estructura,
+  bloques, diseño, metadatos, revisiones, destino y cuota. No mezcla
+  simultáneamente toda la lista de borradores con el inspector del documento.
+
+**Documento personalizable**
+
+- Documento es un lienzo componible, no una plantilla visual cerrada.
+- El autor puede insertar, reordenar, duplicar y eliminar los bloques definidos
+  en 6.1, incluidos títulos, texto enriquecido, imágenes, tablas, citas,
+  avisos, código, listas, separadores y dos columnas.
+- Puede escoger presets de ancho, márgenes y tipografía. Son valores
+  versionados y seguros; no se admite CSS ni HTML arbitrario.
+- La composición se adapta automáticamente a pantallas estrechas y a las
+  cuatro combinaciones Modern/Retro y claro/oscuro.
+
+**Cabinet y Moments**
+
+- Cabinet usa un formulario propio para archivo, ficha, portada, descripción,
+  licencia y demás metadatos, acompañado por la tarjeta/ficha final real.
+- Moments sigue el mismo patrón para vídeo, miniatura, canal, capítulos y
+  subtítulos. Studio prepara archivo y presentación; no edita el vídeo.
+- Ambos reutilizan los componentes publicados para que la previsualización sea
+  contractual y no una imitación.
+
+**Estado editorial**
+
+- Guardar nunca publica: el contenido continúa como borrador privado hasta una
+  acción explícita.
+- La interfaz distingue `Guardando…`, `Guardado`, `Sin conexión`, error,
+  borrador, publicado y publicado con cambios pendientes.
+- Publicar se desactiva cuando faltan campos obligatorios y explica qué debe
+  completar el autor.
+- La futura superficie Articles será otro destino del mismo Documento de
+  bloques, no un cuarto editor.
 
 ## 11. Almacenamiento y publicación
 
@@ -821,13 +905,22 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
 - Studio crea Items vivos; ZIM queda como exportación opcional de colecciones.
 - Las cuotas iniciales son conservadoras y configurables.
 - La baja de un autor exige transferir, custodiar o retirar su contenido.
+- Studio tiene inicio propio, pestaña dedicada y shell sin dirección durante la
+  edición.
+- Inicio y edición usan sidebars contextuales distintos.
+- Documento es un lienzo de bloques personalizable mediante presets seguros.
+- Cabinet y Moments usan formularios especializados con preview real, no el
+  editor de bloques.
+- Articles será un destino futuro del Documento, no otro editor.
 
 ### Pendientes antes de programar el editor visual
 
 1. Elegir el motor/editor visual tras una prueba pequeña de accesibilidad, tamaño y Svelte 5.
 2. Definir si cualquier autor puede publicar en una colección asignada o si hace falta aprobación.
 3. Definir la política de revisiones y papelera.
-4. Diseñar el mockup definitivo de Studio en claro/oscuro y Modern/Retro.
+4. Validar como contrato visual el
+   [mockup interactivo de Studio](mockups/noumon-studio-concept.html), que ya
+   cubre claro/oscuro y Modern/Retro para Inicio, Documento, Cabinet y Moments.
 
 ## 21. Recomendación de arranque
 
