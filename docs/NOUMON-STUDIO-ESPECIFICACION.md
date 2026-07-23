@@ -44,6 +44,8 @@ Sin embargo, Studio necesita un dominio nuevo de autoría. No debe construirse r
 8. **Degradación limpia.** Si Studio no está disponible en un servidor antiguo, el cliente continúa funcionando como lector.
 9. **Recursos modestos.** Nada de procesos residentes adicionales ni indexadores pesados para el MVP.
 10. **Taller y biblioteca son superficies distintas.** Studio sirve para crear; Documentos sirve para consultar el conocimiento publicado, al mismo nivel que Cabinet y Moments.
+11. **Bilingüe desde el origen.** Cada flujo de interfaz se entrega
+    simultáneamente en español e inglés.
 
 ## 3. Alcance del MVP
 
@@ -55,6 +57,7 @@ Sin embargo, Studio necesita un dominio nuevo de autoría. No debe construirse r
 - metadatos comunes: título, resumen, autor visible, idioma, etiquetas y portada;
 - guardado automático en el servidor;
 - revisiones y detección de conflictos;
+- interfaz completa en español e inglés desde la primera entrega;
 - previsualización de documento, Cabinet y Moments;
 - nueva superficie publicada de lectura `Documentos`, al mismo nivel que
   Cabinet y Moments;
@@ -78,6 +81,8 @@ Sin embargo, Studio necesita un dominio nuevo de autoría. No debe construirse r
 - edición de vídeo o audio;
 - IA generativa, resumen, transcripción o etiquetado automático;
 - publicación en Internet.
+- catálogo comunitario, federación o distribución P2P;
+- exportación/importación de paquetes comunitarios firmados.
 
 ## 4. Estado actual relevante
 
@@ -212,6 +217,11 @@ El cuerpo se almacenará como JSON versionado y neutral respecto al editor:
 ```json
 {
   "schemaVersion": 1,
+  "classification": {
+    "workType": "manual",
+    "topics": ["history"],
+    "audience": ["general"]
+  },
   "presentation": {
     "contentWidth": "reading",
     "fontPreset": "editorial"
@@ -278,6 +288,7 @@ studio_documents (
   language TEXT NOT NULL DEFAULT '',
   author_label TEXT NOT NULL DEFAULT '',
   tags_json TEXT NOT NULL DEFAULT '[]',
+  classification_json TEXT NOT NULL DEFAULT '{}',
   metadata_json TEXT NOT NULL DEFAULT '{}',
   content_json TEXT NOT NULL,
   plain_text TEXT NOT NULL DEFAULT '',
@@ -330,16 +341,39 @@ studio_links (
   target_item_id TEXT NOT NULL,
   PRIMARY KEY (source_document_id, target_item_id)
 )
+
+studio_facets (
+  document_id TEXT NOT NULL,
+  facet TEXT NOT NULL,                 -- workType | topic | audience | series
+  value TEXT NOT NULL,
+  PRIMARY KEY (document_id, facet, value)
+)
+
+content_origins (
+  document_id TEXT PRIMARY KEY,
+  origin_content_id TEXT NOT NULL,
+  origin_creator_key TEXT NOT NULL,
+  origin_version TEXT NOT NULL,
+  origin_url TEXT NOT NULL DEFAULT '',
+  forked_from TEXT NOT NULL DEFAULT '',
+  imported INTEGER NOT NULL,
+  UNIQUE (origin_creator_key, origin_content_id)
+)
 ```
 
 Se usará el ID numérico del usuario como propietario. El nombre de usuario es visible, pero no debe ser clave de propiedad porque podría cambiar en el futuro. `author_label` y `editor_label` son instantáneas históricas: una transferencia de propiedad o eliminación de cuenta no reescribe la autoría mostrada.
+
+El `id` de cada documento será globalmente único y estable —UUIDv7, ULID o
+equivalente generado por el servidor—, nunca un autoincremental local ni una
+ruta de disco. La publicación, el nombre de colección y el fichero sidecar son
+proyecciones mutables; no definen la identidad del contenido.
 
 ### 6.3 Índice
 
 Se añadirá una tabla FTS5 separada para Studio, actualizada explícitamente dentro de la misma operación lógica de guardado/publicación:
 
 ```text
-title, summary, plain_text, tags, author_label
+title, summary, plain_text, tags, workType, topics, author_label
 ```
 
 El índice distinguirá:
@@ -356,6 +390,10 @@ permite construir enlaces entrantes, páginas relacionadas y navegación tipo
 wiki sin recorrer todos los JSON en cada petición. Las consultas aplicarán los
 permisos antes de devolver títulos, relaciones o recuentos.
 
+Las facetas normalizadas se proyectan a `studio_facets` para filtrar por tipo de
+obra, tema, audiencia o serie sin escanear JSON. Los permisos se aplican antes
+de calcular resultados y contadores.
+
 ### 6.4 Eliminación de la cuenta propietaria
 
 Una cuenta con documentos Studio no se elimina dejando claves colgantes ni transfiriendo contenido silenciosamente. El Panel obliga a resolver su contenido mediante una de estas acciones:
@@ -367,6 +405,62 @@ Una cuenta con documentos Studio no se elimina dejando claves colgantes ni trans
 El borrado definitivo del contenido es una operación posterior y separada. La eliminación de cuenta, transferencia, retirada y archivado se ejecutan en una transacción: si alguna parte falla, la cuenta permanece. El servidor no permitirá borrar una cuenta con contenido sin enviar una estrategia explícita.
 
 Las publicaciones conservadas no cambian de autor visible. Un administrador puede gestionarlas mientras estén bajo custodia, pero debe reasignarlas antes de continuar su edición ordinaria.
+
+### 6.5 Clasificación portable y preparada para Community
+
+La superficie, el formato técnico y la clasificación editorial son ejes
+independientes:
+
+```text
+surface     dónde se consulta     documents | cabinet | moments
+profile     cómo se representa    document | cabinet.video | cabinet.pdf | ...
+workType    qué clase de obra es  manual | documentary | lesson | essay | story | ...
+topics      de qué trata           history | science | art | mechanics | ...
+audience    para quién             children | teen | general | professional | ...
+```
+
+Así, «documental», «manual» e «historia» no compiten dentro de una sola lista:
+
+```text
+Documental sobre historia → surface=cabinet, profile=cabinet.video,
+                            workType=documentary, topics=[history]
+
+Manual de historia        → surface=documents, profile=document,
+                            workType=manual, topics=[history]
+```
+
+Los valores de sistema son slugs estables e independientes del idioma. La UI
+traduce `history` como `Historia` o `History`; nunca se guarda la etiqueta
+traducida como identidad. `tags_json` permanece para etiquetas libres aportadas
+por el autor, mientras `classification_json` guarda las facetas normalizadas.
+Un valor comunitario desconocido se conserva aunque la versión local todavía
+no sepa mostrar una etiqueta especializada.
+
+La clasificación mínima portable incluye:
+
+- `workType`;
+- `topics[]`;
+- `audience[]`;
+- `seriesId`, `seriesTitle` y `position`, cuando pertenece a una serie;
+- idioma, licencia, autor visible y procedencia, ya presentes en la ficha.
+
+No se guardan rutas físicas dentro del contenido canónico. Los assets se
+referencian por `assetId` y se exportan por SHA-256. Los enlaces internos de un
+paquete usan IDs portables; los enlaces a Items locales no incluidos conservan
+su instantánea y degradan como contenido externo no disponible.
+
+Aunque Community quede fuera del MVP, el servidor separará desde el principio:
+
+```text
+modelo canónico
+  → proyección local a Documentos/Cabinet/Moments
+  → serializador portable versionado
+```
+
+El serializador no se conectará todavía a una red, pero tendrá pruebas de ida y
+vuelta sobre fixtures pequeños: exportar, importar en una base vacía y obtener
+el mismo contenido, clasificación y hashes. Esto evita que Community dependa
+en el futuro de detalles internos de SQLite o de rutas del pool.
 
 ## 7. Plantillas
 
@@ -751,15 +845,87 @@ Estas decisiones completan y concretan 10.1–10.3. Su contrato visual está en 
 - No se creará una superficie futura `Articles`: artículos técnicos, relatos y
   demás plantillas de bloques son tipos de página dentro de Documentos.
 
+### 10.6 Internacionalización desde el primer componente
+
+Studio y Documentos nacen bilingües en español e inglés. La traducción de
+interfaz no se aplaza a una fase de acabado: forma parte de la definición de
+terminado de cada componente, endpoint y flujo.
+
+El cliente reutilizará el sistema existente `t`/`tn` de
+`i18n.svelte.js`, sin introducir una segunda librería. Las claves se agruparán
+por dominio:
+
+```text
+studio.*
+documents.*
+studio.document.*
+studio.cabinet.*
+studio.moments.*
+studio.validation.*
+studio.publish.*
+```
+
+Reglas obligatorias:
+
+- toda clave nueva se añade a `messages.es` y `messages.en` en el mismo cambio;
+- botones, menús, placeholders, ayudas, errores, diálogos, tooltips,
+  `aria-label` y estados vacíos se traducen;
+- no se consideran aceptables cadenas visibles hardcodeadas en componentes;
+- cambiar de idioma actualiza la interfaz en vivo sin perder el borrador, foco,
+  selección ni cambios pendientes;
+- fechas, números, tamaños y tiempos relativos usan el locale activo;
+- el idioma del contenido es un metadato del documento y no cambia al cambiar
+  el idioma de la interfaz;
+- nombres y descripciones de plantillas llegan como claves traducibles, no como
+  etiquetas españolas fijadas por el servidor;
+- textos de ejemplo no se guardan silenciosamente como contenido real.
+
+Las APIs Studio devolverán códigos de error estables y datos estructurados:
+
+```json
+{
+  "errorCode": "studio.revision_conflict",
+  "details": { "currentRevision": 13 }
+}
+```
+
+El cliente traduce `errorCode`; no debe depender de comparar un mensaje humano
+del servidor. El servidor puede incluir un texto diagnóstico para registros o
+clientes antiguos, pero ese texto no es el contrato de interfaz.
+
+Se añadirá una comprobación automática que falle si los diccionarios español e
+inglés no tienen exactamente el mismo conjunto de claves Studio/Documentos.
+El fallback actual a español seguirá siendo una protección de ejecución, no un
+mecanismo para aceptar traducciones incompletas.
+
 ## 11. Almacenamiento y publicación
 
 ### 11.1 Borradores
 
-Los JSON y metadatos viven en `library.db`. Los binarios se guardan bajo:
+Una creación no se vuelca completa «tal cual» a una carpeta en cada guardado.
+Los JSON, metadatos, estado y revisiones viven transaccionalmente en
+`library.db`. Los binarios grandes se transmiten una sola vez a disco y se
+guardan bajo:
 
 ```text
 POOL_ROOT/studio/<document-id>/assets/
 ```
+
+Cada asset tiene ID interno, SHA-256, MIME, tamaño y estado en
+`studio_assets`. El nombre original es metadato, no una ruta confiable. El
+autoguardado modifica JSON y revisiones; no reescribe vídeos, audios o imágenes
+que no hayan cambiado.
+
+Al publicar:
+
+- Documentos continúa leyendo el JSON canónico y los assets autorizados de
+  Studio; no genera una copia plana por página;
+- Cabinet y Moments crean su proyección compatible —fichero y sidecar— mediante
+  staging y promoción atómica;
+- cuando el sistema de archivos lo permita, una proyección binaria podrá usar
+  enlace físico dentro del mismo volumen; si no, se copiará por streaming;
+- el servidor controla referencias y cuota para no borrar un binario todavía
+  utilizado por un borrador, publicación o futura exportación.
 
 Studio debe aparecer como sección propia en el inventario del pool y en las copias de seguridad.
 
@@ -825,6 +991,147 @@ fichero y sidecar. Para el lector, las tres superficies aparecen en la búsqueda
 federada aunque internamente no sean ZIM.
 
 En una fase futura y mediante especificación independiente, un administrador podrá **exportar una colección publicada completa a ZIM**. Esa exportación será una instantánea versionada para USB, traslado entre servidores, conservación o distribución offline; no sustituirá los originales editables de Studio.
+
+### 11.5 Community Creator y catálogo comunitario futuro
+
+Community Creator será una superficie de distribución dentro de Noumon,
+separada tanto del taller Studio como de Documentos, Cabinet y Moments. Permitirá
+descubrir creaciones compartidas, consultar una vista previa, descargarlas e
+integrarlas en la biblioteca local.
+
+El catálogo comunitario se organiza en secciones que reflejan el destino real:
+
+```text
+Community · Documentos  → al añadir, aparece en Documentos
+Community · Cabinet     → al añadir, aparece en Cabinet
+Community · Moments     → al añadir, aparece en Moments
+```
+
+Community es el escaparate y el transporte, no una cuarta biblioteca donde el
+contenido quede aislado. El manifiesto declara `kind` y un perfil compatible
+(`document`, `cabinet.pdf`, `cabinet.audio`, `moments.video`, etc.); Noumon no
+permite elegir un destino incompatible durante la importación.
+
+Dentro de cada sección, el catálogo usa las mismas facetas portables de 6.5:
+
+```text
+Community
+├─ Documentos
+│  ├─ Manuales
+│  ├─ Lecciones
+│  └─ Relatos
+├─ Cabinet
+│  ├─ Documentales
+│  ├─ Audiolibros
+│  └─ Archivos y fuentes
+└─ Moments
+   ├─ Tutoriales
+   ├─ Cursos
+   └─ Entretenimiento
+
+Tema transversal: Historia
+  → manuales de Documentos
+  → documentales de Cabinet
+  → vídeos de Moments
+```
+
+Las secciones nacen de `surface`; los grupos como Manuales o Documentales, de
+`workType`; y materias como Historia, de `topics`. El catálogo puede combinar
+facetas sin duplicar un contenido ni fijarlo a una única categoría visible.
+
+En la primera versión cada paquete pertenece a una sola superficie. Una
+colección puede contener varios Items del mismo tipo —por ejemplo, un
+audiolibro multipista o una serie de documentos—, pero los paquetes mixtos que
+instalen simultáneamente contenido en varias superficies quedan para una
+versión posterior.
+
+El flujo editorial tendrá estados explícitos:
+
+```text
+borrador privado
+  → publicación local en Documentos/Cabinet/Moments
+  → versión comunitaria inmutable
+  → catálogo
+  → descarga verificada
+  → importación local
+```
+
+Compartir no expondrá la carpeta viva del autor ni su historial de Studio. Se
+generará bajo demanda un paquete inmutable —nombre provisional
+`.noumon-pack`— con manifiesto versionado:
+
+```json
+{
+  "formatVersion": 1,
+  "contentId": "noumon:community:...",
+  "version": "1.0.0",
+  "kind": "documents",
+  "profile": "document",
+  "classification": {
+    "workType": "manual",
+    "topics": ["gardening", "education"],
+    "audience": ["children"],
+    "seriesId": ""
+  },
+  "title": "Guía de huerto escolar",
+  "language": "es",
+  "license": "CC BY-SA 4.0",
+  "creator": {
+    "name": "Aula Verde",
+    "publicKey": "..."
+  },
+  "minimumNoumonVersion": "...",
+  "entrypoint": "manifest/content.json",
+  "files": [
+    {
+      "path": "assets/cover.webp",
+      "mime": "image/webp",
+      "size": 12345,
+      "sha256": "..."
+    }
+  ],
+  "signature": "..."
+}
+```
+
+El formato del paquete será independiente del transporte. La primera versión
+podrá funcionar mediante exportar/importar archivo, USB, catálogo HTTPS o
+servidores Noumon de la red local. Más adelante, los mismos blobs identificados
+por SHA-256 podrán distribuirse por P2P sin modificar el contenido ni el
+instalador. No se elegirá BitTorrent, IPFS u otro protocolo antes de definir y
+probar el paquete, la confianza y la importación.
+
+La superficie comunitaria ofrecerá tres acciones diferentes:
+
+1. **Vista previa** — manifiesto, portada, ficha y extracto saneado.
+2. **Leer temporalmente** — descarga verificada a una caché de solo lectura,
+   sin incorporarla todavía a las colecciones locales.
+3. **Añadir a Noumon** — promoción transaccional de los assets ya verificados,
+   creación de la colección/Items y posterior indexación.
+
+La importación seguirá siempre:
+
+```text
+descargar
+  → comprobar tamaño y cuota
+  → validar hashes y firma
+  → validar rutas, MIME y esquema
+  → mostrar autor, licencia, procedencia y permisos solicitados
+  → aprobación del usuario
+  → instalación atómica
+  → indexación
+```
+
+Ningún paquete puede incluir HTML/script ejecutable, escapar de su directorio,
+decidir por sí mismo el nivel de acceso o sobrescribir una creación local. Una
+actualización conserva `contentId` y aumenta versión; si el usuario modifica
+una creación importada, Noumon crea una bifurcación local y no la pisa con una
+actualización remota.
+
+El catálogo solo distribuye versiones publicadas expresamente. Retirar una
+versión del catálogo no borra copias ya descargadas; licencias, moderación,
+identidad del creador, denuncias y revocación de claves requieren una
+especificación independiente antes de habilitar distribución pública.
 
 ## 12. Visibilidad e indexación
 
@@ -927,6 +1234,13 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
 
 - añadir capacidades de usuario;
 - diseñar en el Panel capacidades, destinos publicables, cuota y resolución de cuenta con contenido;
+- usar IDs globales estables, assets por hash y referencias sin rutas físicas;
+- definir clasificación `surface/profile/workType/topics/audience/series` y su
+  proyección a facetas;
+- congelar un snapshot portable mínimo y fixtures de ida y vuelta, todavía sin
+  catálogo ni red;
+- definir los namespaces i18n, códigos de error y prueba de paridad
+  español/inglés antes de crear componentes;
 - marcar las pestañas Cabinet/Moments y las rutas administrativas de subida
   actuales como legado temporal, sin retirarlas todavía;
 - añadir tablas Studio y pruebas de migración;
@@ -1001,6 +1315,21 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
 - permisos por grupos o flujo de aprobación, si el uso real lo exige;
 - libros por capítulos y exportación, mediante una especificación separada.
 
+### Fase posterior — Community Creator
+
+Fuera del MVP de Studio y mediante especificación propia:
+
+- congelar el esquema versionado de `.noumon-pack`;
+- construir secciones por superficie y filtros combinables por tipo de obra,
+  tema, audiencia, idioma, licencia, autor y serie;
+- exportar e importar primero mediante archivo/USB;
+- añadir identidad del creador, firma, licencia y procedencia;
+- montar una creación descargada en modo temporal de solo lectura;
+- promoverla transaccionalmente a Documentos, Cabinet o Moments;
+- añadir catálogo en red local o HTTPS;
+- evaluar distribución P2P de blobs por hash solo después de asegurar
+  verificación, cuotas, moderación, revocación y actualizaciones.
+
 ## 17. Pruebas mínimas
 
 ### Servidor
@@ -1012,6 +1341,10 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
 - administrador puede recuperar contenido sin saltarse auditoría;
 - conflicto de revisión devuelve 409;
 - documento inválido se rechaza;
+- los IDs de contenido permanecen estables al publicar, retirar y republicar;
+- clasificación portable distingue superficie, perfil, tipo de obra y tema;
+- valores de clasificación desconocidos sobreviven a lectura y reescritura;
+- un fixture exportado e importado conserva contenido, facetas y hashes;
 - un perfil Cabinet no acepta campos o assets incompatibles con su formato;
 - audio Cabinet conserva orden, título y archivo de cada pista;
 - vídeo Cabinet valida un vídeo principal, subtítulos y capítulos sin
@@ -1048,7 +1381,12 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
   almacenamiento ni administración de colecciones;
 - temas Modern/Retro y claro/oscuro;
 - navegación por teclado y lector de pantalla;
-- interfaz en español e inglés.
+- cada clave Studio/Documentos existe en español e inglés;
+- ningún control, placeholder, ayuda, error o `aria-label` nuevo queda
+  hardcodeado;
+- cambiar el idioma con un borrador abierto no pierde estado ni selección;
+- los errores del servidor se localizan mediante `errorCode`, no comparando
+  mensajes humanos.
 
 ### Flujo nativo
 
@@ -1073,6 +1411,10 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
 10. El consumo de recursos sigue siendo razonable en hardware ARM/x86 modesto.
 11. Eliminar una cuenta nunca deja propietarios colgantes ni borra publicaciones silenciosamente.
 12. Un enlace a contenido retirado no impide leer el resto del documento.
+13. Todos los flujos del MVP funcionan completos en español e inglés y cambiar
+    de idioma durante la edición no altera el contenido.
+14. Identidad, clasificación y referencias son portables: publicar localmente
+    no introduce rutas ni IDs que impidan una exportación comunitaria futura.
 
 ## 19. Archivos que probablemente cambiarán
 
@@ -1097,6 +1439,10 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
 - nuevo `library-server/core/studio_store.go` — persistencia;
 - nuevo `library-server/core/studio_assets.go` — staging/streaming;
 - nuevo `library-server/core/studio_search.go` — FTS;
+- nuevo `library-server/core/studio_classification.go` — normalización y
+  facetas portables;
+- nuevo `library-server/core/studio_portable.go` — snapshot versionado y pruebas
+  de ida y vuelta, sin transporte de red en el MVP;
 - `library-server/core/items.go` — proveedor `documents`, proyección a Item y
   búsqueda federada;
 - `library-server/core/main.go` — rutas y sección del pool;
@@ -1126,6 +1472,10 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
   temporal y se retira solo después de alcanzar paridad en Studio.
 - Borrador privado por defecto.
 - Formato canónico de bloques JSON, no HTML.
+- Identidad global, clasificación facetada, procedencia y assets por hash
+  forman parte del contrato inicial aunque Community se implemente después.
+- Español e inglés se implementan simultáneamente desde la primera fase; no
+  existe una fase posterior de traducción de Studio.
 - Preview y vista final comparten componentes.
 - Publicación Cabinet/Moments reutiliza el contrato sidecar.
 - Los documentos largos usan FTS5.
@@ -1142,6 +1492,12 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
   editor de bloques.
 - No habrá una superficie separada `Articles`: sus plantillas viven dentro de
   Documentos.
+- Community Creator distribuye versiones inmutables y expresamente publicadas,
+  nunca borradores, carpetas vivas ni historiales de Studio.
+- El paquete comunitario se define antes que el transporte; archivo, USB, HTTP,
+  LAN y un futuro P2P reutilizan el mismo contenido verificable.
+- Community navega por superficie, tipo de obra y temas independientes; una
+  materia como Historia puede atravesar Documentos, Cabinet y Moments.
 
 ### Pendientes antes de programar el editor visual
 
@@ -1155,6 +1511,8 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
    validarse como una pantalla adicional antes de implementar la fase 2; y el
    editor Cabinet deberá añadir el selector y los estados visuales de sus cinco
    perfiles antes de implementar la fase 3.
+5. Especificar por separado identidad, firma, moderación, revocación y
+   transporte de Community Creator antes de habilitar un catálogo público.
 
 ## 21. Recomendación de arranque
 
