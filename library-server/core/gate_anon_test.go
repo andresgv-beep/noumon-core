@@ -39,7 +39,7 @@ func TestAnonymousBlockedAcrossRails(t *testing.T) {
 	s := testAuthServer(t, "")
 
 	// Carril ZIM: /content/{zim}/…
-	if s.canSeeZim(nil, "wikipedia_es") {
+	if s.canSeeZim(nil, "enciclopedia_es") {
 		t.Fatal("ZIM sin configurar debería estar bloqueado para el anónimo")
 	}
 	// Carril media: /media/Biblioteca/Libros/x.pdf
@@ -53,9 +53,9 @@ func TestAnonymousBlockedAcrossRails(t *testing.T) {
 
 	// Ahora el admin ABRE solo el ZIM (open). El resto sigue cerrado.
 	s.store.db.Exec(`INSERT INTO collection_access (collection_id, access, min_age, updated) VALUES (?,?,?,?)`,
-		collectionIDForZIM("wikipedia_es"), "open", 0, now())
+		collectionIDForZIM("enciclopedia_es"), "open", 0, now())
 	s.invalidateAccessCache() // escritura por SQL directo; el PUT real invalida igual
-	if !s.canSeeZim(nil, "wikipedia_es") {
+	if !s.canSeeZim(nil, "enciclopedia_es") {
 		t.Fatal("tras abrir el ZIM como 'open', el anónimo debería verlo")
 	}
 	if s.canSeeMediaPath(nil, "Videos/CanalX/abc123.mp4") {

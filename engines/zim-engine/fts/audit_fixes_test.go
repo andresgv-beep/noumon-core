@@ -158,13 +158,13 @@ func TestManifestCarriesTally(t *testing.T) {
 // extractText devuelve solo el cuerpo; el <title> del HTML se ignora a propósito
 // (una sola fuente de verdad: e.Title(), la misma que usa el suggest).
 func TestExtractIgnoresHTMLTitle(t *testing.T) {
-	h := `<html><head><title>Saturno - Wikipedia</title></head>` +
+	h := `<html><head><title>Saturno - Enciclopedia</title></head>` +
 		`<body><p>El planeta de los anillos.</p></body></html>`
 	body := extractText(strings.NewReader(h))
 	if body != "El planeta de los anillos." {
 		t.Fatalf("body inesperado: %q", body)
 	}
-	if strings.Contains(body, "Wikipedia") {
+	if strings.Contains(body, "Enciclopedia") {
 		t.Fatal("BUG-3 reabierto: el <title> se coló en el cuerpo")
 	}
 }

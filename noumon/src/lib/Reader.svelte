@@ -218,14 +218,14 @@
   {:else if tab.kind === 'view' && tab.view === 'moments'}
     <Moments {onOpenItem} />
   {:else if tab.kind === 'view' && tab.view === 'studio'}
-    <Studio />
+    <Studio {onOpenItem} />
   {:else if tab.kind === 'view' && tab.view === 'documents'}
     <Documents {onOpenItem} />
   {:else if tab.kind === 'item'}
     {#if tab.open?.provider === 'moments'}
       <MomentsWatch {tab} {onOpenItem} {onOpenView} />
     {:else if tab.open?.provider === 'studio'}
-      <DocumentPage {tab} />
+      <DocumentPage {tab} {onOpenItem} />
     {:else}
       <ItemPage {tab} {onOpenItem} />
     {/if}

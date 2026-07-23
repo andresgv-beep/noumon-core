@@ -223,7 +223,7 @@ func (s *Server) canSeeZim(u *User, zimID string) bool {
 // Antes el gate solo cubría el carril ZIM: /content/* y la lista de colecciones.
 // El contenido descargado (/api/media, /media/*, /api/items/*) se servía a
 // cualquiera, incluso sin cuenta — o sea que la edad mínima protegía la
-// Wikipedia y dejaba abierta la carpeta de vídeos.
+// colección ZIM y dejaba abierta la carpeta de vídeos.
 
 func (s *Server) canSeeCollectionID(u *User, collectionID string) bool {
 	return canSee(u, s.collectionAccess(collectionID))

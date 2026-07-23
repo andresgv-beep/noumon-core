@@ -235,6 +235,33 @@ func (s *Server) handleStudioDocumentSub(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, map[string]any{"revisions": revisions})
 		return
 	}
+	if strings.HasPrefix(sub, "restore/") {
+		if r.Method != http.MethodPost {
+			writeStudioError(w, http.StatusMethodNotAllowed, "studio.method_not_allowed", nil)
+			return
+		}
+		revisionText := strings.TrimPrefix(sub, "restore/")
+		targetRevision, err := strconv.Atoi(revisionText)
+		if err != nil || targetRevision < 1 || strings.Contains(revisionText, "/") {
+			writeStudioError(w, http.StatusBadRequest, "studio.revision_invalid", nil)
+			return
+		}
+		var body struct {
+			BaseRevision int `json:"baseRevision"`
+		}
+		if err := decodeStudioJSON(w, r, &body); err != nil {
+			writeStudioError(w, http.StatusBadRequest, "studio.body_invalid", nil)
+			return
+		}
+		document, currentRevision, err := s.store.restoreStudioRevision(
+			id, targetRevision, body.BaseRevision, user)
+		if err != nil {
+			writeStudioStoreError(w, err, currentRevision)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"document": document})
+		return
+	}
 	if sub == "upload-token" {
 		s.handleStudioUploadToken(w, r, id, user)
 		return
@@ -414,6 +441,8 @@ func writeStudioStoreError(w http.ResponseWriter, err error, currentRevision int
 			details = map[string]any{"currentRevision": currentRevision}
 		}
 		writeStudioError(w, http.StatusConflict, "studio.revision_conflict", details)
+	case errors.Is(err, errStudioRevisionNotFound):
+		writeStudioError(w, http.StatusNotFound, "studio.revision_not_found", nil)
 	case errors.Is(err, errStudioAssetInvalid):
 		writeStudioError(w, http.StatusUnprocessableEntity, "studio.asset_invalid", nil)
 	default:

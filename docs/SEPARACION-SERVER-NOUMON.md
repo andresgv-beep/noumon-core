@@ -207,7 +207,7 @@ Ejemplo conceptual:
 
 ```text
 apiUrl("/api/collections")
-contentUrl("/content/wikipedia_es/A/Saturno")
+contentUrl("/content/enciclopedia_es/A/Saturno")
 mediaUrl("/media/videos/documental.mp4")
 ```
 

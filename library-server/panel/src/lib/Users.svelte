@@ -57,6 +57,8 @@
   let flash = $state('')
   let studioCaps = $state({})
   let studioBusy = $state({})
+  let deletePlan = $state(null)
+  let deleteBusy = $state(false)
 
   // formulario de alta
   let show = $state(false)
@@ -98,8 +100,52 @@
   async function del(u) {
     if (!confirm(t('users.confirmDelete', { name: u.username }))) return
     const r = await deleteUser(u.id)
-    if (!r.ok) { flash = (await r.json().catch(() => ({}))).error || t('users.failed'); return }
+    const body = await r.json().catch(() => ({}))
+    if (r.status === 409 && body.errorCode === 'users.studio_strategy_required') {
+      const targets = eligibleTransferTargets(u)
+      deletePlan = {
+        user: u,
+        details: body.details || {},
+        strategy: 'custody',
+        transferTo: targets[0]?.id || '',
+      }
+      return
+    }
+    if (!r.ok) { flash = body.error || t(body.errorCode || 'users.failed'); return }
     await load()
+  }
+
+  function eligibleTransferTargets(source) {
+    return users.filter((candidate) =>
+      candidate.id !== source.id &&
+      (candidate.isAdmin || !!studioCaps[candidate.id]?.canAuthor)
+    )
+  }
+
+  async function confirmStudioDelete() {
+    if (!deletePlan || deleteBusy) return
+    if (deletePlan.strategy === 'transfer' && !deletePlan.transferTo) {
+      flash = t('users.studioTransferTargetRequired')
+      return
+    }
+    if (deletePlan.strategy === 'withdraw' &&
+      !confirm(t('users.studioWithdrawConfirm', { name: deletePlan.user.username }))) return
+    deleteBusy = true
+    flash = ''
+    try {
+      const response = await deleteUser(deletePlan.user.id, {
+        studioStrategy: deletePlan.strategy,
+        transferTo: deletePlan.strategy === 'transfer' ? deletePlan.transferTo : '',
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(t(body.errorCode || 'users.failed'))
+      deletePlan = null
+      await load()
+    } catch (e) {
+      flash = e.message
+    } finally {
+      deleteBusy = false
+    }
   }
 
   const initials = (n) => (n || '?').slice(0, 2).toUpperCase()
@@ -194,6 +240,46 @@
       </div>
     </div>
 
+    {#if deletePlan?.user.id === u.id}
+      <div class="setcard ownership-card" style="margin:-4px 0 8px">
+        <h4>{t('users.studioDeleteTitle', { name: u.username })}</h4>
+        <p class="tmphint">
+          {t('users.studioDeleteImpact', {
+            documents: deletePlan.details.documents || 0,
+            published: deletePlan.details.published || 0,
+            assets: deletePlan.details.assets || 0,
+          })}
+        </p>
+        <label class="ownership-option">
+          <input type="radio" bind:group={deletePlan.strategy} value="custody" />
+          <span><b>{t('users.studioCustody')}</b><small>{t('users.studioCustodyDesc')}</small></span>
+        </label>
+        <label class="ownership-option">
+          <input type="radio" bind:group={deletePlan.strategy} value="transfer" />
+          <span><b>{t('users.studioTransfer')}</b><small>{t('users.studioTransferDesc')}</small></span>
+        </label>
+        {#if deletePlan.strategy === 'transfer'}
+          <select class="uinput transfer-target" bind:value={deletePlan.transferTo}>
+            <option value="">{t('users.studioChooseTarget')}</option>
+            {#each eligibleTransferTargets(u) as candidate}
+              <option value={candidate.id}>{candidate.username}</option>
+            {/each}
+          </select>
+        {/if}
+        <label class="ownership-option danger-option">
+          <input type="radio" bind:group={deletePlan.strategy} value="withdraw" />
+          <span><b>{t('users.studioWithdraw')}</b><small>{t('users.studioWithdrawDesc')}</small></span>
+        </label>
+        <div class="setrow ownership-actions">
+          <span class="grow"></span>
+          <button class="btn" onclick={() => (deletePlan = null)} disabled={deleteBusy}>{t('common.cancel')}</button>
+          <button class="btn btn-primary" onclick={confirmStudioDelete} disabled={deleteBusy}>
+            {deleteBusy ? '…' : t('users.studioResolveDelete')}
+          </button>
+        </div>
+      </div>
+    {/if}
+
     {#if resetId === u.id}
       <div class="setcard" style="margin:-4px 0 8px">
         {#if rdone}
@@ -239,4 +325,13 @@
   .studio-perms{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:11px;color:var(--ink-faint)}
   .studio-perms>span{font-weight:650;color:var(--ink-dim)}
   .studio-perms label{display:flex;align-items:center;gap:5px;cursor:pointer}
+  .ownership-card{border-color:var(--warn-border)}
+  .ownership-option{display:flex;align-items:flex-start;gap:9px;padding:9px;border:1px solid var(--line);border-radius:7px;margin-top:7px;cursor:pointer}
+  .ownership-option:has(input:checked){border-color:var(--signal-border);background:var(--signal-dim)}
+  .ownership-option input{margin-top:3px}
+  .ownership-option span{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink)}
+  .ownership-option small{font-size:11px;color:var(--ink-faint);line-height:1.4}
+  .danger-option:has(input:checked){border-color:var(--crit);background:var(--crit-dim)}
+  .transfer-target{width:100%;margin-top:7px}
+  .ownership-actions{padding-top:10px}
 </style>

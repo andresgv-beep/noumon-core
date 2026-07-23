@@ -26,13 +26,13 @@ type Limits struct {
 	// SuggestWordIndex: construir también el índice de PALABRAS del suggest, que
 	// permite casar el prefijo a mitad de título (paridad con kiwix, §6) a costa de
 	// ~duplicar la RAM del índice (medido: 245 MB con vs ~120 MB sin, en la
-	// Wikipedia ES de 4.17M artículos). ZIM_SUGGEST_WORDS=0 lo desactiva en la Pi
+	// un ZIM enciclopédico de 4.17M artículos). ZIM_SUGGEST_WORDS=0 lo desactiva en la Pi
 	// con la RAM justa: el suggest queda como prefijo del título completo.
 	SuggestWordIndex bool
 
 	// TitleIndexCache: persistir el índice de títulos en disco (`<zim>.tix`, junto
 	// al fichero) y cargarlo en los siguientes arranques en vez de reconstruirlo —
-	// el rebuild de la Wikipedia ES cuesta ~20 s por arranque; la carga, una
+	// reconstruir ese ZIM enciclopédico cuesta ~20 s por arranque; la carga, una
 	// fracción. ZIM_TITLE_CACHE=0 lo desactiva (p. ej. pool de solo lectura).
 	TitleIndexCache bool
 }

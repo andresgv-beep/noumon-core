@@ -81,8 +81,13 @@ export const setStudioCapabilities = (id, capabilities) =>
     body: JSON.stringify(capabilities),
   })
 export const createUser = (u) => postJSON('/api/admin/users', u)
-export const deleteUser = (id) =>
-  fetch(`/api/admin/users/${id}`, { method: 'DELETE' })
+export const deleteUser = (id, { studioStrategy = '', transferTo = '' } = {}) => {
+  const query = new URLSearchParams()
+  if (studioStrategy) query.set('studioStrategy', studioStrategy)
+  if (transferTo) query.set('transferTo', String(transferTo))
+  const suffix = query.size ? `?${query.toString()}` : ''
+  return fetch(`/api/admin/users/${id}${suffix}`, { method: 'DELETE' })
+}
 // Restablecer la contraseña de un usuario (a petición, por olvido). La temporal
 // debe cumplir la política (10 caracteres + 1 especial); el usuario la cambia
 // luego desde su interfaz del lector.

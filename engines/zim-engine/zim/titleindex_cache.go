@@ -1,7 +1,7 @@
 package zim
 
 // Persistencia del índice de títulos (§20, enmienda 2026-07-14): el índice de la
-// Wikipedia ES (4.3M artículos) tarda ~20 s en construirse — pagarlo en CADA
+// un ZIM enciclopédico de 4.3M artículos tarda ~20 s en construirse — pagarlo en CADA
 // arranque hacía la primera búsqueda insufrible. Se vuelca a disco UNA vez
 // (`<zim>.tix`, junto al fichero, misma convención que el `.bleve` del FTS) y los
 // arranques siguientes lo cargan en una fracción del tiempo.

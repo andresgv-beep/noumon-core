@@ -9,7 +9,7 @@ package fts
 //	      de enlaces de MEJORAS-BUSQUEDA.md; hoy 0, mañana un UPDATE barato en
 //	      una tabla normal — un UPDATE sobre una fila FTS5 es internamente
 //	      delete+reinsert de la fila entera, y con 2M de artículos eso es
-//	      reindexar Wikipedia otra vez).
+//	      reindexar un ZIM enciclopédico completo otra vez).
 //	fts   FTS5 content='': SOLO el índice invertido, sin texto almacenado. El
 //	      rowid casa con docs.id. Esto resuelve de golpe el riesgo de tamaño de
 //	      las columnas duplicadas del diseño original (el texto se guarda una

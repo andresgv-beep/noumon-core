@@ -171,6 +171,13 @@ CREATE TABLE IF NOT EXISTS studio_links (
   target_item_id     TEXT NOT NULL,
   PRIMARY KEY (source_document_id, target_item_id)
 );
+CREATE TABLE IF NOT EXISTS studio_published_links (
+  source_document_id TEXT NOT NULL,
+  target_item_id     TEXT NOT NULL,
+  PRIMARY KEY (source_document_id, target_item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_studio_published_links_target
+  ON studio_published_links(target_item_id, source_document_id);
 CREATE TABLE IF NOT EXISTS studio_facets (
   document_id TEXT NOT NULL,
   facet       TEXT NOT NULL,
@@ -234,6 +241,10 @@ func openStore(path string) (*Store, error) {
 		return nil, err
 	}
 	if err := st.ensureColumn("studio_documents", "published_plain_text", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := st.backfillStudioPublishedLinks(); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -713,6 +724,14 @@ func (s *Store) DeleteUserData(username string) error {
 	if err != nil {
 		return err
 	}
+	if err := deleteUserDataTx(tx, username); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+func deleteUserDataTx(tx *sql.Tx, username string) error {
 	for _, stmt := range []string{
 		`DELETE FROM media_tokens WHERE username = ?`,
 		`DELETE FROM sessions  WHERE username = ?`,
@@ -722,11 +741,10 @@ func (s *Store) DeleteUserData(username string) error {
 		`DELETE FROM tags      WHERE user = ?`,
 	} {
 		if _, err := tx.Exec(stmt, username); err != nil {
-			tx.Rollback()
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // ─── Etiquetas (una página puede tener varias) ────────────────────────────────

@@ -47,6 +47,25 @@ export async function updateStudioDocument(id, input) {
   return body.document;
 }
 
+export async function listStudioRevisions(id) {
+  const body = await studioJSON(
+    `/api/studio/documents/${encodeURIComponent(id)}/revisions`,
+  );
+  return body.revisions || [];
+}
+
+export async function restoreStudioRevision(id, revision, baseRevision) {
+  const body = await studioJSON(
+    `/api/studio/documents/${encodeURIComponent(id)}/restore/${encodeURIComponent(revision)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseRevision }),
+    },
+  );
+  return body.document;
+}
+
 export async function archiveStudioDocument(id) {
   const body = await studioJSON(`/api/studio/documents/${encodeURIComponent(id)}`, {
     method: 'DELETE',
@@ -128,4 +147,8 @@ export async function listPublishedDocuments() {
 export async function getPublishedDocument(id) {
   const body = await studioJSON(`/api/documents/${encodeURIComponent(id)}`);
   return body.document;
+}
+
+export async function getPublishedDocumentRelations(id) {
+  return studioJSON(`/api/documents/${encodeURIComponent(id)}/relations`);
 }

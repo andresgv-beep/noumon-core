@@ -154,18 +154,18 @@ a{color:inherit}
 .zim-content img{max-width:100%;height:auto;border-radius:var(--r-md)}
 .zim-content hr{border:none;border-top:1px solid var(--border);margin:1.6em 0}
 .zim-content h1:first-child,.zim-content h2:first-child{margin-top:0}
-/* Infobox de Wikipedia → tarjeta flotante estilo Noumon (como el mockup) */
+/* Infobox de artículos ZIM → tarjeta flotante estilo Noumon (como el mockup) */
 .zim-content table.infobox,.zim-content .infobox{float:right;clear:right;width:300px;max-width:42%;margin:4px 0 18px 24px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);font-size:13px;display:table;overflow:hidden;box-shadow:var(--shadow)}
 .zim-content .infobox th,.zim-content .infobox td{border:none;border-bottom:1px solid var(--border-soft);padding:8px 13px;background:none}
 .zim-content .infobox tr:last-child th,.zim-content .infobox tr:last-child td{border-bottom:none}
 .zim-content .infobox caption{caption-side:top;padding:12px 13px;font-weight:650;color:var(--ink);font-size:15px}
 .zim-content .infobox img{border-radius:var(--r-md);max-width:100%;height:auto}
 .zim-content .infobox a{color:var(--link)}
-/* Miniaturas / figuras de Wikipedia */
+/* Miniaturas / figuras de artículos */
 .zim-content figure,.zim-content .thumb{margin:1.2em 0}
 .zim-content .thumb .thumbinner{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:10px;display:inline-block;max-width:100%}
 .zim-content figcaption,.zim-content .thumbcaption{font-size:12.5px;color:var(--muted);margin-top:7px;line-height:1.4}
-/* Portales / páginas-mosaico de Wikipedia: tarjetas <a.item> en rejilla fluida
+/* Páginas-mosaico de ZIMs: tarjetas <a.item> en rejilla fluida
    (kiwix las tilea con su CSS; nosotros lo recreamos con estética Noumon) */
 .zim-content div:has(> a.item){display:flex;flex-wrap:wrap;gap:14px;margin:1.2em 0}
 .zim-content a.item{flex:1 1 260px;max-width:380px;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;text-decoration:none;color:var(--ink);border-bottom:1px solid var(--border);transition:border-color .12s,transform .12s;box-shadow:var(--shadow)}

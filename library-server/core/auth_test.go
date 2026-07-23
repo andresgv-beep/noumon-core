@@ -48,7 +48,7 @@ func sessionFor(t *testing.T, s *Server, name string, age int, admin bool) *http
 }
 
 func do(h http.Handler, cookie *http.Cookie, hdr map[string]string) int {
-	r := httptest.NewRequest(http.MethodPost, "/api/admin/zim/unregister", strings.NewReader(`{"id":"wikipedia_es"}`))
+	r := httptest.NewRequest(http.MethodPost, "/api/admin/zim/unregister", strings.NewReader(`{"id":"enciclopedia_es"}`))
 	if cookie != nil {
 		r.AddCookie(cookie)
 	}

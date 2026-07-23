@@ -32,6 +32,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -947,16 +948,47 @@ func (s *Server) handleAdminUserOp(w http.ResponseWriter, r *http.Request) {
 	// Purga transaccional del estado personal + sesiones (auditoría H-1), y solo
 	// entonces la fila de la cuenta. Si el cascade falla, no borramos el usuario:
 	// mejor dejarlo entero que a medias.
-	if err := s.store.DeleteUserData(username); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+	strategy := strings.TrimSpace(r.URL.Query().Get("studioStrategy"))
+	var transferTo int64
+	if strategy == "transfer" {
+		transferTo, err = strconv.ParseInt(r.URL.Query().Get("transferTo"), 10, 64)
+		if err != nil || transferTo < 1 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"errorCode": "users.studio_transfer_target_invalid",
+			})
+			return
+		}
 	}
-	if _, err := s.store.db.Exec(`DELETE FROM users WHERE id = ?`, id); err != nil {
+	impact, err := s.store.deleteUserWithStudioStrategy(id, username, me, strategy, transferTo)
+	switch {
+	case errors.Is(err, errStudioDeletionStrategyRequired):
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"errorCode": "users.studio_strategy_required",
+			"details":   impact,
+		})
+		return
+	case errors.Is(err, errStudioDeletionStrategyInvalid):
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"errorCode": "users.studio_strategy_invalid",
+		})
+		return
+	case errors.Is(err, errStudioTransferTargetInvalid):
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"errorCode": "users.studio_transfer_target_invalid",
+		})
+		return
+	case errors.Is(err, errStudioTransferQuota):
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"errorCode": "users.studio_transfer_quota",
+		})
+		return
+	case err != nil:
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 	s.invalidateSessionCache() // DeleteUserData eliminó sus sesiones: fuera también de RAM
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	s.invalidateAccessCache()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "studio": impact})
 }
 
 // ── Errores de entrada ─────────────────────────────────────────────────────

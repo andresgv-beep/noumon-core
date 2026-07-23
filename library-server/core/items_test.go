@@ -174,16 +174,16 @@ func TestItemSearchEndpointIncludesMedia(t *testing.T) {
 }
 
 func TestZIMItemIDRoundTrip(t *testing.T) {
-	id := itemIDForZIM("wikipedia_es", "A/Saturno")
+	id := itemIDForZIM("enciclopedia_es", "A/Saturno")
 	payload, ok := decodeOpaque(id[len("zim:"):])
 	if !ok {
 		t.Fatal("could not decode zim item id")
 	}
-	if payload != "wikipedia_es/A/Saturno" {
+	if payload != "enciclopedia_es/A/Saturno" {
 		t.Fatalf("payload = %q", payload)
 	}
-	item := zimToItem(Library{ID: "wikipedia_es"}, "A/Saturno", "Saturno", "", "", 0)
-	if item.Open == nil || item.Open.Mode != "iframe" || item.Open.URL != "/content/wikipedia_es/A/Saturno" {
+	item := zimToItem(Library{ID: "enciclopedia_es"}, "A/Saturno", "Saturno", "", "", 0)
+	if item.Open == nil || item.Open.Mode != "iframe" || item.Open.URL != "/content/enciclopedia_es/A/Saturno" {
 		t.Fatalf("zim open = %+v", item.Open)
 	}
 }

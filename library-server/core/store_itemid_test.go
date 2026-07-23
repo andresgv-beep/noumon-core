@@ -16,7 +16,7 @@ func TestStoreReaderStateByItemID(t *testing.T) {
 	if got := canonicalItemID("", itemLegacyLib, itemID); got != itemID {
 		t.Fatalf("canonicalItemID internal item = %q, want %q", got, itemID)
 	}
-	if got := canonicalItemID("", "wikipedia_es", ""); got != "" {
+	if got := canonicalItemID("", "enciclopedia_es", ""); got != "" {
 		t.Fatalf("canonicalItemID partial legacy key = %q, want empty", got)
 	}
 

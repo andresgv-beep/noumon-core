@@ -7,7 +7,7 @@
 
 ## 1. Resumen ejecutivo
 
-Noumon Studio será una superficie de autoría dentro del cliente Noumon. Se abrirá en una pestaña propia y permitirá crear contenido para tres superficies publicadas hermanas: **Documentos**, **Cabinet** y **Moments**. Documentos será la Wikipedia personalizada y local de Noumon: páginas enriquecidas enlazables, organizadas por temas y buscables. Studio guarda los borradores privados, permite previsualizar el resultado definitivo y publica contenido indexable en Library Server.
+Noumon Studio será una superficie de autoría dentro del cliente Noumon. Se abrirá en una pestaña propia y permitirá crear contenido para tres superficies publicadas hermanas: **Documentos**, **Cabinet** y **Moments**. Documentos será la base de conocimiento local de Noumon: páginas enriquecidas enlazables, organizadas por temas y buscables. Studio guarda los borradores privados, permite previsualizar el resultado definitivo y publica contenido indexable en Library Server.
 
 La frontera arquitectónica existente se conserva:
 
@@ -120,7 +120,7 @@ Las rutas `studio` son privadas y editoriales; las rutas `documents` son de lect
 
 Documentos todavía no existe como superficie propia. Debe añadirse junto a
 Cabinet y Moments, no dentro de Studio ni como una vista secundaria del editor.
-Será la base de conocimiento tipo Wikipedia de la instalación: portada,
+Será la base de conocimiento local de la instalación: portada,
 categorías/temas, páginas enlazables, índice de secciones, relaciones entre
 documentos y búsqueda. Un lector podrá usar Documentos aunque no tenga permiso
 para abrir Studio.
@@ -184,7 +184,7 @@ Un lector no obtiene permisos de servidor por mostrar u ocultar botones en el cl
 │ └─ studioApi.js         contrato HTTP                          │
 │                                                               │
 │ Superficies de lectura                                        │
-│ ├─ DocumentsHome        Wikipedia local publicada              │
+│ ├─ DocumentsHome        base de conocimiento publicada         │
 │ ├─ DocumentView         página, índice y enlaces               │
 │ ├─ Cabinet              archivo documental                     │
 │ └─ Moments              vídeos y canales                       │
@@ -342,6 +342,12 @@ studio_links (
   PRIMARY KEY (source_document_id, target_item_id)
 )
 
+studio_published_links (
+  source_document_id TEXT NOT NULL,
+  target_item_id TEXT NOT NULL,
+  PRIMARY KEY (source_document_id, target_item_id)
+)
+
 studio_facets (
   document_id TEXT NOT NULL,
   facet TEXT NOT NULL,                 -- workType | topic | audience | series
@@ -385,10 +391,14 @@ El índice distinguirá:
 
 La búsqueda actual de media recorre sidecars en disco por consulta. Studio no debe añadir otro recorrido completo del filesystem; FTS5 es más predecible en una Raspberry Pi y escala mejor con documentos largos.
 
-Al guardar se extraerán también los `itemRef` hacia `studio_links`. Esta tabla
-permite construir enlaces entrantes, páginas relacionadas y navegación tipo
-wiki sin recorrer todos los JSON en cada petición. Las consultas aplicarán los
-permisos antes de devolver títulos, relaciones o recuentos.
+Al guardar se extraerán los `itemRef` del borrador hacia `studio_links`. Al
+publicar se proyectarán, dentro de la misma transacción, los enlaces de la
+revisión publicada hacia `studio_published_links`. Esta separación permite
+construir enlaces entrantes, páginas relacionadas y navegación del conocimiento
+sin recorrer todos los JSON en cada petición y, sobre todo, sin filtrar enlaces
+añadidos o eliminados en un borrador todavía privado. Las consultas públicas
+usarán exclusivamente `studio_published_links` y aplicarán los permisos antes de
+devolver títulos, relaciones o recuentos.
 
 Las facetas normalizadas se proyectan a `studio_facets` para filtrar por tipo de
 obra, tema, audiencia o serie sin escanear JSON. Los permisos se aplican antes
@@ -480,7 +490,7 @@ Las plantillas oficiales definen campos, bloques iniciales, reglas de validació
 
 Se publica en la superficie Documentos y se renderiza con el mismo
 `DocumentView.svelte` usado por la previsualización. No aparece como una pieza
-aislada de Studio: pasa a formar parte de la Wikipedia local, sus temas, enlaces
+aislada de Studio: pasa a formar parte de la base de conocimiento local, sus temas, enlaces
 internos, índice y contenido relacionado.
 
 ### 7.2 Artículo técnico
@@ -702,7 +712,7 @@ Entrada recomendada:
 
 Abrir Studio no debe reemplazar el artículo que el usuario está consultando: la creación nace en una pestaña nueva para permitir consultar fuentes en paralelo.
 
-Abrir Documentos no abre el editor. Muestra la portada de la Wikipedia local y
+Abrir Documentos no abre el editor. Muestra la portada del conocimiento local y
 permite navegar por temas, documentos recientes, destacados, enlaces internos
 y resultados relacionados. La capacidad de lectura de Documentos no concede
 autoría.
@@ -780,7 +790,7 @@ Estas decisiones completan y concretan 10.1–10.3. Su contrato visual está en 
 
 - Studio es el taller privado de creación y gestión de borradores.
 - Documentos es una superficie publicada de lectura, hermana de Cabinet y
-  Moments, y funciona como la Wikipedia personalizada de la instalación.
+  Moments, y funciona como la base de conocimiento local de la instalación.
 - Publicar un Documento lo incorpora a Documentos; nunca crea una subsección
   pública dentro de Studio.
 - Los lectores pueden navegar por Documentos sin disponer de `can_author`.
@@ -941,7 +951,7 @@ open.mode: document-page
 open.itemId: documents:<id>
 ```
 
-`DocumentsHome.svelte` compondrá la Wikipedia local a partir de los documentos
+`DocumentsHome.svelte` compondrá la base de conocimiento local a partir de los documentos
 publicados que el lector pueda ver. `Reader.svelte` abrirá `DocumentView` para
 cada página. La portada y la búsqueda podrán agrupar por temas, recientes y
 destacados; los `itemRef` crearán enlaces internos estables y permitirán
@@ -1138,7 +1148,7 @@ especificación independiente antes de habilitar distribución pública.
 ### MVP recomendado
 
 - **Borrador privado:** solo propietario y administrador; índice privado de Studio.
-- **Publicado en Documentos:** aparece en la Wikipedia local, hereda acceso y
+- **Publicado en Documentos:** aparece en la base de conocimiento local, hereda acceso y
   edad de su colección y solo se descubre por usuarios autorizados.
 - **Publicado en Cabinet/Moments:** hereda el acceso, edad y descarga de su
   colección y usa la proyección de media correspondiente.
@@ -1405,7 +1415,7 @@ Fuera del MVP de Studio y mediante especificación propia:
 5. La vista previa usa el aspecto final.
 6. Un publicador elige únicamente colecciones permitidas.
 7. La publicación aparece en la superficie Documentos y en búsquedas
-   autorizadas, y se abre como una página de la Wikipedia local.
+   autorizadas, y se abre como una página de la base de conocimiento local.
 8. Retirarla elimina su exposición sin borrar el borrador.
 9. El flujo funciona sin Internet y sin IA.
 10. El consumo de recursos sigue siendo razonable en hardware ARM/x86 modesto.
@@ -1427,7 +1437,7 @@ Fuera del MVP de Studio y mediante especificación propia:
 - `noumon/src/lib/libraryAddress.js` — direcciones Studio y Documentos;
 - `noumon/src/lib/auth.svelte.js` — capacidades recibidas;
 - nuevos `DocumentsHome.svelte`, `DocumentCard.svelte` y
-  `DocumentView.svelte` — Wikipedia local publicada;
+  `DocumentView.svelte` — base de conocimiento local publicada;
 - `noumon/src/lib/Cabinet.svelte`, `Moments.svelte`, `ItemPage.svelte` — extraer presentadores compartidos;
 - nuevos módulos bajo `noumon/src/lib/studio/`;
 - mensajes de `i18n` en español e inglés.
@@ -1461,8 +1471,8 @@ Fuera del MVP de Studio y mediante especificación propia:
 ### Cerradas por esta propuesta
 
 - Studio vive en Noumon como experiencia, pero los datos viven en Server.
-- Studio es el taller de creación; Documentos es la superficie publicada tipo
-  Wikipedia, hermana de Cabinet y Moments.
+- Studio es el taller de creación; Documentos es la base de conocimiento
+  publicada, hermana de Cabinet y Moments.
 - Los documentos publicados usan `provider: documents`; Studio queda como
   procedencia editorial interna.
 - No se reutiliza `/api/admin/upload` como API de autor.
@@ -1524,7 +1534,7 @@ capacidad de autor
     → autoguardar borrador privado
     → previsualizar
     → publicar en Documentos
-    → navegarlo desde la Wikipedia local
+    → navegarlo desde la base de conocimiento local
     → encontrarlo en búsqueda federada
     → retirarlo sin perder el borrador
 ```

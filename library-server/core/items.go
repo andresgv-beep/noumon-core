@@ -339,7 +339,7 @@ func (s *Server) handleItemSub(media *mediaDeps) http.HandlerFunc {
 			return
 		}
 		// Gate: el item lleva su CollectionID, así que la pregunta es la misma
-		// para un artículo de la Wikipedia que para un PDF del pool. Cubre /open
+		// para un artículo ZIM que para un PDF del pool. Cubre /open
 		// (que da la URL del fichero) y /preview.
 		if !s.canSeeCollectionID(s.currentUser(r), item.CollectionID) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "sin acceso a esta coleccion"})

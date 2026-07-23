@@ -33,7 +33,8 @@ import (
 
 // titleIndex: DOS índices compactos, para casar el prefijo contra cualquier
 // palabra del título (como el índice tokenizado de kiwix, §6) sin el coste de RAM
-// de indexar sufijos completos (medido: 1.5 GB en la Wikipedia ES — inviable en la
+// de indexar sufijos completos (medido: 1.5 GB en un ZIM enciclopédico de 4M
+// artículos — inviable en la
 // Pi; los sufijos duplican el texto en O(palabras²)).
 //
 //   - full:  títulos completos normalizados, ordenados. Cubre el prefijo
@@ -277,7 +278,7 @@ type titleRec struct {
 }
 
 // collectTitleRecs lee el título de cada candidato con I/O SECUENCIAL, no con un
-// ReadAt por dirent: para la Wikipedia ES son millones de candidatos, y el patrón
+// ReadAt por dirent: para un ZIM enciclopédico son millones de candidatos, y el patrón
 // aleatorio (puntero + dirent + strings por candidato) es una tormenta de syscalls
 // en x86 y la muerte en el almacenamiento de la Pi. En su lugar:
 //

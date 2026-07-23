@@ -49,7 +49,7 @@ func validStudioDocumentBody(title string, baseRevision int) string {
 				map[string]any{"id": "intro", "type": "paragraph", "text": "Contenido de prueba"},
 				map[string]any{
 					"id": "referencia", "type": "itemRef",
-					"itemId": "zim:wikipedia_es:Q0hB", "titleSnapshot": "Historia",
+					"itemId": "zim:enciclopedia_es:Q0hB", "titleSnapshot": "Historia",
 				},
 			},
 		},
@@ -170,11 +170,38 @@ func studioDocumentBodyWithImage(t *testing.T, title string, baseRevision int, a
 	return string(encoded)
 }
 
+func studioDocumentBodyWithLink(
+	t *testing.T,
+	title string,
+	baseRevision int,
+	itemID string,
+) string {
+	t.Helper()
+	var body map[string]any
+	if err := json.Unmarshal([]byte(validStudioDocumentBody(title, baseRevision)), &body); err != nil {
+		t.Fatal(err)
+	}
+	content := body["content"].(map[string]any)
+	for _, raw := range content["blocks"].([]any) {
+		block := raw.(map[string]any)
+		if block["type"] == "itemRef" {
+			block["itemId"] = itemID
+			block["titleSnapshot"] = title
+		}
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(encoded)
+}
+
 func TestStudioSchemaIsAdditive(t *testing.T) {
 	s := testAuthServer(t, "")
 	for _, table := range []string{
 		"user_capabilities", "studio_documents", "studio_revisions", "studio_assets",
-		"studio_publish_targets", "studio_links", "studio_facets", "content_origins",
+		"studio_publish_targets", "studio_links", "studio_published_links",
+		"studio_facets", "content_origins",
 		"users", "sessions", "collection_access",
 	} {
 		var found string
@@ -202,7 +229,7 @@ func TestStudioValidationNormalizesPortableFacetsAndLinks(t *testing.T) {
 		strings.Join(valid.Facets["topic"], ",") != "historia,local" {
 		t.Fatalf("facetas inesperadas: %#v", valid.Facets)
 	}
-	if len(valid.Links) != 1 || valid.Links[0] != "zim:wikipedia_es:Q0hB" {
+	if len(valid.Links) != 1 || valid.Links[0] != "zim:enciclopedia_es:Q0hB" {
 		t.Fatalf("enlaces inesperados: %#v", valid.Links)
 	}
 
@@ -280,6 +307,122 @@ func TestStudioCapabilitiesAndPrivateDraftLifecycle(t *testing.T) {
 	}
 }
 
+func TestStudioRestoreCreatesRevisionWithoutChangingPublishedSnapshot(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	authorCookie := sessionFor(t, s, "autora-restaura", 30, false)
+	otherCookie := sessionFor(t, s, "autora-ajena", 30, false)
+	grantStudio(t, s, "autora-restaura", true)
+	grantStudio(t, s, "autora-ajena", false)
+
+	createdRec := studioRequest(h, http.MethodPost, "/api/studio/documents",
+		validStudioDocumentBody("Versión uno", 0), authorCookie)
+	created := decodeStudioDocumentResponse(t, createdRec)
+	updatedRec := studioRequest(h, http.MethodPut, "/api/studio/documents/"+created.ID,
+		validStudioDocumentBody("Versión pública dos", 1), authorCookie)
+	if updatedRec.Code != http.StatusOK {
+		t.Fatalf("actualizar revisión 2: %d %s", updatedRec.Code, updatedRec.Body.String())
+	}
+	publishedRec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/publish", "", authorCookie)
+	if publishedRec.Code != http.StatusOK {
+		t.Fatalf("publicar revisión 2: %d %s", publishedRec.Code, publishedRec.Body.String())
+	}
+	privateRec := studioRequest(h, http.MethodPut, "/api/studio/documents/"+created.ID,
+		validStudioDocumentBody("Borrador privado tres", 2), authorCookie)
+	if privateRec.Code != http.StatusOK {
+		t.Fatalf("actualizar revisión 3: %d %s", privateRec.Code, privateRec.Body.String())
+	}
+
+	restoredRec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/restore/1",
+		`{"baseRevision":3}`, authorCookie)
+	if restoredRec.Code != http.StatusOK {
+		t.Fatalf("restaurar revisión 1: %d %s", restoredRec.Code, restoredRec.Body.String())
+	}
+	restored := decodeStudioDocumentResponse(t, restoredRec)
+	if restored.Revision != 4 || restored.Title != "Versión uno" ||
+		restored.Status != "published" || restored.PublishedRevision == nil ||
+		*restored.PublishedRevision != 2 {
+		t.Fatalf("restauración inesperada: %#v", restored)
+	}
+	public, err := s.store.publishedStudioDocument(created.ID)
+	if err != nil || public.Title != "Versión pública dos" || public.Revision != 2 {
+		t.Fatalf("restaurar alteró la publicación inmutable: %#v err=%v", public, err)
+	}
+
+	revisionsRec := studioRequest(h, http.MethodGet,
+		"/api/studio/documents/"+created.ID+"/revisions", "", authorCookie)
+	var history struct {
+		Revisions []StudioRevision `json:"revisions"`
+	}
+	if revisionsRec.Code != http.StatusOK ||
+		json.Unmarshal(revisionsRec.Body.Bytes(), &history) != nil ||
+		len(history.Revisions) != 4 ||
+		history.Revisions[0].Title != "Versión uno" {
+		t.Fatalf("historial restaurado inesperado: %d %#v", revisionsRec.Code, history)
+	}
+
+	conflictRec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/restore/2",
+		`{"baseRevision":3}`, authorCookie)
+	if conflictRec.Code != http.StatusConflict ||
+		!strings.Contains(conflictRec.Body.String(), `"currentRevision":4`) {
+		t.Fatalf("restauración obsoleta no dio conflicto: %d %s",
+			conflictRec.Code, conflictRec.Body.String())
+	}
+	privateRestore := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/restore/1",
+		`{"baseRevision":4}`, otherCookie)
+	if privateRestore.Code != http.StatusNotFound {
+		t.Fatalf("otro autor descubrió/restauró el documento: %d %s",
+			privateRestore.Code, privateRestore.Body.String())
+	}
+	missingRestore := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/restore/99",
+		`{"baseRevision":4}`, authorCookie)
+	if missingRestore.Code != http.StatusNotFound ||
+		!strings.Contains(missingRestore.Body.String(), `"studio.revision_not_found"`) {
+		t.Fatalf("revisión inexistente: %d %s",
+			missingRestore.Code, missingRestore.Body.String())
+	}
+}
+
+func TestStudioRestoreArchivedDocumentReturnsPrivateDraft(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	authorCookie := sessionFor(t, s, "autora-papelera", 30, false)
+	grantStudio(t, s, "autora-papelera", true)
+
+	createdRec := studioRequest(h, http.MethodPost, "/api/studio/documents",
+		validStudioDocumentBody("Recuperable", 0), authorCookie)
+	created := decodeStudioDocumentResponse(t, createdRec)
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/publish", "", authorCookie); rec.Code != http.StatusOK {
+		t.Fatalf("publicar: %d %s", rec.Code, rec.Body.String())
+	}
+	archivedRec := studioRequest(h, http.MethodDelete,
+		"/api/studio/documents/"+created.ID, "", authorCookie)
+	archived := decodeStudioDocumentResponse(t, archivedRec)
+	if archivedRec.Code != http.StatusOK || archived.Status != "archived" {
+		t.Fatalf("archivar: %d %#v", archivedRec.Code, archived)
+	}
+
+	restoredRec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/restore/1",
+		`{"baseRevision":2}`, authorCookie)
+	restored := decodeStudioDocumentResponse(t, restoredRec)
+	if restoredRec.Code != http.StatusOK || restored.Status != "draft" ||
+		restored.Revision != 3 || restored.PublishedRevision != nil ||
+		restored.Published != nil {
+		t.Fatalf("recuperación desde papelera inesperada: %d %#v",
+			restoredRec.Code, restored)
+	}
+	if _, err := s.store.publishedStudioDocument(created.ID); !errors.Is(err, errStudioNotFound) {
+		t.Fatalf("restaurar desde papelera republicó el documento: %v", err)
+	}
+}
+
 func TestStudioAdminCapabilityContract(t *testing.T) {
 	s := testAuthServer(t, "")
 	userCookie := sessionFor(t, s, "creadora", 30, false)
@@ -352,6 +495,9 @@ func TestStudioPublicationUsesImmutableRevisionSnapshot(t *testing.T) {
 	if err != nil || public.Title != "Versión pública" || public.Revision != 1 {
 		t.Fatalf("el borrador posterior contaminó la publicación: %#v err=%v", public, err)
 	}
+	if public.OwnerUserID != nil {
+		t.Fatalf("la API pública filtró el ID interno del propietario: %v", *public.OwnerUserID)
+	}
 	hits, err := s.store.searchPublishedStudioDocuments("secreto nuevo")
 	if err != nil || len(hits) != 0 {
 		t.Fatalf("la búsqueda filtró texto privado: hits=%#v err=%v", hits, err)
@@ -376,6 +522,73 @@ func TestStudioPublicationUsesImmutableRevisionSnapshot(t *testing.T) {
 	}
 	if _, err := s.store.publishedStudioDocument(created.ID); !errors.Is(err, errStudioNotFound) {
 		t.Fatalf("despublicar dejó el documento visible: %v", err)
+	}
+}
+
+func TestStudioPublishedLinksFollowOnlyPublishedSnapshot(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	authorCookie := sessionFor(t, s, "autora-enlaces", 30, false)
+	grantStudio(t, s, "autora-enlaces", true)
+
+	targetRec := studioRequest(h, http.MethodPost, "/api/studio/documents",
+		validStudioDocumentBody("Destino", 0), authorCookie)
+	target := decodeStudioDocumentResponse(t, targetRec)
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+target.ID+"/publish", "", authorCookie); rec.Code != http.StatusOK {
+		t.Fatalf("publicar destino: %d %s", rec.Code, rec.Body.String())
+	}
+
+	sourceRec := studioRequest(h, http.MethodPost, "/api/studio/documents",
+		studioDocumentBodyWithLink(t, "Origen", 0, "studio:"+target.ID), authorCookie)
+	source := decodeStudioDocumentResponse(t, sourceRec)
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+source.ID+"/publish", "", authorCookie); rec.Code != http.StatusOK {
+		t.Fatalf("publicar origen: %d %s", rec.Code, rec.Body.String())
+	}
+	targetRelations, err := s.store.publishedStudioRelations(target.ID)
+	if err != nil || len(targetRelations.Backlinks) != 1 ||
+		targetRelations.Backlinks[0].ID != source.ID {
+		t.Fatalf("backlink publicado inesperado: %#v err=%v", targetRelations, err)
+	}
+
+	draftRec := studioRequest(h, http.MethodPut, "/api/studio/documents/"+source.ID,
+		studioDocumentBodyWithLink(t, "Origen privado", 1, "zim:manual:QTE"), authorCookie)
+	if draftRec.Code != http.StatusOK {
+		t.Fatalf("editar enlace privado: %d %s", draftRec.Code, draftRec.Body.String())
+	}
+	sourceRelations, err := s.store.publishedStudioRelations(source.ID)
+	if err != nil || len(sourceRelations.OutgoingItemIDs) != 1 ||
+		sourceRelations.OutgoingItemIDs[0] != "studio:"+target.ID {
+		t.Fatalf("el borrador contaminó enlaces publicados: %#v err=%v", sourceRelations, err)
+	}
+
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+source.ID+"/publish", "", authorCookie); rec.Code != http.StatusOK {
+		t.Fatalf("republicar origen: %d %s", rec.Code, rec.Body.String())
+	}
+	targetRelations, err = s.store.publishedStudioRelations(target.ID)
+	if err != nil || len(targetRelations.Backlinks) != 0 {
+		t.Fatalf("republicar conservó backlink antiguo: %#v err=%v", targetRelations, err)
+	}
+	sourceRelations, err = s.store.publishedStudioRelations(source.ID)
+	if err != nil || len(sourceRelations.OutgoingItemIDs) != 1 ||
+		sourceRelations.OutgoingItemIDs[0] != "zim:manual:QTE" {
+		t.Fatalf("republicar no promovió el enlace nuevo: %#v err=%v", sourceRelations, err)
+	}
+
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+source.ID+"/unpublish", "", authorCookie); rec.Code != http.StatusOK {
+		t.Fatalf("retirar origen: %d %s", rec.Code, rec.Body.String())
+	}
+	var publishedLinks int
+	if err := s.store.db.QueryRow(`
+		SELECT COUNT(*) FROM studio_published_links
+		WHERE source_document_id=?`, source.ID).Scan(&publishedLinks); err != nil {
+		t.Fatal(err)
+	}
+	if publishedLinks != 0 {
+		t.Fatalf("retirar dejó %d enlaces publicados", publishedLinks)
 	}
 }
 

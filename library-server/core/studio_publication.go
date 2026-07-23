@@ -58,6 +58,9 @@ func (s *Store) publishStudioDocument(id string, editor *User) (StudioDocument, 
 	if changed, _ := result.RowsAffected(); changed != 1 {
 		return StudioDocument{}, errStudioConflict
 	}
+	if err := replaceStudioPublishedLinks(tx, id, valid.Links); err != nil {
+		return StudioDocument{}, err
+	}
 	if _, err = tx.Exec(`
 		INSERT INTO content_origins
 			(document_id, origin_content_id, origin_creator_key, origin_version, imported)
@@ -101,7 +104,12 @@ func (s *Store) unpublishStudioDocument(id string, editor *User) (StudioDocument
 		return current, nil
 	}
 	now := time.Now().Unix()
-	result, err := s.db.Exec(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return StudioDocument{}, err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`
 		UPDATE studio_documents SET
 			status='draft', published_revision=NULL, publication_kind=NULL,
 			publication_target=NULL, published_plain_text='', published=NULL, updated=?
@@ -111,6 +119,12 @@ func (s *Store) unpublishStudioDocument(id string, editor *User) (StudioDocument
 	}
 	if changed, _ := result.RowsAffected(); changed != 1 {
 		return StudioDocument{}, errStudioConflict
+	}
+	if err := replaceStudioPublishedLinks(tx, id, nil); err != nil {
+		return StudioDocument{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return StudioDocument{}, err
 	}
 	current.Status = "draft"
 	current.PublishedRevision = nil
@@ -153,6 +167,10 @@ func (s *Store) publishedStudioDocument(id string) (StudioDocument, error) {
 		v := published.Int64
 		doc.Published = &v
 	}
+	// El propietario es estado administrativo, no parte del documento público.
+	// Las revisiones inmutables pueden conservar el ID de una cuenta eliminada
+	// como procedencia interna, pero nunca debe salir por esta API.
+	doc.OwnerUserID = nil
 	return doc, nil
 }
 
@@ -190,6 +208,74 @@ func (s *Store) listPublishedStudioDocuments() ([]StudioDocumentSummary, error) 
 	return out, nil
 }
 
+type StudioDocumentRelations struct {
+	OutgoingItemIDs []string                `json:"outgoingItemIds"`
+	Backlinks       []StudioDocumentSummary `json:"backlinks"`
+}
+
+func (s *Store) publishedStudioRelations(id string) (StudioDocumentRelations, error) {
+	relations := StudioDocumentRelations{
+		OutgoingItemIDs: []string{},
+		Backlinks:       []StudioDocumentSummary{},
+	}
+	rows, err := s.db.Query(`
+		SELECT target_item_id FROM studio_published_links
+		WHERE source_document_id=? ORDER BY target_item_id`, id)
+	if err != nil {
+		return relations, err
+	}
+	for rows.Next() {
+		var target string
+		if err := rows.Scan(&target); err != nil {
+			rows.Close()
+			return relations, err
+		}
+		relations.OutgoingItemIDs = append(relations.OutgoingItemIDs, target)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return relations, err
+	}
+	if err := rows.Close(); err != nil {
+		return relations, err
+	}
+
+	rows, err = s.db.Query(`
+		SELECT p.source_document_id
+		FROM studio_published_links p
+		JOIN studio_documents d ON d.id=p.source_document_id
+		WHERE p.target_item_id=?
+		  AND d.published_revision IS NOT NULL AND d.status!='archived'
+		ORDER BY d.published DESC, d.id`, "studio:"+id)
+	if err != nil {
+		return relations, err
+	}
+	var sourceIDs []string
+	for rows.Next() {
+		var sourceID string
+		if err := rows.Scan(&sourceID); err != nil {
+			rows.Close()
+			return relations, err
+		}
+		sourceIDs = append(sourceIDs, sourceID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return relations, err
+	}
+	if err := rows.Close(); err != nil {
+		return relations, err
+	}
+	for _, sourceID := range sourceIDs {
+		document, err := s.publishedStudioDocument(sourceID)
+		if err != nil {
+			return relations, err
+		}
+		relations.Backlinks = append(relations.Backlinks, studioSummary(document))
+	}
+	return relations, nil
+}
+
 func (s *Server) registerPublishedDocumentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/documents", s.handlePublishedDocuments)
 	mux.HandleFunc("/api/documents/", s.handlePublishedDocument)
@@ -221,10 +307,28 @@ func (s *Server) handlePublishedDocument(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "sin acceso a esta coleccion"})
 		return
 	}
-	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/documents/"), "/")
+	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/documents/"), "/")
+	id, action, hasAction := strings.Cut(rest, "/")
+	if !studioIDRE.MatchString(id) {
+		writeStudioError(w, http.StatusNotFound, "studio.document_not_found", nil)
+		return
+	}
 	doc, err := s.store.publishedStudioDocument(id)
 	if err != nil {
 		writeStudioStoreError(w, err, 0)
+		return
+	}
+	if hasAction {
+		if action != "relations" {
+			writeStudioError(w, http.StatusNotFound, "studio.route_not_found", nil)
+			return
+		}
+		relations, err := s.store.publishedStudioRelations(id)
+		if err != nil {
+			writeStudioError(w, http.StatusInternalServerError, "studio.internal", nil)
+			return
+		}
+		writeJSON(w, http.StatusOK, relations)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

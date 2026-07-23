@@ -8,7 +8,7 @@
 
 "Soporta N usuarios" es la frase más fácil de decir y la más difícil de sostener.
 Sin decir *haciendo qué* y *con qué criterio de éxito*, el número no significa
-nada: 20 personas leyendo Wikipedia y 20 viendo vídeo 1080p son cargas que se
+nada: 20 personas leyendo contenido documental y 20 viendo vídeo 1080p son cargas que se
 diferencian en dos órdenes de magnitud.
 
 Noumon se instala en casa de gente que no puede pedir soporte. Prometer de más

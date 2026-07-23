@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -177,6 +178,90 @@ func replaceStudioDerived(tx *sql.Tx, documentID string, valid studioValidatedIn
 		}
 	}
 	return nil
+}
+
+func replaceStudioPublishedLinks(tx *sql.Tx, documentID string, links []string) error {
+	if _, err := tx.Exec(`
+		DELETE FROM studio_published_links WHERE source_document_id=?`, documentID); err != nil {
+		return err
+	}
+	for _, target := range links {
+		if _, err := tx.Exec(`
+			INSERT INTO studio_published_links (source_document_id, target_item_id)
+			VALUES (?,?)`, documentID, target); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) backfillStudioPublishedLinks() error {
+	rows, err := s.db.Query(`
+		SELECT d.id, r.snapshot_json
+		FROM studio_documents d
+		JOIN studio_revisions r
+		  ON r.document_id=d.id AND r.revision=d.published_revision
+		WHERE d.published_revision IS NOT NULL AND d.status!='archived'
+		ORDER BY d.id`)
+	if err != nil {
+		return err
+	}
+	type publishedSnapshot struct {
+		id       string
+		snapshot string
+	}
+	var snapshots []publishedSnapshot
+	for rows.Next() {
+		var item publishedSnapshot
+		if err := rows.Scan(&item.id, &item.snapshot); err != nil {
+			rows.Close()
+			return err
+		}
+		snapshots = append(snapshots, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM studio_published_links`); err != nil {
+		return err
+	}
+	for _, item := range snapshots {
+		var document StudioDocument
+		if err := json.Unmarshal([]byte(item.snapshot), &document); err != nil {
+			// A legacy or damaged snapshot must not prevent the library from
+			// starting. It remains unavailable through the normal reader, but
+			// the rest of the published link graph can still be rebuilt.
+			continue
+		}
+		valid, err := validateStudioInput(StudioDocumentInput{
+			TemplateKey: document.TemplateKey,
+			Title:       document.Title,
+			Summary:     document.Summary,
+			Language:    document.Language,
+			AuthorLabel: document.AuthorLabel,
+			Tags:        document.Tags,
+			Metadata:    document.Metadata,
+			Content:     document.Content,
+		})
+		if err != nil {
+			// Validation rules may become stricter after a document was
+			// published. Skip that legacy snapshot instead of bricking startup.
+			continue
+		}
+		if err := replaceStudioPublishedLinks(tx, item.id, valid.Links); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func ensureStudioAssets(tx *sql.Tx, documentID string, assetIDs []string, publish bool) error {
@@ -384,6 +469,8 @@ func (s *Store) archiveStudioDocument(id string, editor *User) (StudioDocument, 
 type StudioRevision struct {
 	Revision    int    `json:"revision"`
 	EditorLabel string `json:"editorLabel,omitempty"`
+	Title       string `json:"title"`
+	Status      string `json:"status"`
 	Created     int64  `json:"created"`
 }
 
@@ -392,7 +479,7 @@ func (s *Store) listStudioRevisions(id string, viewer *User) ([]StudioRevision, 
 		return nil, err
 	}
 	rows, err := s.db.Query(`
-		SELECT revision, editor_label, created
+		SELECT revision, editor_label, snapshot_json, created
 		FROM studio_revisions WHERE document_id=? ORDER BY revision DESC`, id)
 	if err != nil {
 		return nil, err
@@ -401,10 +488,146 @@ func (s *Store) listStudioRevisions(id string, viewer *User) ([]StudioRevision, 
 	out := []StudioRevision{}
 	for rows.Next() {
 		var revision StudioRevision
-		if err := rows.Scan(&revision.Revision, &revision.EditorLabel, &revision.Created); err != nil {
+		var snapshotJSON string
+		if err := rows.Scan(
+			&revision.Revision, &revision.EditorLabel, &snapshotJSON, &revision.Created,
+		); err != nil {
 			return nil, err
 		}
+		var snapshot StudioDocument
+		if err := json.Unmarshal([]byte(snapshotJSON), &snapshot); err != nil {
+			return nil, err
+		}
+		revision.Title = snapshot.Title
+		revision.Status = snapshot.Status
 		out = append(out, revision)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) restoreStudioRevision(
+	id string,
+	targetRevision int,
+	baseRevision int,
+	editor *User,
+) (StudioDocument, int, error) {
+	current, err := s.getStudioDocument(id, editor)
+	if err != nil {
+		return StudioDocument{}, 0, err
+	}
+	if baseRevision < 1 || current.Revision != baseRevision {
+		return StudioDocument{}, current.Revision, errStudioConflict
+	}
+	var snapshotJSON string
+	err = s.db.QueryRow(`
+		SELECT snapshot_json FROM studio_revisions
+		WHERE document_id=? AND revision=?`, id, targetRevision).Scan(&snapshotJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return StudioDocument{}, current.Revision, errStudioRevisionNotFound
+	}
+	if err != nil {
+		return StudioDocument{}, current.Revision, err
+	}
+	var source StudioDocument
+	if err := json.Unmarshal([]byte(snapshotJSON), &source); err != nil {
+		return StudioDocument{}, current.Revision, err
+	}
+	valid, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey:  source.TemplateKey,
+		Title:        source.Title,
+		Summary:      source.Summary,
+		Language:     source.Language,
+		AuthorLabel:  source.AuthorLabel,
+		Tags:         source.Tags,
+		Metadata:     source.Metadata,
+		Content:      source.Content,
+		BaseRevision: baseRevision,
+	})
+	if err != nil {
+		return StudioDocument{}, current.Revision, err
+	}
+
+	now := time.Now().Unix()
+	current.TemplateKey = valid.Input.TemplateKey
+	current.Title = valid.Input.Title
+	current.Summary = valid.Input.Summary
+	current.Language = valid.Input.Language
+	current.AuthorLabel = valid.Input.AuthorLabel
+	current.Tags = valid.Input.Tags
+	current.Classification = valid.Classification
+	current.Metadata = valid.Input.Metadata
+	current.Content = valid.Input.Content
+	current.Revision++
+	current.Updated = now
+	wasArchived := current.Status == "archived"
+	if wasArchived {
+		// Recuperar desde la papelera devuelve un borrador privado. Conservar la
+		// antigua referencia publicada haría reaparecer contenido sin una acción
+		// explícita de publicación.
+		current.Status = "draft"
+		current.PublishedRevision = nil
+		current.PublicationKind = ""
+		current.PublicationTarget = ""
+		current.Published = nil
+	}
+	newSnapshot, err := json.Marshal(current)
+	if err != nil {
+		return StudioDocument{}, baseRevision, err
+	}
+	tagsJSON, _ := json.Marshal(valid.Input.Tags)
+	classificationJSON, _ := json.Marshal(valid.Classification)
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return StudioDocument{}, baseRevision, err
+	}
+	defer tx.Rollback()
+	if err := ensureStudioAssets(tx, id, valid.Assets, false); err != nil {
+		return StudioDocument{}, baseRevision, err
+	}
+	var publishedRevision any
+	if current.PublishedRevision != nil {
+		publishedRevision = *current.PublishedRevision
+	}
+	var published any
+	if current.Published != nil {
+		published = *current.Published
+	}
+	result, err := tx.Exec(`
+		UPDATE studio_documents SET
+			template_key=?, status=?, title=?, summary=?, language=?, author_label=?,
+			tags_json=?, classification_json=?, metadata_json=?, content_json=?,
+			plain_text=?, published_revision=?, publication_kind=?,
+			publication_target=?, published=?, revision=?, updated=?,
+			published_plain_text=CASE WHEN ?=1
+				THEN '' ELSE published_plain_text END
+		WHERE id=? AND revision=?`,
+		current.TemplateKey, current.Status, current.Title, current.Summary,
+		current.Language, current.AuthorLabel, string(tagsJSON),
+		string(classificationJSON), string(current.Metadata), string(current.Content),
+		valid.PlainText, publishedRevision, current.PublicationKind,
+		current.PublicationTarget, published, current.Revision, now,
+		boolInt(wasArchived), id, baseRevision)
+	if err != nil {
+		return StudioDocument{}, baseRevision, err
+	}
+	if changed, _ := result.RowsAffected(); changed != 1 {
+		var revision int
+		_ = tx.QueryRow(`SELECT revision FROM studio_documents WHERE id=?`, id).Scan(&revision)
+		return StudioDocument{}, revision, errStudioConflict
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO studio_revisions
+			(document_id, revision, editor_user_id, editor_label, snapshot_json, created)
+		VALUES (?,?,?,?,?,?)`,
+		id, current.Revision, editor.ID, editor.Username, string(newSnapshot), now); err != nil {
+		return StudioDocument{}, baseRevision, err
+	}
+	if err := replaceStudioDerived(tx, id, valid); err != nil {
+		return StudioDocument{}, baseRevision, err
+	}
+	if err := tx.Commit(); err != nil {
+		return StudioDocument{}, baseRevision, err
+	}
+	return current, current.Revision, nil
 }
