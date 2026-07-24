@@ -512,7 +512,10 @@
 
   async function restoreRevision(revision) {
     if (!selected || restoringRevision || revision.revision === selected.revision) return;
-    if (!confirm(t('studio.restoreConfirm', { revision: revision.revision }))) return;
+    const confirmKey = selected.publishedRevision
+      ? 'studio.restorePublishedConfirm'
+      : 'studio.restoreConfirm';
+    if (!confirm(t(confirmKey, { revision: revision.revision }))) return;
     if (!await flushCurrent()) return;
     const documentId = selected.id;
     restoringRevision = revision.revision;
@@ -995,11 +998,13 @@
   $effect(() => {
     const surface = surfaceOf();
     const publishDisabled = !selected || selected.status === 'archived';
+    const publicationPending = !!selected?.publishedRevision &&
+      (dirty || selected.revision !== selected.publishedRevision);
     onShellChange?.({
       mode,
       title: selected?.title || t('studio.title'),
-      saveState: saving ? 'saving' : offline ? 'error' : dirty ? 'changes' : 'saved',
-      saveLabel: saving ? t('studio.saving') : offline ? t('studio.offlineShort') : dirty ? t('studio.changesPending') : t('studio.saved'),
+      saveState: saving ? 'saving' : offline ? 'error' : dirty ? 'changes' : publicationPending ? 'publication' : 'saved',
+      saveLabel: saving ? t('studio.saving') : offline ? t('studio.offlineShort') : dirty ? t('studio.changesPending') : publicationPending ? t('studio.publicationPending') : t('studio.saved'),
       tools: shellTools(),
       textControl: selectedTextControl(),
       canPublish,
@@ -1202,7 +1207,14 @@
               <div class="revision-list">
                 {#each revisions as revision (revision.revision)}
                   <div class="revision-row">
-                    <span><b>{revision.title}</b><small>{t('studio.revisionNumber', { revision: revision.revision })} · {relTime(revision.created)}</small></span>
+                    <span>
+                      <b>{revision.title}</b>
+                      <small>
+                        {t('studio.revisionNumber', { revision: revision.revision })} · {relTime(revision.created)}
+                        {#if revision.revision === selected.revision} · {t('studio.revisionCurrent')}{/if}
+                        {#if revision.revision === selected.publishedRevision} · {t('studio.revisionPublished')}{/if}
+                      </small>
+                    </span>
                     <button disabled={restoringRevision || revision.revision === selected.revision} onclick={() => restoreRevision(revision)}>
                       {t('studio.restore')}
                     </button>
@@ -1283,7 +1295,14 @@
             <div class="revision-list">
               {#each revisions as revision (revision.revision)}
                 <div class="revision-row">
-                  <span><b>{revision.title}</b><small>{t('studio.revisionNumber', { revision: revision.revision })} · {relTime(revision.created)}</small></span>
+                  <span>
+                    <b>{revision.title}</b>
+                    <small>
+                      {t('studio.revisionNumber', { revision: revision.revision })} · {relTime(revision.created)}
+                      {#if revision.revision === selected.revision} · {t('studio.revisionCurrent')}{/if}
+                      {#if revision.revision === selected.publishedRevision} · {t('studio.revisionPublished')}{/if}
+                    </small>
+                  </span>
                   <button disabled={restoringRevision || revision.revision === selected.revision} onclick={() => restoreRevision(revision)}>
                     {t('studio.restore')}
                   </button>

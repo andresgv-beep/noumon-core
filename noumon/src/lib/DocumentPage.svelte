@@ -1,5 +1,4 @@
 <script>
-  import { onMount } from 'svelte';
   import { t } from './i18n.svelte.js';
   import { getPublishedDocument, getPublishedDocumentRelations } from './studioApi.js';
   import StudioDocumentView from './StudioDocumentView.svelte';
@@ -10,22 +9,52 @@
   let error = $state(false);
   let backlinks = $state([]);
   let related = $state([]);
+  let loadSequence = 0;
 
-  onMount(async () => {
-    const id = String(tab.itemId || tab.open?.itemId || '').replace(/^studio:/, '');
+  async function loadDocument(id, sequence) {
     try {
-      document = await getPublishedDocument(id);
+      const loadedDocument = await getPublishedDocument(id);
+      if (sequence !== loadSequence) return;
+      document = loadedDocument;
       try {
         const relations = await getPublishedDocumentRelations(id);
+        if (sequence !== loadSequence) return;
         backlinks = relations.backlinks || [];
         related = relations.related || [];
       } catch {
+        if (sequence !== loadSequence) return;
         backlinks = [];
         related = [];
       }
     }
-    catch (e) { error = true; }
+    catch (e) {
+      if (sequence !== loadSequence) return;
+      error = true;
+    }
+    if (sequence !== loadSequence) return;
     loading = false;
+  }
+
+  // Reader se reutiliza al cambiar entre pestañas internas. onMount solo cargaba
+  // la primera página y podía dejar visible un snapshot publicado antiguo (por
+  // ejemplo, una portada ya retirada). La identidad del item gobierna la carga.
+  $effect(() => {
+    const id = String(tab.itemId || tab.open?.itemId || '').replace(/^studio:/, '');
+    const sequence = ++loadSequence;
+    document = null;
+    backlinks = [];
+    related = [];
+    error = false;
+    loading = true;
+    onToc?.([]);
+    if (id) void loadDocument(id, sequence);
+    else {
+      error = true;
+      loading = false;
+    }
+    return () => {
+      if (loadSequence === sequence) loadSequence++;
+    };
   });
 </script>
 

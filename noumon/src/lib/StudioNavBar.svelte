@@ -121,7 +121,7 @@
   .identity strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;font-weight:650}
   .save-state{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px;white-space:nowrap}
   .save-state i{width:7px;height:7px;border-radius:var(--r-round);background:#6fd39a}
-  .save-state[data-state="saving"] i,.save-state[data-state="changes"] i{background:#e9b86b}
+  .save-state[data-state="saving"] i,.save-state[data-state="changes"] i,.save-state[data-state="publication"] i{background:#e9b86b}
   .save-state[data-state="error"]{color:#e77d88}.save-state[data-state="error"] i{background:#e77d88}
   .context-tools{display:flex;align-items:center;gap:2px;padding:4px;border-radius:var(--r-md);background:var(--ui-face);border:1px solid var(--ui-edge)}
   .context-tools button{min-width:27px;height:26px;padding:0 6px;border-radius:var(--r-sm);color:var(--muted);font-size:11px}

@@ -170,6 +170,46 @@ func studioDocumentBodyWithImage(t *testing.T, title string, baseRevision int, a
 	return string(encoded)
 }
 
+func studioDocumentBodyWithCover(t *testing.T, title string, baseRevision int, assetID string) string {
+	t.Helper()
+	var body map[string]any
+	if err := json.Unmarshal([]byte(validStudioDocumentBody(title, baseRevision)), &body); err != nil {
+		t.Fatal(err)
+	}
+	content := body["content"].(map[string]any)
+	blocks := content["blocks"].([]any)
+	content["blocks"] = append([]any{
+		map[string]any{
+			"id": "portada", "type": "image", "role": "cover",
+			"assetId": assetID, "alt": "Portada de prueba",
+		},
+	}, blocks...)
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(encoded)
+}
+
+func studioDocumentHasCover(t *testing.T, document StudioDocument) bool {
+	t.Helper()
+	var content struct {
+		Blocks []struct {
+			Type string `json:"type"`
+			Role string `json:"role"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(document.Content, &content); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range content.Blocks {
+		if block.Type == "image" && block.Role == "cover" {
+			return true
+		}
+	}
+	return false
+}
+
 func studioDocumentBodyWithLink(
 	t *testing.T,
 	title string,
@@ -777,6 +817,73 @@ func TestStudioRestoreCreatesRevisionWithoutChangingPublishedSnapshot(t *testing
 		!strings.Contains(missingRestore.Body.String(), `"studio.revision_not_found"`) {
 		t.Fatalf("revisión inexistente: %d %s",
 			missingRestore.Code, missingRestore.Body.String())
+	}
+}
+
+func TestStudioDocumentCoverRemovalAndRestoreRepublish(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	cookie := sessionFor(t, s, "autora-portada", 30, false)
+	ownerID := grantStudio(t, s, "autora-portada", true)
+
+	created := decodeStudioDocumentResponse(t, studioRequest(
+		h, http.MethodPost, "/api/studio/documents",
+		validStudioDocumentBody("Sin portada", 0), cookie,
+	))
+	if studioDocumentHasCover(t, created) {
+		t.Fatal("el documento inicial contiene una portada inesperada")
+	}
+	if _, err := s.store.db.Exec(`
+		INSERT INTO studio_assets
+			(id, document_id, owner_user_id, filename, mime_type, size_bytes, sha256, state, created)
+		VALUES ('asset-cover-lifecycle', ?, ?, 'portada.png', 'image/png', 10, 'cover-hash', 'staged', 1)`,
+		created.ID, ownerID); err != nil {
+		t.Fatal(err)
+	}
+
+	withCoverRec := studioRequest(
+		h, http.MethodPut, "/api/studio/documents/"+created.ID,
+		studioDocumentBodyWithCover(t, "Con portada", 1, "asset-cover-lifecycle"), cookie,
+	)
+	withCover := decodeStudioDocumentResponse(t, withCoverRec)
+	if withCoverRec.Code != http.StatusOK || !studioDocumentHasCover(t, withCover) {
+		t.Fatalf("guardar portada: %d %#v", withCoverRec.Code, withCover)
+	}
+	if rec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/publish", "", cookie,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("publicar portada: %d %s", rec.Code, rec.Body.String())
+	}
+
+	withoutCoverRec := studioRequest(
+		h, http.MethodPut, "/api/studio/documents/"+created.ID,
+		validStudioDocumentBody("Portada retirada", 2), cookie,
+	)
+	withoutCover := decodeStudioDocumentResponse(t, withoutCoverRec)
+	if withoutCoverRec.Code != http.StatusOK || studioDocumentHasCover(t, withoutCover) {
+		t.Fatalf("retirar portada del borrador: %d %#v", withoutCoverRec.Code, withoutCover)
+	}
+	public, err := s.store.publishedStudioDocument(created.ID)
+	if err != nil || !studioDocumentHasCover(t, public) || public.Revision != 2 {
+		t.Fatalf("el borrador alteró el snapshot publicado: %#v err=%v", public, err)
+	}
+
+	restoredRec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/restore/1",
+		`{"baseRevision":3}`, cookie,
+	)
+	restored := decodeStudioDocumentResponse(t, restoredRec)
+	if restoredRec.Code != http.StatusOK || studioDocumentHasCover(t, restored) {
+		t.Fatalf("restaurar revisión sin portada: %d %#v", restoredRec.Code, restored)
+	}
+	if rec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/publish", "", cookie,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("republicar revisión restaurada: %d %s", rec.Code, rec.Body.String())
+	}
+	public, err = s.store.publishedStudioDocument(created.ID)
+	if err != nil || studioDocumentHasCover(t, public) || public.Revision != 4 {
+		t.Fatalf("la portada sobrevivió a la republicación restaurada: %#v err=%v", public, err)
 	}
 }
 

@@ -162,15 +162,21 @@ export async function deleteStudioAsset(documentId, assetId) {
 }
 
 export async function listPublishedDocuments() {
-  const body = await studioJSON('/api/documents');
+  const body = await studioJSON('/api/documents', { cache: 'no-store' });
   return body.documents || [];
 }
 
 export async function getPublishedDocument(id) {
-  const body = await studioJSON(`/api/documents/${encodeURIComponent(id)}`);
+  const body = await studioJSON(
+    `/api/documents/${encodeURIComponent(id)}`,
+    { cache: 'no-store' },
+  );
   return body.document;
 }
 
 export async function getPublishedDocumentRelations(id) {
-  return studioJSON(`/api/documents/${encodeURIComponent(id)}/relations`);
+  return studioJSON(
+    `/api/documents/${encodeURIComponent(id)}/relations`,
+    { cache: 'no-store' },
+  );
 }
