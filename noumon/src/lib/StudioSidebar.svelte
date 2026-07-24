@@ -38,12 +38,14 @@
       <span class="glyph">{state.kindGlyph || '✎'}</span>
       <span><b>{state.kindLabel || t('studio.createDocument')}</b><small>{state.kindHint || t('studio.blockEditor')}</small></span>
     </div>
-    <span class="side-title">{t('studio.editing')}</span>
-    {#each state.sections || [] as section (section.key)}
-      <button class="side-item nav-item" class:active={state.activeSection === section.key} onclick={() => state.openSection?.(section.key)}>
-        <Icon name={section.icon || 'list'} size={15} />{section.label}
-      </button>
-    {/each}
+    {#if state.sections?.length}
+      <span class="side-title">{t('studio.editing')}</span>
+      {#each state.sections as section (section.key)}
+        <button class="side-item nav-item" class:active={state.activeSection === section.key} onclick={() => state.openSection?.(section.key)}>
+          <Icon name={section.icon || 'list'} size={15} />{section.label}
+        </button>
+      {/each}
+    {/if}
     <span class="side-title">{t('studio.history')}</span>
     <button class="side-item nav-item" class:active={state.revisionsOpen} onclick={() => state.toggleRevisions?.()}>
       <Icon name="history" size={15} />{t('studio.revisions')}<span class="badge">{state.revisionCount || 0}</span>

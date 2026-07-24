@@ -974,42 +974,7 @@
   }
 
   function shellSections() {
-    const surface = surfaceOf();
-    if (surface === 'cabinet') {
-      if (selected?.templateKey === 'cabinet.audio') {
-        return [
-          { key: 'tracks', icon: 'list', label: t('studio.audioTracks') },
-          { key: 'metadata', icon: 'tag', label: t('studio.section.metadata') },
-          { key: 'cover', icon: 'image', label: t('studio.section.cover') },
-        ];
-      }
-      const sections = [
-        { key: 'file', icon: 'download', label: t('studio.section.mainFile') },
-        { key: 'metadata', icon: 'tag', label: t('studio.section.metadata') },
-        { key: 'cover', icon: 'image', label: t('studio.section.cover') },
-      ];
-      if (selected?.templateKey === 'cabinet.video') {
-        sections.push(
-          { key: 'chapters', icon: 'list', label: t('studio.section.chapters') },
-          { key: 'subtitles', icon: 'list', label: t('studio.subtitles') },
-        );
-      }
-      return sections;
-    }
-    if (surface === 'moments') {
-      return [
-        { key: 'video', icon: 'download', label: t('studio.section.video') },
-        { key: 'cover', icon: 'image', label: t('studio.section.thumbnail') },
-        { key: 'chapters', icon: 'list', label: t('studio.section.chapters') },
-        { key: 'subtitles', icon: 'list', label: t('studio.subtitles') },
-      ];
-    }
-    return [
-      { key: 'structure', icon: 'list', label: t('studio.section.structure') },
-      { key: 'design', icon: 'edit', label: t('studio.section.design') },
-      { key: 'metadata', icon: 'tag', label: t('studio.section.metadata') },
-      { key: 'cover', icon: 'image', label: t('studio.section.cover') },
-    ];
+    return [];
   }
 
   function shellTools() {
@@ -1178,6 +1143,23 @@
           </div>
         </div>
 
+        <div class="palette-section cover-palette" data-studio-section="cover">
+          <h3>{t('studio.section.cover')}</h3>
+          <button class="document-cover" class:ready={!!documentCover()} onclick={chooseDocumentCover} disabled={uploadingImage}>
+            {#if documentCover()}
+              <StudioImage documentId={selected.id} assetId={documentCover().assetId} alt={t('studio.section.cover')} compact />
+            {:else}
+              <b>＋</b><span>{uploadingImage ? t('studio.uploadingImage') : t('studio.addCover')}</span>
+            {/if}
+          </button>
+          {#if documentCover()}
+            <div class="cover-actions">
+              <button onclick={chooseDocumentCover} disabled={uploadingImage}>{t('studio.replaceCover')}</button>
+              <button class="remove" onclick={removeDocumentCover}>{t('studio.removeCover')}</button>
+            </div>
+          {/if}
+        </div>
+
         <button class="link-tool" class:active={linkPicker} onclick={toggleLinkPicker}>
           <Icon name="book" size={14} />{t('studio.internalLink')}
         </button>
@@ -1211,24 +1193,6 @@
         class:compact={content().presentation?.contentWidth === 'compact'}
       >
         {#if error}<div class="studio-error">{t(error)}</div>{/if}
-        {#if activeSection === 'cover'}
-          <section class="document-inspector cover-inspector" data-studio-section="cover">
-            <h3>{t('studio.section.cover')}</h3>
-            <button class="document-cover" class:ready={!!documentCover()} onclick={chooseDocumentCover} disabled={uploadingImage}>
-              {#if documentCover()}
-                <StudioImage documentId={selected.id} assetId={documentCover().assetId} alt={t('studio.section.cover')} display="poster" />
-              {:else}
-                <b>＋</b><span>{uploadingImage ? t('studio.uploadingImage') : t('studio.addCover')}</span>
-              {/if}
-            </button>
-            {#if documentCover()}
-              <div class="cover-actions">
-                <button onclick={chooseDocumentCover} disabled={uploadingImage}>{t('studio.replaceCover')}</button>
-                <button class="remove" onclick={removeDocumentCover}>{t('studio.removeCover')}</button>
-              </div>
-            {/if}
-          </section>
-        {/if}
         {#if showRevisions}
           <section class="revision-panel">
             <header><b>{t('studio.revisions')}</b><span>{revisions.length}</span></header>
@@ -1388,8 +1352,6 @@
   .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:744px}
   .sidebar-hidden .canvas-column{max-width:1000px}
   .sidebar-hidden .canvas-column.wide{max-width:1120px}.sidebar-hidden .canvas-column.editorial{max-width:1340px}.sidebar-hidden .canvas-column.compact{max-width:820px}
-  .document-inspector{width:100%;margin:0 auto 14px;padding:16px;border:1px solid var(--accent-line);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
-  .document-inspector h3{margin:0 0 10px;color:var(--ink);font-size:12px}.document-inspector h3:not(:first-child){margin-top:16px}
   .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
   .revision-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px}.revision-panel header span{color:var(--faint)}
   .revision-list{display:grid;gap:5px}.revision-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:var(--r-sm);background:var(--raise)}
@@ -1409,6 +1371,10 @@
   .document-cover :global(img),.document-cover :global(.placeholder){width:100%;height:clamp(180px,28vw,360px);object-fit:cover;border-radius:0}
   .cover-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:9px}.cover-actions button{padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
   .cover-actions button:hover{border-color:var(--accent-line);color:var(--ink)}.cover-actions .remove{color:#df7474}
+  .cover-palette .document-cover{min-height:92px}
+  .cover-palette .document-cover :global(img),.cover-palette .document-cover :global(.placeholder){height:110px;min-height:0}
+  .cover-palette .cover-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:0}
+  .cover-palette .cover-actions button{min-width:0;padding-inline:5px;font-size:9.5px}
 
   .preview-mode{height:100%;overflow:auto;padding:28px clamp(18px,5vw,70px) 70px;background:var(--panel-2)}
   .publication-workspace{height:100%;overflow:auto;padding:34px clamp(22px,6vw,80px) 70px}
