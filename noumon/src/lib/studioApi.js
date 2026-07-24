@@ -1,5 +1,5 @@
 import {
-  serverFetch, isShell, isGateway, getGatewayTarget, getServerBase,
+  serverFetch, isShell, getDirectServerBase,
 } from './connection.js';
 
 async function studioJSON(path, options = {}) {
@@ -104,7 +104,10 @@ export async function uploadStudioAsset(documentId, file, purpose = 'image') {
       `/api/studio/documents/${encodeURIComponent(documentId)}/upload-token`,
       { method: 'POST' },
     );
-    const base = isGateway() ? await getGatewayTarget() : getServerBase();
+    // FormData no atraviesa correctamente el AssetServer del webview. La URL
+    // absoluta inyectada por el shell conserva el body y el `ut` autentica la
+    // petición sin cookie. Mismo contrato que las subidas del Panel.
+    const base = await getDirectServerBase();
     if (!base) throw new Error('studio.assets_unavailable');
     response = await fetch(
       `${String(base).replace(/\/+$/, '')}${assetPath}&ut=${encodeURIComponent(grant.token)}`,

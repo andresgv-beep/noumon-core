@@ -61,6 +61,19 @@ export async function getGatewayTarget() {
   return normalizeBase((await response.json()).target);
 }
 
+// Los multipart del webview deben saltarse el AssetServer y salir por red real.
+// El shell inyecta la URL absoluta del Core para ese único transporte. Conservamos
+// el endpoint del gateway como respaldo para shells antiguos/remotos y el base
+// normal para cualquier consumidor que no esté dentro del shell.
+export async function getDirectServerBase() {
+  if (isShell()) {
+    const injected = normalizeBase(window.__NOUMON_LIBRARY_CORE__);
+    if (injected) return injected;
+    if (isGateway()) return getGatewayTarget();
+  }
+  return getServerBase();
+}
+
 export async function setGatewayTarget(value) {
   const response = await fetch('/__noumon/gateway', {
     method: 'PUT',
