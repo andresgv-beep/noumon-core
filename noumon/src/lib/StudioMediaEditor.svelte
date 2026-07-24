@@ -27,7 +27,30 @@
     if (!m.collection) m.collection = 'General';
     return m;
   }
-  $effect(() => { if (document) ensureMetadata(); });
+  function normalizeLegacyPrimaryAudio() {
+    if (document?.templateKey !== 'cabinet.audio') return false;
+    const m = ensureMetadata();
+    const assetId = String(m.primaryAssetId || '').trim();
+    if (!assetId) return false;
+
+    const existingIndex = m.tracks.findIndex((track) => track?.assetId === assetId);
+    const track = existingIndex >= 0
+      ? m.tracks.splice(existingIndex, 1)[0]
+      : {
+          title: String(m.primaryName || '').replace(/\.[^.]+$/, '') || t('studio.defaultTrackTitle'),
+          assetId,
+        };
+    m.tracks.unshift(track);
+    m.primaryAssetId = '';
+    m.primaryName = '';
+    return true;
+  }
+
+  $effect(() => {
+    if (!document) return;
+    ensureMetadata();
+    if (normalizeLegacyPrimaryAudio()) changed();
+  });
 
   const cabinetProfile = () => String(document?.templateKey || '').replace('cabinet.', '');
 
@@ -74,6 +97,31 @@
     }
   }
 
+  async function uploadTracks(event) {
+    const input = event.currentTarget;
+    const files = Array.from(input.files || []);
+    input.value = '';
+    if (!files.length || !document || uploading) return;
+    uploading = 'track';
+    let added = false;
+    try {
+      for (const file of files) {
+        const asset = await onUpload?.(file, 'track');
+        if (!asset) continue;
+        ensureMetadata().tracks.push({
+          title: file.name.replace(/\.[^.]+$/, ''),
+          assetId: asset.id,
+        });
+        added = true;
+      }
+    } catch (error) {
+      onError?.(error);
+    } finally {
+      uploading = '';
+      if (added) changed();
+    }
+  }
+
   function addChapter() {
     const chapters = ensureMetadata().chapters;
     const last = chapters.at(-1);
@@ -113,22 +161,41 @@
       </div>
     {/if}
 
-    <div class="field" data-studio-section={surface() === 'moments' ? 'video' : 'file'}>
-      <span class="field-label">
-        {document.templateKey === 'cabinet.audio' ? t('studio.mainAudio')
-          : surface() === 'moments' || document.templateKey === 'cabinet.video'
+    {#if document.templateKey === 'cabinet.audio'}
+      <section class="repeat-field audio-tracks" data-studio-section="tracks">
+        <header><span><b>{t('studio.audioTracks')}</b><small>{t('studio.audioTracksHint')}</small></span>
+          <button onclick={() => trackInput?.click()} disabled={!!uploading}>
+            ＋ {uploading === 'track' ? t('studio.uploadingFile') : t('studio.addTrack')}
+          </button>
+        </header>
+        <input bind:this={trackInput} class="hidden-input" type="file" multiple
+          accept=".mp3,.ogg,.oga,.flac,.m4a,.wav,audio/*" onchange={uploadTracks} />
+        {#each metadata().tracks || [] as track, index}
+          <div class="repeat-row">
+            <span class="number">{index + 1}</span>
+            <input value={track.title} aria-label={t('studio.trackTitle')} oninput={(event) => { track.title = event.currentTarget.value; changed(); }} />
+            <button class="remove" onclick={() => removeAt('tracks', index)} aria-label={t('studio.removeEntry')}>×</button>
+          </div>
+        {/each}
+        {#if (metadata().tracks || []).length === 0}<p>{t('studio.noTracks')}</p>{/if}
+      </section>
+    {:else}
+      <div class="field" data-studio-section={surface() === 'moments' ? 'video' : 'file'}>
+        <span class="field-label">
+          {surface() === 'moments' || document.templateKey === 'cabinet.video'
             ? t('studio.section.video') : t('studio.section.mainFile')}
-      </span>
-      <button class="drop-zone" class:ready={!!metadata().primaryAssetId} onclick={() => primaryInput?.click()} disabled={!!uploading}>
-        <b>{uploading === 'primary' ? t('studio.uploadingFile') : assetLabel(metadata().primaryName, metadata().primaryAssetId) || t('studio.chooseLocalFile')}</b>
-        <small>{t('studio.localFileHint')}</small>
-      </button>
-      <input bind:this={primaryInput} class="hidden-input" type="file" accept={primaryAccept()}
-        onchange={(event) => upload(event, 'primary', (asset, file) => {
-          metadata().primaryAssetId = asset.id;
-          metadata().primaryName = file.name;
-        })} />
-    </div>
+        </span>
+        <button class="drop-zone" class:ready={!!metadata().primaryAssetId} onclick={() => primaryInput?.click()} disabled={!!uploading}>
+          <b>{uploading === 'primary' ? t('studio.uploadingFile') : assetLabel(metadata().primaryName, metadata().primaryAssetId) || t('studio.chooseLocalFile')}</b>
+          <small>{t('studio.localFileHint')}</small>
+        </button>
+        <input bind:this={primaryInput} class="hidden-input" type="file" accept={primaryAccept()}
+          onchange={(event) => upload(event, 'primary', (asset, file) => {
+            metadata().primaryAssetId = asset.id;
+            metadata().primaryName = file.name;
+          })} />
+      </div>
+    {/if}
 
     <div class="fields-two" data-studio-section="metadata">
       <label>{t('studio.documentTitle')}<input value={document.title} oninput={(event) => { document.title = event.currentTarget.value; changed(); }} /></label>
@@ -150,26 +217,6 @@
         <label>{t('studio.durationSeconds')}<input type="number" min="0" value={metadata().duration || 0} oninput={(event) => { metadata().duration = Number(event.currentTarget.value || 0); changed(); }} /></label>
       {/if}
     </div>
-
-    {#if document.templateKey === 'cabinet.audio'}
-      <section class="repeat-field" data-studio-section="tracks">
-        <header><span><b>{t('studio.audioTracks')}</b><small>{t('studio.audioTracksHint')}</small></span>
-          <button onclick={() => trackInput?.click()} disabled={!!uploading}>＋ {t('studio.addTrack')}</button>
-        </header>
-        <input bind:this={trackInput} class="hidden-input" type="file" accept=".mp3,.ogg,.oga,.flac,.m4a,.wav,audio/*"
-          onchange={(event) => upload(event, 'track', (asset, file) => {
-            ensureMetadata().tracks.push({ title: file.name.replace(/\.[^.]+$/, ''), assetId: asset.id });
-          })} />
-        {#each metadata().tracks || [] as track, index}
-          <div class="repeat-row">
-            <span class="number">{index + 1}</span>
-            <input value={track.title} aria-label={t('studio.trackTitle')} oninput={(event) => { track.title = event.currentTarget.value; changed(); }} />
-            <button class="remove" onclick={() => removeAt('tracks', index)} aria-label={t('studio.removeEntry')}>×</button>
-          </div>
-        {/each}
-        {#if (metadata().tracks || []).length === 0}<p>{t('studio.noTracks')}</p>{/if}
-      </section>
-    {/if}
 
     {#if surface() === 'moments'}
       <section class="repeat-field" data-studio-section="chapters">

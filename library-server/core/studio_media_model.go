@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
@@ -82,6 +83,34 @@ func validateStudioMediaMetadata(template string, raw json.RawMessage) (StudioMe
 	metadata.PrimaryName = strings.TrimSpace(metadata.PrimaryName)
 	metadata.CoverName = strings.TrimSpace(metadata.CoverName)
 	metadata.ChannelAvatarName = strings.TrimSpace(metadata.ChannelAvatarName)
+	// Cabinet Audio used to store one file separately as primaryAssetId while
+	// the player only enumerated tracks. Normalize that legacy shape so the
+	// former primary file becomes track 1 and every audio follows one ordering.
+	if template == "cabinet.audio" && strings.TrimSpace(metadata.PrimaryAssetID) != "" {
+		primaryID := strings.TrimSpace(metadata.PrimaryAssetID)
+		index := -1
+		for i := range metadata.Tracks {
+			if strings.TrimSpace(metadata.Tracks[i].AssetID) == primaryID {
+				index = i
+				break
+			}
+		}
+		var primaryTrack StudioMediaTrack
+		if index >= 0 {
+			primaryTrack = metadata.Tracks[index]
+			metadata.Tracks = append(metadata.Tracks[:index], metadata.Tracks[index+1:]...)
+		} else {
+			title := strings.TrimSpace(strings.TrimSuffix(
+				metadata.PrimaryName, filepath.Ext(metadata.PrimaryName)))
+			if title == "" {
+				title = "Audio"
+			}
+			primaryTrack = StudioMediaTrack{Title: title, AssetID: primaryID}
+		}
+		metadata.Tracks = append([]StudioMediaTrack{primaryTrack}, metadata.Tracks...)
+		metadata.PrimaryAssetID = ""
+		metadata.PrimaryName = ""
+	}
 	if metadata.Duration < 0 || metadata.Duration > 7*24*60*60 {
 		return metadata, nil, fmt.Errorf("metadata.duration: invalid")
 	}

@@ -1533,6 +1533,39 @@ func TestStudioCabinetPublishesMultipleAudioTracks(t *testing.T) {
 	}
 }
 
+func TestStudioCabinetNormalizesLegacyPrimaryAudioAsFirstTrack(t *testing.T) {
+	primaryID := strings.Repeat("a", 32)
+	secondID := strings.Repeat("b", 32)
+	raw, err := json.Marshal(map[string]any{
+		"collection":     "Historia",
+		"primaryAssetId": primaryID,
+		"primaryName":    "01-introduccion.mp3",
+		"tracks": []map[string]any{
+			{"title": "Testimonios", "assetId": secondID},
+			{"title": "Introducción", "assetId": primaryID},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, assets, err := validateStudioMediaMetadata("cabinet.audio", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.PrimaryAssetID != "" || metadata.PrimaryName != "" {
+		t.Fatalf("legacy primary fields remain after normalization: %#v", metadata)
+	}
+	if len(metadata.Tracks) != 2 ||
+		metadata.Tracks[0].AssetID != primaryID ||
+		metadata.Tracks[0].Title != "Introducción" ||
+		metadata.Tracks[1].AssetID != secondID {
+		t.Fatalf("legacy primary was not promoted to track 1: %#v", metadata.Tracks)
+	}
+	if len(assets) != 2 {
+		t.Fatalf("unexpected normalized assets: %#v", assets)
+	}
+}
+
 func TestStudioMediaProfileRejectsWrongPrimaryType(t *testing.T) {
 	s := testAuthServer(t, "")
 	s.studioRoot = t.TempDir()

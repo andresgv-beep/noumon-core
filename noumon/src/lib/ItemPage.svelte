@@ -86,7 +86,7 @@
   // ── Audiolibro multi-pista (portada + motor con onda + lista) ──
   const coverURL = $derived(item?.preview?.kind === 'image' ? item.preview.url : '');
   const tracks = $derived(item?.tracks || []);
-  const isAudiobook = $derived(isAudio && tracks.length > 1);
+  const isAudiobook = $derived(isAudio && tracks.length > 0);
   const curTrack = $derived(tracks[trackIdx] || null);
   const trackURL = $derived(curTrack?.url || url);
   const trackWave = $derived(curTrack?.waveform || '');
@@ -269,7 +269,11 @@
             {#if author}<p>{author}</p>{/if}
             <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
             <div class="wave" style={trackWave ? `background-image:url('${trackWave}')` : ''} class:nowave={!trackWave} onclick={seekWave} role="slider" aria-label={t('item.trackPosition')} aria-valuenow={Math.round(progress * 100)} aria-valuemin="0" aria-valuemax="100" tabindex="0">
-              {#if !trackWave}<Icon name="note" size={30} />{/if}
+              {#if !trackWave}
+                <svg class="wave-fallback" viewBox="0 0 1000 120" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M0 60 L24 60 L35 53 L47 67 L60 60 L82 60 L94 42 L108 78 L122 60 L151 60 L164 50 L178 70 L192 60 L221 60 L234 31 L249 89 L264 60 L291 60 L307 47 L322 73 L338 60 L365 60 L381 21 L398 99 L415 60 L444 60 L459 45 L474 75 L489 60 L518 60 L535 27 L552 93 L568 60 L596 60 L612 48 L628 72 L644 60 L673 60 L689 37 L705 83 L721 60 L750 60 L764 51 L779 69 L794 60 L823 60 L839 43 L855 77 L871 60 L900 60 L914 53 L928 67 L942 60 L1000 60" />
+                </svg>
+              {/if}
               <div class="wave-played" style="width:{progress * 100}%"></div>
               <div class="wave-head" style="left:{progress * 100}%"></div>
             </div>
@@ -444,9 +448,10 @@
   .audioengine h2 { font-family: var(--a-serif); font-size: 25px; font-weight: 400; margin: 8px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .audioengine p { color: var(--a-faint); font-size: 12px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wave { position: relative; height: 118px; margin: 22px 0 16px; width: 100%; border-radius:var(--r-md); background: #0e0f14 center/100% 86% no-repeat; border: 1px solid var(--a-line); display: grid; place-items: center; color: var(--a-faint); cursor: pointer; overflow: hidden; }
-  .wave.nowave { background: linear-gradient(150deg,var(--a-accent),var(--a-accent2)); color: rgba(255,255,255,.85); cursor: default; }
+  .wave.nowave { background: #3b3e43; border-color: #555960; color: #fff; }
+  .wave-fallback { position: absolute; inset: 22px 0; width: 100%; height: calc(100% - 44px); opacity: .86; }
+  .wave-fallback path { fill: none; stroke: currentColor; stroke-width: 2.2; vector-effect: non-scaling-stroke; }
   .wave-played { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--a-accent) 30%, transparent); pointer-events: none; }
-  .wave.nowave .wave-played, .wave.nowave .wave-head { display: none; }
   .wave-head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--a-accent); box-shadow: 0 0 6px var(--a-accent); pointer-events: none; }
   .engine-audio { width: 100%; }
 
