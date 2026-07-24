@@ -14,6 +14,11 @@
       : undefined;
   }
 
+  function pageTextAlign(field) {
+    const value = presentation()[field];
+    return ['left', 'center', 'right'].includes(value) ? value : undefined;
+  }
+
   function collectHeadings(blocks, result = [], depth = 0) {
     if (!Array.isArray(blocks) || depth > 12) return result;
     for (const block of blocks) {
@@ -49,8 +54,8 @@
   >
     <header>
       <span>{document.classification?.workType || content().classification?.workType || t('documents.article')}</span>
-      <h1 style:font-size={pageTextSize('titleFontSize')}>{document.title}</h1>
-      {#if document.summary}<p class="lead" style:font-size={pageTextSize('summaryFontSize')}>{document.summary}</p>{/if}
+      <h1 style:font-size={pageTextSize('titleFontSize')} style:text-align={pageTextAlign('titleTextAlign')}>{document.title}</h1>
+      {#if document.summary}<p class="lead" style:font-size={pageTextSize('summaryFontSize')} style:text-align={pageTextAlign('summaryTextAlign')}>{document.summary}</p>{/if}
       <div class="meta">
         {document.authorLabel || t('documents.localAuthor')}
         {#if document.published || document.updated} · {relTime(document.published || document.updated)}{/if}

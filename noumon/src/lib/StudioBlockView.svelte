@@ -45,19 +45,25 @@
       ? `${value}px`
       : undefined;
   }
+
+  function textAlign() {
+    return ['left', 'center', 'right'].includes(block.textAlign)
+      ? block.textAlign
+      : undefined;
+  }
 </script>
 
 {#if block.type === 'heading'}
   {@const level = Math.min(3, Math.max(1, block.level || 2))}
-  {#if level === 1}<h1 id={headingId()} style:font-size={textSize()}>{@html inline(block.text)}</h1>{:else if level === 2}<h2 id={headingId()} style:font-size={textSize()}>{@html inline(block.text)}</h2>{:else}<h3 id={headingId()} style:font-size={textSize()}>{@html inline(block.text)}</h3>{/if}
+  {#if level === 1}<h1 id={headingId()} style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</h1>{:else if level === 2}<h2 id={headingId()} style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</h2>{:else}<h3 id={headingId()} style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</h3>{/if}
 {:else if block.type === 'paragraph'}
-  <p style:font-size={textSize()}>{@html inline(block.text)}</p>
+  <p style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</p>
 {:else if block.type === 'quote'}
-  <blockquote style:font-size={textSize()}>{@html inline(block.text)}</blockquote>
+  <blockquote style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</blockquote>
 {:else if block.type === 'bulletList'}
-  <ul style:font-size={textSize()}>{#each block.items || [] as item}<li>{@html inline(item)}</li>{/each}</ul>
+  <ul style:font-size={textSize()} style:text-align={textAlign()}>{#each block.items || [] as item}<li>{@html inline(item)}</li>{/each}</ul>
 {:else if block.type === 'orderedList'}
-  <ol style:font-size={textSize()}>{#each block.items || [] as item}<li>{@html inline(item)}</li>{/each}</ol>
+  <ol style:font-size={textSize()} style:text-align={textAlign()}>{#each block.items || [] as item}<li>{@html inline(item)}</li>{/each}</ol>
 {:else if block.type === 'table'}
   <div class="table-scroll"><table style:font-size={textSize()}><tbody>{#each block.rows || [] as row, rowIndex}<tr>{#each row as cell}{#if rowIndex === 0}<th>{@html inline(cell)}</th>{:else}<td>{@html inline(cell)}</td>{/if}{/each}</tr>{/each}</tbody></table></div>
 {:else if block.type === 'image'}
@@ -75,13 +81,13 @@
       {#if block.caption}<figcaption>{@html inline(block.caption)}</figcaption>{/if}
     </figure>
     {#if imageHasSideText()}
-      <div class="image-side-text" style:font-size={textSize()}>{@html inline(block.sideText)}</div>
+      <div class="image-side-text" style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.sideText)}</div>
     {/if}
   </div>
 {:else if block.type === 'code'}
-  <pre style:font-size={textSize()}><code>{block.text || ''}</code></pre>
+  <pre style:font-size={textSize()} style:text-align={textAlign()}><code>{block.text || ''}</code></pre>
 {:else if block.type === 'callout'}
-  <aside class="callout" style:font-size={textSize()}>
+  <aside class="callout" style:font-size={textSize()} style:text-align={textAlign()}>
     {#if block.title}<b>{@html inline(block.title)}</b>{/if}
     {#if block.text}<p>{@html inline(block.text)}</p>{/if}
     {#each block.children || block.blocks || [] as child (child.id)}

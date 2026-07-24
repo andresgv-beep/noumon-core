@@ -70,6 +70,76 @@
     touch();
   }
 
+  function blockDefaultTextSize(block) {
+    if (block?.type === 'heading') return ({ 1: 42, 2: 25, 3: 18 })[block.level || 2];
+    if (block?.type === 'quote') return 17;
+    if (block?.type === 'code' || block?.type === 'table' || block?.type === 'callout') return 13;
+    if (block?.type === 'image') return 15;
+    return 15;
+  }
+
+  function selectedTextControl() {
+    if (selectedBlockID === '@title') {
+      return {
+        size: pageTextSize('titleFontSize', 34),
+        align: content().presentation?.titleTextAlign || 'left',
+        canAlign: true,
+      };
+    }
+    if (selectedBlockID === '@summary') {
+      return {
+        size: pageTextSize('summaryFontSize', 17),
+        align: content().presentation?.summaryTextAlign || 'left',
+        canAlign: true,
+      };
+    }
+    const block = findBlockByID(selectedBlockID);
+    const supported = ['heading', 'paragraph', 'quote', 'bulletList', 'orderedList', 'code', 'callout', 'table'].includes(block?.type)
+      || (block?.type === 'image'
+        && ['medium', 'small'].includes(block.imageSize)
+        && ['left', 'right'].includes(block.imageAlign));
+    if (!supported) return null;
+    const value = Number(block.fontSize);
+    return {
+      size: Number.isInteger(value) && value >= 10 && value <= 96
+        ? value
+        : blockDefaultTextSize(block),
+      align: ['left', 'center', 'right'].includes(block.textAlign) ? block.textAlign : 'left',
+      canAlign: block.type !== 'table',
+    };
+  }
+
+  function setSelectedTextSize(value) {
+    const next = Math.max(10, Math.min(96, Math.round(Number(value) || 15)));
+    if (selectedBlockID === '@title') {
+      setPageTextSize('titleFontSize', next, 34);
+      return;
+    }
+    if (selectedBlockID === '@summary') {
+      setPageTextSize('summaryFontSize', next, 17);
+      return;
+    }
+    const block = findBlockByID(selectedBlockID);
+    if (!block) return;
+    block.fontSize = next;
+    touch();
+  }
+
+  function setSelectedTextAlign(align) {
+    if (!['left', 'center', 'right'].includes(align)) return;
+    if (selectedBlockID === '@title' || selectedBlockID === '@summary') {
+      content().presentation ||= {};
+      const field = selectedBlockID === '@title' ? 'titleTextAlign' : 'summaryTextAlign';
+      content().presentation[field] = align;
+      touch();
+      return;
+    }
+    const block = findBlockByID(selectedBlockID);
+    if (!block || block.type === 'table') return;
+    block.textAlign = align;
+    touch();
+  }
+
   onMount(() => {
     studioActive = true;
     load();
@@ -888,6 +958,7 @@
       saveState: saving ? 'saving' : offline ? 'error' : dirty ? 'changes' : 'saved',
       saveLabel: saving ? t('studio.saving') : offline ? t('studio.offlineShort') : dirty ? t('studio.changesPending') : t('studio.saved'),
       tools: shellTools(),
+      textControl: selectedTextControl(),
       canPublish,
       publishDisabled,
       publishLabel: selected?.publishedRevision ? t('studio.updatePublication') : t('studio.publish'),
@@ -909,6 +980,8 @@
       publish: publishSelected,
       unpublish: selected?.publishedRevision ? unpublishSelected : null,
       runTool,
+      setTextSize: setSelectedTextSize,
+      setTextAlign: setSelectedTextAlign,
       openDocument,
       openSection,
       toggleRevisions,
@@ -1075,22 +1148,22 @@
           data-studio-section="structure"
         >
           <div class="canvas-title selected">
-            <div class="canvas-font-control">
-              <span>{t('studio.textSize')}</span>
-              <button title={t('studio.textSmaller')} onclick={() => setPageTextSize('titleFontSize', pageTextSize('titleFontSize', 34) - 1, 34)}>−</button>
-              <label><input type="number" min="10" max="96" value={pageTextSize('titleFontSize', 34)} oninput={(event) => setPageTextSize('titleFontSize', event.currentTarget.value, 34)} /><span>px</span></label>
-              <button title={t('studio.textLarger')} onclick={() => setPageTextSize('titleFontSize', pageTextSize('titleFontSize', 34) + 1, 34)}>+</button>
-            </div>
-            <h1 style:font-size={`${pageTextSize('titleFontSize', 34)}px`} contenteditable="true" oninput={(event) => { selected.title = event.currentTarget.innerText; touch(); }}>{selected.title}</h1>
+            <h1
+              style:font-size={`${pageTextSize('titleFontSize', 34)}px`}
+              style:text-align={content().presentation?.titleTextAlign || 'left'}
+              contenteditable="true"
+              onfocus={() => (selectedBlockID = '@title')}
+              oninput={(event) => { selected.title = event.currentTarget.innerText; touch(); }}
+            >{selected.title}</h1>
           </div>
           <div class="canvas-summary">
-            <div class="canvas-font-control">
-              <span>{t('studio.textSize')}</span>
-              <button title={t('studio.textSmaller')} onclick={() => setPageTextSize('summaryFontSize', pageTextSize('summaryFontSize', 17) - 1, 17)}>−</button>
-              <label><input type="number" min="10" max="96" value={pageTextSize('summaryFontSize', 17)} oninput={(event) => setPageTextSize('summaryFontSize', event.currentTarget.value, 17)} /><span>px</span></label>
-              <button title={t('studio.textLarger')} onclick={() => setPageTextSize('summaryFontSize', pageTextSize('summaryFontSize', 17) + 1, 17)}>+</button>
-            </div>
-            <p style:font-size={`${pageTextSize('summaryFontSize', 17)}px`} contenteditable="true" oninput={(event) => { selected.summary = event.currentTarget.innerText; touch(); }}>{selected.summary || t('studio.summaryPlaceholder')}</p>
+            <p
+              style:font-size={`${pageTextSize('summaryFontSize', 17)}px`}
+              style:text-align={content().presentation?.summaryTextAlign || 'left'}
+              contenteditable="true"
+              onfocus={() => (selectedBlockID = '@summary')}
+              oninput={(event) => { selected.summary = event.currentTarget.innerText; touch(); }}
+            >{selected.summary || t('studio.summaryPlaceholder')}</p>
           </div>
 
           {#each content().blocks as block (block.id)}
@@ -1192,17 +1265,10 @@
   .revision-row>span{min-width:0;display:flex;flex-direction:column}.revision-row b{font-size:11px}.revision-row small{color:var(--faint);font-size:9px}.revision-row button{padding:5px 8px;font-size:10px}
   .document-canvas{width:100%;min-height:470px;margin:0 auto;padding:42px clamp(38px,5vw,68px);border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--shadow-soft);font-family:var(--font-read);transition:padding .2s}
   .document-canvas.compact{padding-inline:52px}.document-canvas.sans{font-family:var(--font)}
-  .canvas-title,.canvas-summary{position:relative;margin:2px -9px;padding:7px 9px;border:1px solid transparent;border-radius:var(--r-sm)}
+  .canvas-title,.canvas-summary{margin:2px -9px;padding:7px 9px;border:1px solid transparent;border-radius:var(--r-sm)}
   .canvas-title:hover,.canvas-title:focus-within,.canvas-summary:hover,.canvas-summary:focus-within{border-color:var(--accent-line);background:color-mix(in srgb,var(--accent) 5%,transparent)}
   .canvas-title h1{margin:0;outline:0;color:var(--ink);line-height:1.1;letter-spacing:-.03em}
   .canvas-summary p{min-height:28px;margin:0;outline:0;color:var(--muted);line-height:1.5}
-  .canvas-font-control{position:absolute;z-index:3;right:5px;top:-25px;display:flex;align-items:center;gap:3px;height:25px;padding:3px 5px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--raise);box-shadow:0 4px 14px color-mix(in srgb,#000 18%,transparent);font-family:var(--font);opacity:0;transition:opacity .12s}
-  .canvas-title:hover>.canvas-font-control,.canvas-title:focus-within>.canvas-font-control,.canvas-summary:hover>.canvas-font-control,.canvas-summary:focus-within>.canvas-font-control{opacity:1}
-  .canvas-font-control>span{padding:0 3px;color:var(--muted);font-size:9px;font-weight:700;text-transform:uppercase}
-  .canvas-font-control button{width:22px;height:20px;border:1px solid var(--border);border-radius:3px;background:var(--card);color:var(--ink-dim);font-size:12px}
-  .canvas-font-control label{display:flex;align-items:center;height:20px;border:1px solid var(--border);border-radius:3px;background:var(--card);color:var(--muted)}
-  .canvas-font-control input{width:34px;padding:0 2px;border:0;outline:0;background:transparent;color:var(--ink);font:10px var(--mono);text-align:right;appearance:textfield}
-  .canvas-font-control input::-webkit-inner-spin-button{appearance:none}.canvas-font-control label span{padding-right:4px;font-size:9px}
   .add-any{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:11px;border:1px dashed var(--border);border-radius:var(--r-md);background:transparent;color:var(--faint);font-size:12px}
   .add-any:hover{border-color:var(--accent-line);color:var(--ink)}.add-any b{width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r-sm);background:var(--accent-weak);color:var(--accent-2)}
   .document-metadata{width:100%;margin:18px auto 0;padding:16px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}

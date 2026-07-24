@@ -258,6 +258,7 @@ func TestStudioValidationAcceptsOnlyKnownImagePresentation(t *testing.T) {
 				"imageSize":"poster",
 				"imageAlign":"center",
 				"fontSize":18,
+				"textAlign":"right",
 				"sideText":"Texto que también debe indexarse"
 			}]
 		}`),
@@ -307,6 +308,16 @@ func TestStudioValidationAcceptsOnlyKnownImagePresentation(t *testing.T) {
 	if _, err := validateStudioInput(input); err == nil ||
 		!strings.Contains(err.Error(), "presentation.titleFontSize") {
 		t.Fatalf("unsafe title font size accepted: %v", err)
+	}
+
+	input.Content = json.RawMessage(`{
+		"schemaVersion":1,
+		"presentation":{"titleTextAlign":"justify"},
+		"blocks":[]
+	}`)
+	if _, err := validateStudioInput(input); err == nil ||
+		!strings.Contains(err.Error(), "presentation.titleTextAlign") {
+		t.Fatalf("unknown title alignment accepted: %v", err)
 	}
 }
 

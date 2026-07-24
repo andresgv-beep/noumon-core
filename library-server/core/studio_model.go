@@ -62,10 +62,12 @@ type StudioClassification struct {
 }
 
 type StudioPresentation struct {
-	ContentWidth    string `json:"contentWidth,omitempty"`
-	FontPreset      string `json:"fontPreset,omitempty"`
-	TitleFontSize   int    `json:"titleFontSize,omitempty"`
-	SummaryFontSize int    `json:"summaryFontSize,omitempty"`
+	ContentWidth     string `json:"contentWidth,omitempty"`
+	FontPreset       string `json:"fontPreset,omitempty"`
+	TitleFontSize    int    `json:"titleFontSize,omitempty"`
+	SummaryFontSize  int    `json:"summaryFontSize,omitempty"`
+	TitleTextAlign   string `json:"titleTextAlign,omitempty"`
+	SummaryTextAlign string `json:"summaryTextAlign,omitempty"`
 }
 
 type StudioContent struct {
@@ -221,6 +223,17 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	}
 	if size := content.Presentation.SummaryFontSize; size != 0 && (size < 10 || size > 96) {
 		return studioValidatedInput{}, fmt.Errorf("presentation.summaryFontSize: invalid")
+	}
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{"titleTextAlign", content.Presentation.TitleTextAlign},
+		{"summaryTextAlign", content.Presentation.SummaryTextAlign},
+	} {
+		if field.value != "" && field.value != "left" && field.value != "center" && field.value != "right" {
+			return studioValidatedInput{}, fmt.Errorf("presentation.%s: invalid", field.name)
+		}
 	}
 	classification, facets, err := validateStudioClassification(content.Classification)
 	if err != nil {
@@ -381,6 +394,13 @@ func (s *studioBlockValidation) validate(raw json.RawMessage, depth int) error {
 		var size int
 		if err := json.Unmarshal(field, &size); err != nil || size < 10 || size > 96 {
 			return fmt.Errorf("block.fontSize: invalid")
+		}
+	}
+	if field, ok := obj["textAlign"]; ok {
+		var align string
+		if err := json.Unmarshal(field, &align); err != nil ||
+			(align != "left" && align != "center" && align != "right") {
+			return fmt.Errorf("block.textAlign: invalid")
 		}
 	}
 	for _, key := range []string{"text", "caption", "alt", "sideText", "title", "titleSnapshot"} {

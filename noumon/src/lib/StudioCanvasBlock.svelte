@@ -89,11 +89,6 @@
       && ['left', 'right'].includes(imageAlign());
   }
 
-  function supportsTextSize() {
-    return ['heading', 'paragraph', 'quote', 'bulletList', 'orderedList', 'code', 'callout', 'table'].includes(block.type)
-      || (block.type === 'image' && imageHasSideText());
-  }
-
   function defaultTextSize() {
     if (block.type === 'heading') return ({ 1: 42, 2: 25, 3: 18 })[block.level || 2];
     if (block.type === 'quote') return 17;
@@ -109,10 +104,10 @@
       : defaultTextSize();
   }
 
-  function setTextSize(value, event) {
-    event?.stopPropagation();
-    block.fontSize = Math.max(10, Math.min(96, Math.round(Number(value) || defaultTextSize())));
-    onChange?.();
+  function textAlign() {
+    return ['left', 'center', 'right'].includes(block.textAlign)
+      ? block.textAlign
+      : 'left';
   }
 
   function setImageSize(size, event) {
@@ -220,51 +215,24 @@
     <button title={t('studio.removeBlock')} aria-label={t('studio.removeBlock')} onclick={(event) => { event.stopPropagation(); onRemove?.(block.id); }}>×</button>
   </div>
 
-  {#if supportsTextSize() && (selected || activeBlockID === block.id)}
-    <div class="text-size-tools">
-      <span>{t('studio.textSize')}</span>
-      <button
-        title={t('studio.textSmaller')}
-        aria-label={t('studio.textSmaller')}
-        onclick={(event) => setTextSize(textSize() - 1, event)}
-      >−</button>
-      <label>
-        <input
-          type="number"
-          min="10"
-          max="96"
-          value={textSize()}
-          aria-label={t('studio.textSize')}
-          oninput={(event) => setTextSize(event.currentTarget.value, event)}
-        />
-        <span>px</span>
-      </label>
-      <button
-        title={t('studio.textLarger')}
-        aria-label={t('studio.textLarger')}
-        onclick={(event) => setTextSize(textSize() + 1, event)}
-      >+</button>
-    </div>
-  {/if}
-
   {#if block.type === 'heading'}
     {@const level = Math.min(3, Math.max(1, block.level || 2))}
     {#if level === 1}
-      <h1 style:font-size={`${textSize()}px`} contenteditable="true" oninput={setText}>{@html inline(block.text)}</h1>
+      <h1 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</h1>
     {:else if level === 2}
-      <h2 style:font-size={`${textSize()}px`} contenteditable="true" oninput={setText}>{@html inline(block.text)}</h2>
+      <h2 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</h2>
     {:else}
-      <h3 style:font-size={`${textSize()}px`} contenteditable="true" oninput={setText}>{@html inline(block.text)}</h3>
+      <h3 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</h3>
     {/if}
   {:else if block.type === 'paragraph'}
-    <p style:font-size={`${textSize()}px`} contenteditable="true" oninput={setText}>{@html inline(block.text)}</p>
+    <p style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</p>
   {:else if block.type === 'quote'}
-    <blockquote style:font-size={`${textSize()}px`} contenteditable="true" oninput={setText}>{@html inline(block.text)}</blockquote>
+    <blockquote style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</blockquote>
   {:else if block.type === 'bulletList' || block.type === 'orderedList'}
     {#if block.type === 'bulletList'}
-      <ul style:font-size={`${textSize()}px`}>{#each block.items || [] as item, itemIndex}<li contenteditable="true" oninput={(event) => setListItem(event, itemIndex)}>{item}</li>{/each}</ul>
+      <ul style:font-size={`${textSize()}px`} style:text-align={textAlign()}>{#each block.items || [] as item, itemIndex}<li contenteditable="true" oninput={(event) => setListItem(event, itemIndex)}>{item}</li>{/each}</ul>
     {:else}
-      <ol style:font-size={`${textSize()}px`}>{#each block.items || [] as item, itemIndex}<li contenteditable="true" oninput={(event) => setListItem(event, itemIndex)}>{item}</li>{/each}</ol>
+      <ol style:font-size={`${textSize()}px`} style:text-align={textAlign()}>{#each block.items || [] as item, itemIndex}<li contenteditable="true" oninput={(event) => setListItem(event, itemIndex)}>{item}</li>{/each}</ol>
     {/if}
   {:else if block.type === 'table'}
     <div class="table-editor">
@@ -338,15 +306,16 @@
             data-placeholder={t('studio.imageSideTextPlaceholder')}
             bind:innerText={block.sideText}
             style:font-size={`${textSize()}px`}
+            style:text-align={textAlign()}
             oninput={() => onChange?.()}
           ></div>
         {/if}
       </div>
     </div>
   {:else if block.type === 'code'}
-    <pre style:font-size={`${textSize()}px`} contenteditable="true" oninput={setText}>{block.text || ''}</pre>
+    <pre style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{block.text || ''}</pre>
   {:else if block.type === 'callout'}
-    <aside class="callout" style:font-size={`${textSize()}px`}>
+    <aside class="callout" style:font-size={`${textSize()}px`} style:text-align={textAlign()}>
       <strong contenteditable="true" oninput={(event) => setText(event, 'title')}>{@html inline(block.title || t('studio.calloutTitle'))}</strong>
       <p contenteditable="true" oninput={setText}>{@html inline(block.text)}</p>
     </aside>
@@ -486,14 +455,6 @@
   .actions{position:absolute;z-index:2;right:5px;top:-24px;display:flex;gap:2px;padding:3px;border-radius:var(--r-sm);background:var(--raise);border:1px solid var(--border);opacity:0}
   .actions button{padding:1px 5px;color:var(--muted);font-size:11px}.actions button:hover{color:var(--ink)}
   .canvas-block:hover>.handle,.canvas-block:hover>.actions,.canvas-block.selected>.handle,.canvas-block.selected>.actions{opacity:1}
-  .text-size-tools{position:absolute;z-index:3;left:6px;top:-28px;display:flex;align-items:center;gap:3px;height:27px;padding:3px 5px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--raise);box-shadow:0 4px 14px color-mix(in srgb,#000 18%,transparent);font-family:var(--font)}
-  .text-size-tools>span{padding:0 3px;color:var(--muted);font-size:9px;font-weight:700;text-transform:uppercase}
-  .text-size-tools button{width:22px;height:20px;border:1px solid var(--border);border-radius:3px;background:var(--card);color:var(--ink-dim);font-size:12px}
-  .text-size-tools button:hover{border-color:var(--accent-line);color:var(--ink)}
-  .text-size-tools label{display:flex;align-items:center;height:20px;border:1px solid var(--border);border-radius:3px;background:var(--card);color:var(--muted)}
-  .text-size-tools input{width:34px;padding:0 2px;border:0;outline:0;background:transparent;color:var(--ink);font:10px var(--mono);text-align:right;appearance:textfield}
-  .text-size-tools input::-webkit-inner-spin-button{appearance:none}
-  .text-size-tools label span{padding-right:4px;font-size:9px}
   h1{font-size:clamp(30px,5vw,42px);line-height:1.1;letter-spacing:-.03em}
   h2{font-size:25px;line-height:1.2;letter-spacing:-.02em}
   h3{font-size:18px;line-height:1.3}
@@ -559,7 +520,6 @@
   @media(max-width:700px){
     .columns,.columns.single,.columns.single.half-left,.columns.single.half-right,.columns.three,.columns.lead-left,.columns.lead-right{grid-template-columns:1fr;justify-content:stretch}
     .handle,.actions{display:none}
-    .text-size-tools{position:static;width:max-content;margin-bottom:7px}
     .table-controls{align-items:flex-start;flex-direction:column}
     .image-layout.image-medium{width:min(86%,760px)}.image-layout.image-small{width:min(62%,420px)}
     .image-layout.with-side-text{display:grid;width:100%}

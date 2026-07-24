@@ -39,6 +39,46 @@
     {/if}
   </div>
 
+  {#if state.mode === 'editor' && state.textControl}
+    <div class="text-context" aria-label={t('studio.textFormatting')}>
+      <button
+        title={t('studio.textSmaller')}
+        aria-label={t('studio.textSmaller')}
+        onclick={() => state.setTextSize?.(state.textControl.size - 1)}
+      >−</button>
+      <label>
+        <input
+          type="number"
+          min="10"
+          max="96"
+          value={state.textControl.size}
+          aria-label={t('studio.textSize')}
+          onchange={(event) => state.setTextSize?.(event.currentTarget.value)}
+        />
+        <span>px</span>
+      </label>
+      <button
+        title={t('studio.textLarger')}
+        aria-label={t('studio.textLarger')}
+        onclick={() => state.setTextSize?.(state.textControl.size + 1)}
+      >+</button>
+      {#if state.textControl.canAlign}
+        <i></i>
+        {#each ['left', 'center', 'right'] as align}
+          <button
+            class="align"
+            class:active={state.textControl.align === align}
+            title={t(`studio.textAlign.${align}`)}
+            aria-label={t(`studio.textAlign.${align}`)}
+            onclick={() => state.setTextAlign?.(align)}
+          >
+            <span class={`align-lines ${align}`}><b></b><b></b><b></b></span>
+          </button>
+        {/each}
+      {/if}
+    </div>
+  {/if}
+
   {#if state.mode === 'editor' && state.tools?.length}
     <div class="context-tools" aria-label={t('studio.contextTools')}>
       {#each state.tools as tool (tool.key)}
@@ -87,6 +127,17 @@
   .context-tools{display:flex;align-items:center;gap:2px;padding:4px;border-radius:var(--r-md);background:var(--ui-face);border:1px solid var(--ui-edge)}
   .context-tools button{min-width:27px;height:26px;padding:0 6px;border-radius:var(--r-sm);color:var(--muted);font-size:11px}
   .context-tools button:hover{background:var(--raise);color:var(--ink)}
+  .text-context{display:flex;align-items:center;gap:2px;height:36px;padding:4px;border:1px solid var(--ui-edge);border-radius:var(--r-md);background:var(--ui-face)}
+  .text-context>button{min-width:25px;height:26px;padding:0 5px;border-radius:var(--r-sm);color:var(--muted);font-size:12px}
+  .text-context>button:hover,.text-context>button.active{background:var(--raise);color:var(--ink)}
+  .text-context>i{width:1px;height:18px;margin:0 3px;background:var(--ui-edge)}
+  .text-context label{height:26px;display:flex;align-items:center;border:1px solid var(--ui-edge);border-radius:var(--r-sm);background:var(--panel);color:var(--muted)}
+  .text-context input{width:36px;padding:0 2px;border:0;outline:0;background:transparent;color:var(--ink);font:11px var(--mono);text-align:right;appearance:textfield}
+  .text-context input::-webkit-inner-spin-button{appearance:none}
+  .text-context label span{padding-right:5px;font-size:9px}
+  .align-lines{width:14px;height:12px;display:flex;flex-direction:column;justify-content:space-between}
+  .align-lines b{display:block;height:1px;background:currentColor}.align-lines b:nth-child(2){width:9px}
+  .align-lines.left b:nth-child(2){align-self:flex-start}.align-lines.center b:nth-child(2){align-self:center}.align-lines.right b:nth-child(2){align-self:flex-end}
   .action{height:34px;padding:0 13px;border-radius:var(--r-md);font-size:12px;font-weight:650;white-space:nowrap}
   .action.ghost{background:var(--ui-face);border:1px solid var(--ui-edge);color:var(--ink)}
   .action.primary{background:var(--accent);color:#fff;box-shadow:0 4px 16px var(--accent-weak)}
@@ -95,7 +146,7 @@
   .account:hover{background:var(--panel)}
   .account span{width:28px;height:28px;display:grid;place-items:center;border-radius:var(--r-round);color:#fff;font-size:11px;font-weight:650;border:1px solid rgba(255,255,255,.14)}
   @media(max-width:700px){
-    .mobile-side{display:grid}.back span,.context-tools{display:none}
+    .mobile-side{display:grid}.back span,.context-tools,.text-context{display:none}
     .studio-nav{gap:6px;padding-inline:8px}.back{width:32px;padding:0;justify-content:center}
     .identity strong{font-size:12.5px}.save-state>span{display:none}
     .action{padding-inline:9px}.account{display:none}
