@@ -558,20 +558,24 @@
     error = cause?.code || cause?.message || 'studio.internal';
   }
 
-  function findBlockLocation(blockID, blocks = selected?.content?.blocks) {
+  function findBlockLocationIn(blockID, blocks) {
     for (let index = 0; index < (blocks || []).length; index++) {
       const block = blocks[index];
       if (block.id === blockID) return { block, container: blocks, index };
       for (const column of block.columns || []) {
-        const nested = findBlockLocation(blockID, column);
+        const nested = findBlockLocationIn(blockID, column);
         if (nested) return nested;
       }
       for (const children of [block.children, block.blocks]) {
-        const nested = findBlockLocation(blockID, children);
+        const nested = findBlockLocationIn(blockID, children);
         if (nested) return nested;
       }
     }
     return null;
+  }
+
+  function findBlockLocation(blockID) {
+    return findBlockLocationIn(blockID, selected?.content?.blocks || []);
   }
 
   function findBlockByID(blockID) {
