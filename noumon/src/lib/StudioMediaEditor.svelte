@@ -11,14 +11,24 @@
   let subtitleInput = $state(null);
 
   const surface = () => document?.templateKey?.startsWith('moments.') ? 'moments' : 'cabinet';
-  const metadata = () => {
+
+  // Lector PURO: el template lo invoca durante el render y en Svelte 5 está
+  // prohibido escribir estado ahí (state_unsafe_mutation). Nunca muta nada.
+  const metadata = () => (document?.metadata && !Array.isArray(document.metadata)) ? document.metadata : {};
+
+  // Normaliza la estructura (arrays + colección). Mutar estado reactivo solo es
+  // seguro dentro de un $effect o de manejadores de eventos, NUNCA en el render.
+  function ensureMetadata() {
     if (!document.metadata || Array.isArray(document.metadata)) document.metadata = {};
-    if (!Array.isArray(document.metadata.tracks)) document.metadata.tracks = [];
-    if (!Array.isArray(document.metadata.subtitles)) document.metadata.subtitles = [];
-    if (!Array.isArray(document.metadata.chapters)) document.metadata.chapters = [];
-    if (!document.metadata.collection) document.metadata.collection = 'General';
-    return document.metadata;
-  };
+    const m = document.metadata;
+    if (!Array.isArray(m.tracks)) m.tracks = [];
+    if (!Array.isArray(m.subtitles)) m.subtitles = [];
+    if (!Array.isArray(m.chapters)) m.chapters = [];
+    if (!m.collection) m.collection = 'General';
+    return m;
+  }
+  $effect(() => { if (document) ensureMetadata(); });
+
   const cabinetProfile = () => String(document?.templateKey || '').replace('cabinet.', '');
 
   function changed() {
@@ -28,9 +38,10 @@
   function selectCabinetProfile(profile) {
     if (surface() !== 'cabinet' || cabinetProfile() === profile) return;
     document.templateKey = `cabinet.${profile}`;
-    metadata().primaryAssetId = '';
-    metadata().primaryName = '';
-    metadata().tracks = [];
+    const m = ensureMetadata();
+    m.primaryAssetId = '';
+    m.primaryName = '';
+    m.tracks = [];
     changed();
   }
 
@@ -64,7 +75,7 @@
   }
 
   function addChapter() {
-    const chapters = metadata().chapters;
+    const chapters = ensureMetadata().chapters;
     const last = chapters.at(-1);
     chapters.push({
       start: last ? Number(last.start || 0) + 60 : 0,
@@ -74,7 +85,7 @@
   }
 
   function removeAt(field, index) {
-    metadata()[field].splice(index, 1);
+    ensureMetadata()[field].splice(index, 1);
     changed();
   }
 
@@ -147,16 +158,16 @@
         </header>
         <input bind:this={trackInput} class="hidden-input" type="file" accept=".mp3,.ogg,.oga,.flac,.m4a,.wav,audio/*"
           onchange={(event) => upload(event, 'track', (asset, file) => {
-            metadata().tracks.push({ title: file.name.replace(/\.[^.]+$/, ''), assetId: asset.id });
+            ensureMetadata().tracks.push({ title: file.name.replace(/\.[^.]+$/, ''), assetId: asset.id });
           })} />
-        {#each metadata().tracks as track, index}
+        {#each metadata().tracks || [] as track, index}
           <div class="repeat-row">
             <span class="number">{index + 1}</span>
             <input value={track.title} aria-label={t('studio.trackTitle')} oninput={(event) => { track.title = event.currentTarget.value; changed(); }} />
             <button class="remove" onclick={() => removeAt('tracks', index)} aria-label={t('studio.removeEntry')}>×</button>
           </div>
         {/each}
-        {#if metadata().tracks.length === 0}<p>{t('studio.noTracks')}</p>{/if}
+        {#if (metadata().tracks || []).length === 0}<p>{t('studio.noTracks')}</p>{/if}
       </section>
     {/if}
 
@@ -165,7 +176,7 @@
         <header><span><b>{t('studio.section.chapters')}</b><small>{t('studio.chaptersHint')}</small></span>
           <button onclick={addChapter}>＋ {t('studio.addChapter')}</button>
         </header>
-        {#each metadata().chapters as chapter, index}
+        {#each metadata().chapters || [] as chapter, index}
           <div class="repeat-row chapter-row">
             <input class="time" type="number" min="0" step="0.1" value={chapter.start} aria-label={t('studio.chapterStart')}
               oninput={(event) => { chapter.start = Number(event.currentTarget.value || 0); changed(); }} />
@@ -181,9 +192,9 @@
         </header>
         <input bind:this={subtitleInput} class="hidden-input" type="file" accept=".vtt,text/vtt"
           onchange={(event) => upload(event, 'subtitle', (asset) => {
-            metadata().subtitles.push({ lang: document.language || 'es', assetId: asset.id });
+            ensureMetadata().subtitles.push({ lang: document.language || 'es', assetId: asset.id });
           })} />
-        {#each metadata().subtitles as subtitle, index}
+        {#each metadata().subtitles || [] as subtitle, index}
           <div class="repeat-row subtitle-row">
             <input class="lang" value={subtitle.lang} aria-label={t('studio.subtitleLanguage')} oninput={(event) => { subtitle.lang = event.currentTarget.value; changed(); }} />
             <span>{t('studio.assetReady')}</span>

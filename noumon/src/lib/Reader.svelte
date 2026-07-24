@@ -148,6 +148,18 @@
     try { frameEl?.contentDocument?.getElementById(id)?.scrollIntoView({ block: 'start' }); } catch (e) {}
   }
 
+  // Referencia ESTABLE para el índice del documento. Si se pasara un arrow inline
+  // (onToc={(x)=>toc=x}), se recrearía en cada render y el $effect que lo invoca
+  // en StudioDocumentView se realimentaría sin fin ("Maximum call stack size").
+  function handleDocToc(items) { toc = items || []; }
+
+  // Documentos propios: el índice se entrega desde el documento (onToc) y los
+  // encabezados están en el DOM real, así que aquí sí cabe el scroll suave.
+  function scrollToDocHeading(id) {
+    const reduceMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    try { globalThis.document?.getElementById(id)?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' }); } catch (e) {}
+  }
+
   // El contenido se muestra SIEMPRE original (el ZIM ya trae su diseño). Nosotros
   // somos el navegador/gestor por encima. El iframe es del mismo origen.
 
@@ -226,7 +238,17 @@
     {#if tab.open?.provider === 'moments'}
       <MomentsWatch {tab} {onOpenItem} {onOpenView} />
     {:else if tab.open?.provider === 'studio'}
-      <DocumentPage {tab} {onOpenItem} />
+      <DocumentPage {tab} {onOpenItem} onToc={handleDocToc} />
+      {#if indexOpen && toc.length}
+        <aside class="toc-col scroll thin">
+          <div class="toc-h">{t('reader.index')}</div>
+          <nav class="toc">
+            {#each toc as h (h.id)}
+              <button class="tocitem" class:lvl3={h.level === 3} onclick={() => scrollToDocHeading(h.id)}>{h.text}</button>
+            {/each}
+          </nav>
+        </aside>
+      {/if}
     {:else}
       <ItemPage {tab} {onOpenItem} />
     {/if}

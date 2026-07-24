@@ -4,7 +4,7 @@
   import { getPublishedDocument, getPublishedDocumentRelations } from './studioApi.js';
   import StudioDocumentView from './StudioDocumentView.svelte';
 
-  let { tab, onOpenItem } = $props();
+  let { tab, onOpenItem, onToc } = $props();
   let document = $state(null);
   let loading = $state(true);
   let error = $state(false);
@@ -35,7 +35,7 @@
   {:else if error || !document}
     <div class="state">{t('documents.loadError')}</div>
   {:else}
-    <StudioDocumentView {document} {onOpenItem} />
+    <StudioDocumentView {document} {onOpenItem} {onToc} />
     {#if backlinks.length}
       <section class="backlinks">
         <span>{t('documents.linksHere')}</span>
@@ -66,7 +66,7 @@
 </div>
 
 <style>
-  .surface{height:100%;overflow:auto;background:var(--panel-2);padding:clamp(22px,5vw,70px)}
+  .surface{flex:1;min-width:0;height:100%;overflow:auto;background:var(--panel-2);padding:clamp(22px,5vw,70px)}
   .state{padding:70px;text-align:center;color:var(--muted)}
   .backlinks{max-width:760px;margin:24px auto 0;padding:18px;border-radius:var(--r-lg);background:var(--panel);border:1px solid var(--border)}
   .backlinks>span{display:block;margin-bottom:9px;color:var(--accent-2);font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}

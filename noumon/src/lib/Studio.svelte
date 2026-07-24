@@ -1102,7 +1102,7 @@
 </section>
 
 <style>
-  .studio-new{height:100%;min-height:0;min-width:0;background:var(--ground);color:var(--ink);overflow:hidden}
+  .studio-new{flex:1 1 auto;height:100%;min-height:0;min-width:0;background:var(--ground);color:var(--ink);overflow:hidden}
   .studio-state{height:100%;display:grid;place-items:center;color:var(--muted);font-size:13px}
   .studio-home{height:100%;overflow:auto;padding:clamp(28px,5vw,64px) clamp(20px,6vw,80px) 70px}
   .studio-home>h2,.document-palette h3{margin:0 0 12px;color:var(--faint);font-size:9px;font-weight:650;letter-spacing:.14em;text-transform:uppercase}
