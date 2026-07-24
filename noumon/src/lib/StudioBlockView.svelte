@@ -20,6 +20,18 @@
   function headingId() {
     return `studio-section-${documentId}-${block.id}`;
   }
+
+  function imageSize() {
+    return ['original', 'medium', 'small', 'poster'].includes(block.imageSize)
+      ? block.imageSize
+      : 'original';
+  }
+
+  function imageAlign() {
+    return ['left', 'center', 'right'].includes(block.imageAlign)
+      ? block.imageAlign
+      : 'center';
+  }
 </script>
 
 {#if block.type === 'heading'}
@@ -36,8 +48,13 @@
 {:else if block.type === 'table'}
   <div class="table-scroll"><table><tbody>{#each block.rows || [] as row, rowIndex}<tr>{#each row as cell}{#if rowIndex === 0}<th>{@html inline(cell)}</th>{:else}<td>{@html inline(cell)}</td>{/if}{/each}</tr>{/each}</tbody></table></div>
 {:else if block.type === 'image'}
-  <figure>
-    <StudioImage {documentId} assetId={block.assetId} alt={block.alt || ''} />
+  <figure class={`image-${imageSize()} align-${imageAlign()}`}>
+    <StudioImage
+      {documentId}
+      assetId={block.assetId}
+      alt={block.alt || ''}
+      display={imageSize()}
+    />
     {#if block.caption}<figcaption>{@html inline(block.caption)}</figcaption>{/if}
   </figure>
 {:else if block.type === 'code'}
@@ -82,6 +99,9 @@
   p{white-space:pre-wrap}
   blockquote{margin:28px 0;border-left:3px solid var(--accent);padding:10px 20px;background:var(--raise);color:var(--ink-dim)}
   figure{margin:30px 0}
+  figure.image-medium{width:min(72%,760px)}figure.image-small{width:min(40%,420px)}
+  figure.image-poster,figure.image-original{width:100%}
+  figure.align-left{margin-right:auto}figure.align-center{margin-inline:auto}figure.align-right{margin-left:auto}
   figcaption{margin-top:8px;text-align:center;color:var(--muted);font-family:var(--font,system-ui,sans-serif);font-size:12px}
   .table-scroll{overflow:auto;margin:24px 0}
   table{width:100%;border-collapse:collapse;font-family:var(--font,system-ui,sans-serif);font-size:14px}
@@ -101,5 +121,6 @@
   hr{border:0;border-top:1px solid var(--border);margin:32px 0}
   @media(max-width:680px){
     .columns,.columns.single,.columns.single.half-left,.columns.single.half-right,.columns.three,.columns.lead-left,.columns.lead-right{grid-template-columns:1fr;justify-content:stretch}
+    figure.image-medium{width:min(86%,760px)}figure.image-small{width:min(62%,420px)}
   }
 </style>

@@ -302,6 +302,24 @@
     };
   }
 
+  function mergeSavedEnvelope(document, updated) {
+    // El cuerpo y los metadatos que está editando el usuario deben conservar
+    // su identidad. Reemplazarlos por la respuesta del servidor desmonta los
+    // contenteditable, pierde el foco y puede devolver el lienzo hacia arriba.
+    for (const field of [
+      'revision',
+      'status',
+      'updated',
+      'publishedRevision',
+      'publicationKind',
+      'publicationTarget',
+      'published',
+      'coverAssetId',
+    ]) {
+      document[field] = updated[field];
+    }
+  }
+
   async function saveNow() {
     clearTimeout(saveTimer);
     if (savePromise) {
@@ -327,7 +345,7 @@
         if (selected?.id !== documentId) return true;
 
         if (changeVersion === version) {
-          selected = updated;
+          mergeSavedEnvelope(selected, updated);
           dirty = false;
           saved = true;
           clearTimeout(recoveryTimer);
@@ -339,8 +357,7 @@
           // El servidor ha guardado la instantánea enviada, pero el usuario
           // siguió escribiendo durante la petición. Conservamos esos cambios y
           // solo adelantamos su baseRevision para el siguiente guardado.
-          selected.revision = updated.revision;
-          selected.updated = updated.updated;
+          mergeSavedEnvelope(selected, updated);
           dirty = true;
           scheduleRecovery(0);
           scheduleSave(0);
@@ -526,7 +543,7 @@
       if (selected?.id !== documentId) return;
       const imageBlock = {
         id: nextBlockId(), type: 'image', assetId: asset.id,
-        caption: '', alt: '',
+        caption: '', alt: '', imageSize: 'original', imageAlign: 'center',
       };
       const target = targetColumn
         ? findBlockByID(targetColumn.blockID)

@@ -245,6 +245,41 @@ func TestStudioValidationNormalizesPortableFacetsAndLinks(t *testing.T) {
 	}
 }
 
+func TestStudioValidationAcceptsOnlyKnownImagePresentation(t *testing.T) {
+	input := StudioDocumentInput{
+		TemplateKey: "document",
+		Title:       "Documento con imagen",
+		Content: json.RawMessage(`{
+			"schemaVersion":1,
+			"blocks":[{
+				"id":"imagen-portada",
+				"type":"image",
+				"assetId":"asset-local",
+				"imageSize":"poster",
+				"imageAlign":"center"
+			}]
+		}`),
+	}
+	if _, err := validateStudioInput(input); err != nil {
+		t.Fatalf("valid image presentation rejected: %v", err)
+	}
+
+	input.Content = json.RawMessage(`{
+		"schemaVersion":1,
+		"blocks":[{
+			"id":"imagen-invalida",
+			"type":"image",
+			"assetId":"asset-local",
+			"imageSize":"pantalla-completa",
+			"imageAlign":"center"
+		}]
+	}`)
+	if _, err := validateStudioInput(input); err == nil ||
+		!strings.Contains(err.Error(), "image.imageSize") {
+		t.Fatalf("unknown image size accepted: %v", err)
+	}
+}
+
 func TestStudioCapabilitiesAndPrivateDraftLifecycle(t *testing.T) {
 	s := testAuthServer(t, "")
 	h := studioTestMux(s)

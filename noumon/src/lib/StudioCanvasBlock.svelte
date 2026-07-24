@@ -72,6 +72,31 @@
     onChange?.();
   }
 
+  function imageSize() {
+    return ['original', 'medium', 'small', 'poster'].includes(block.imageSize)
+      ? block.imageSize
+      : 'original';
+  }
+
+  function imageAlign() {
+    return ['left', 'center', 'right'].includes(block.imageAlign)
+      ? block.imageAlign
+      : 'center';
+  }
+
+  function setImageSize(size, event) {
+    event.stopPropagation();
+    block.imageSize = size;
+    if (size === 'poster') block.imageAlign = 'center';
+    onChange?.();
+  }
+
+  function setImageAlign(align, event) {
+    event.stopPropagation();
+    block.imageAlign = align;
+    onChange?.();
+  }
+
   function addColumnBlock(columnIndex, type, event) {
     event.stopPropagation();
     onAddToColumn?.(block.id, columnIndex, type);
@@ -213,10 +238,38 @@
       </div>
     </div>
   {:else if block.type === 'image'}
-    <figure>
-      <StudioImage {documentId} assetId={block.assetId} alt={block.alt || ''} />
+    <div class="image-editor">
+      <div class="image-tools" aria-label={t('studio.imageLayout')}>
+        <div>
+          <span>{t('studio.imageSize')}</span>
+          {#each ['original', 'medium', 'small', 'poster'] as size}
+            <button
+              class:active={imageSize() === size}
+              onclick={(event) => setImageSize(size, event)}
+            >{t(`studio.imageSize.${size}`)}</button>
+          {/each}
+        </div>
+        <div>
+          <span>{t('studio.imageAlign')}</span>
+          {#each ['left', 'center', 'right'] as align}
+            <button
+              class:active={imageAlign() === align}
+              disabled={imageSize() === 'poster'}
+              onclick={(event) => setImageAlign(align, event)}
+            >{t(`studio.imageAlign.${align}`)}</button>
+          {/each}
+        </div>
+      </div>
+      <figure class={`image-${imageSize()} align-${imageAlign()}`}>
+      <StudioImage
+        {documentId}
+        assetId={block.assetId}
+        alt={block.alt || ''}
+        display={imageSize()}
+      />
       <figcaption contenteditable="true" oninput={(event) => setText(event, 'caption')}>{block.caption || t('studio.imageCaption')}</figcaption>
-    </figure>
+      </figure>
+    </div>
   {:else if block.type === 'code'}
     <pre contenteditable="true" oninput={setText}>{block.text || ''}</pre>
   {:else if block.type === 'callout'}
@@ -370,6 +423,16 @@
   .callout strong{display:block;color:var(--ink);margin-bottom:3px}.callout p{margin:0;font-size:13px}
   pre{padding:13px 15px;overflow:auto;background:var(--ground);color:var(--link);font:12px/1.6 var(--mono);white-space:pre-wrap}
   figure{margin:0}figcaption{margin-top:7px;text-align:center;color:var(--muted);font:11px var(--font)}
+  .image-editor{display:grid;gap:9px}
+  .image-tools{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px;padding:7px 9px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--raise);font-family:var(--font)}
+  .image-tools>div{display:flex;align-items:center;flex-wrap:wrap;gap:3px}
+  .image-tools span{margin-right:3px;color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+  .image-tools button{min-height:25px;padding:3px 7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:9px}
+  .image-tools button:hover:not(:disabled),.image-tools button.active{border-color:var(--accent-line);background:var(--accent-weak);color:var(--ink)}
+  .image-tools button:disabled{opacity:.35}
+  .image-medium{width:min(72%,760px)}.image-small{width:min(40%,420px)}
+  .image-poster,.image-original{width:100%}
+  .align-left{margin-right:auto}.align-center{margin-inline:auto}.align-right{margin-left:auto}
   .column-layout-tools{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0 0 12px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--raise);font-family:var(--font)}
   .column-layout-tools>span{margin-right:auto;color:var(--ink);font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
   .column-count,.column-ratios{display:flex;gap:3px}
@@ -408,5 +471,6 @@
     .columns,.columns.single,.columns.single.half-left,.columns.single.half-right,.columns.three,.columns.lead-left,.columns.lead-right{grid-template-columns:1fr;justify-content:stretch}
     .handle,.actions{display:none}
     .table-controls{align-items:flex-start;flex-direction:column}
+    .image-medium{width:min(86%,760px)}.image-small{width:min(62%,420px)}
   }
 </style>

@@ -403,6 +403,20 @@ func (s *studioBlockValidation) validate(raw json.RawMessage, depth int) error {
 		if err := json.Unmarshal(obj["assetId"], &assetID); err != nil || !studioIDRE.MatchString(assetID) {
 			return fmt.Errorf("image.assetId: invalid")
 		}
+		if field, ok := obj["imageSize"]; ok {
+			var size string
+			if err := json.Unmarshal(field, &size); err != nil ||
+				(size != "original" && size != "medium" && size != "small" && size != "poster") {
+				return fmt.Errorf("image.imageSize: invalid")
+			}
+		}
+		if field, ok := obj["imageAlign"]; ok {
+			var align string
+			if err := json.Unmarshal(field, &align); err != nil ||
+				(align != "left" && align != "center" && align != "right") {
+				return fmt.Errorf("image.imageAlign: invalid")
+			}
+		}
 		s.assets[assetID] = true
 	}
 	if typ == "itemRef" {
