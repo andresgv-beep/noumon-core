@@ -40,6 +40,7 @@
      gris suave para que no deslumbren; los logos siguen legibles. Claro = blanco. */
   --icon-surface:#c9ccd5;
   --shadow:0 1px 0 rgba(255,255,255,.02), 0 12px 32px -12px rgba(0,0,0,.6);
+  --shadow-soft:0 8px 24px -16px rgba(0,0,0,.55);
   --mix:#ffffff; /* hacia dónde se aclara el acento derivado */
   --code-ink:#cdbcff; /* código inline: legible sobre --raise en cada tema */
   color-scheme:dark;  /* controles nativos y scrollbars a juego con el tema */
@@ -53,6 +54,7 @@
   --accent:#6a58e0;
   --icon-surface:#ffffff;
   --shadow:0 1px 2px rgba(20,20,40,.05), 0 14px 30px -16px rgba(20,20,50,.22);
+  --shadow-soft:0 8px 22px -15px rgba(20,20,50,.2);
   --mix:#000000;
   --code-ink:#5240b8;
   color-scheme:light;
@@ -84,6 +86,7 @@
   --accent:#b9a8ff;
   --icon-surface:#c9ccd5;
   --shadow:3px 3px 0 rgba(0,0,0,.85);
+  --shadow-soft:2px 2px 0 rgba(0,0,0,.72);
   --mix:#ffffff;
   --code-ink:#cfc4ff;
 }
@@ -95,6 +98,7 @@
   --accent:#5b47c9;
   --icon-surface:#ffffff;
   --shadow:3px 3px 0 rgba(0,0,0,.28);
+  --shadow-soft:2px 2px 0 rgba(0,0,0,.2);
   --mix:#000000;
   --code-ink:#43389c;
 }

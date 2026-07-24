@@ -16,11 +16,15 @@
       .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
   }
+
+  function headingId() {
+    return `studio-section-${documentId}-${block.id}`;
+  }
 </script>
 
 {#if block.type === 'heading'}
   {@const level = Math.min(3, Math.max(1, block.level || 2))}
-  {#if level === 1}<h1>{@html inline(block.text)}</h1>{:else if level === 2}<h2>{@html inline(block.text)}</h2>{:else}<h3>{@html inline(block.text)}</h3>{/if}
+  {#if level === 1}<h1 id={headingId()}>{@html inline(block.text)}</h1>{:else if level === 2}<h2 id={headingId()}>{@html inline(block.text)}</h2>{:else}<h3 id={headingId()}>{@html inline(block.text)}</h3>{/if}
 {:else if block.type === 'paragraph'}
   <p>{@html inline(block.text)}</p>
 {:else if block.type === 'quote'}
@@ -47,7 +51,15 @@
     {/each}
   </aside>
 {:else if block.type === 'columns'}
-  <div class="columns">
+  <div
+    class="columns"
+    class:single={(block.columns || []).length === 1}
+    class:three={(block.columns || []).length === 3}
+    class:lead-left={block.layout === 'lead-left'}
+    class:lead-right={block.layout === 'lead-right'}
+    class:half-left={block.layout === 'half-left'}
+    class:half-right={block.layout === 'half-right'}
+  >
     {#each block.columns || [] as column}
       <div>{#each column as child (child.id)}<StudioBlockView block={child} {documentId} {onOpenItem} />{/each}</div>
     {/each}
@@ -70,16 +82,24 @@
   p{white-space:pre-wrap}
   blockquote{margin:28px 0;border-left:3px solid var(--accent);padding:10px 20px;background:var(--raise);color:var(--ink-dim)}
   figure{margin:30px 0}
-  figcaption{margin-top:8px;text-align:center;color:var(--muted);font-family:var(--font-sans,system-ui,sans-serif);font-size:12px}
+  figcaption{margin-top:8px;text-align:center;color:var(--muted);font-family:var(--font,system-ui,sans-serif);font-size:12px}
   .table-scroll{overflow:auto;margin:24px 0}
-  table{width:100%;border-collapse:collapse;font-family:var(--font-sans,system-ui,sans-serif);font-size:14px}
+  table{width:100%;border-collapse:collapse;font-family:var(--font,system-ui,sans-serif);font-size:14px}
   th,td{border:1px solid var(--border);padding:9px;text-align:left}
   th{background:var(--raise)}
-  pre{overflow:auto;margin:24px 0;padding:16px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--panel-2);font:13px/1.6 var(--font-mono,ui-monospace,monospace)}
+  pre{overflow:auto;margin:24px 0;padding:16px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--panel-2);font:13px/1.6 var(--mono,ui-monospace,monospace)}
   code{white-space:pre}
   .callout{margin:24px 0;padding:16px 18px;border-left:4px solid var(--accent);border-radius:var(--r-md);background:var(--raise)}
   .callout>b{display:block;margin-bottom:5px}.callout>p{margin:0}
   .columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(18px,4vw,42px);margin:26px 0}
+  .columns.single{grid-template-columns:minmax(0,1fr)}
+  .columns.single.half-left,.columns.single.half-right{grid-template-columns:minmax(0,50%)}
+  .columns.single.half-left{justify-content:start}.columns.single.half-right{justify-content:end}
+  .columns.three{grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(16px,2.5vw,30px)}
+  .columns.lead-left{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+  .columns.lead-right{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
   hr{border:0;border-top:1px solid var(--border);margin:32px 0}
-  @media(max-width:680px){.columns{grid-template-columns:1fr}}
+  @media(max-width:680px){
+    .columns,.columns.single,.columns.single.half-left,.columns.single.half-right,.columns.three,.columns.lead-left,.columns.lead-right{grid-template-columns:1fr;justify-content:stretch}
+  }
 </style>

@@ -29,18 +29,21 @@ import (
 
 // Server mantiene la conexión con el motor y la config del shim.
 type Server struct {
-	kiwix          *url.URL
-	proxy          *httputil.ReverseProxy
-	http           *http.Client
-	token          string  // token de sesión Noumon. Vacío = auth desactivada (dev LAN).
-	store          *Store  // capa de gestión persistida (favoritos, notas, historial)
-	geo            *sql.DB // índice FTS5 de geocoding (plugin Maps); nil si no hay geo.db
-	geoPath        string
-	mapsDir        string
-	geoMu          sync.RWMutex
-	studioRoot     string
-	studioUploadMu sync.Mutex
-	studioUploads  map[string]studioUploadGrant
+	kiwix           *url.URL
+	proxy           *httputil.ReverseProxy
+	http            *http.Client
+	token           string  // token de sesión Noumon. Vacío = auth desactivada (dev LAN).
+	store           *Store  // capa de gestión persistida (favoritos, notas, historial)
+	geo             *sql.DB // índice FTS5 de geocoding (plugin Maps); nil si no hay geo.db
+	geoPath         string
+	mapsDir         string
+	geoMu           sync.RWMutex
+	studioRoot      string
+	mediaRoot       string
+	media           *mediaDeps
+	studioPublishMu sync.Mutex
+	studioUploadMu  sync.Mutex
+	studioUploads   map[string]studioUploadGrant
 
 	// lanPrivate: el proceso escucha en la red pero la biblioteca NO está
 	// publicada (paquete servidor headless con lanAccess=false). El middleware
@@ -394,6 +397,8 @@ func main() {
 	// Mitad lectora: escanea las fichas del pool y sirve los ficheros locales
 	// (ver media.go). Comparte la raíz con las descargas.
 	md := &mediaDeps{root: downloadRoot}
+	s.mediaRoot = downloadRoot
+	s.media = md
 	s.registerMediaRoutes(mux, md)                                                                           // /api/media + /media/* — detrás del gate de acceso
 	mux.HandleFunc("/api/images", s.handleImageSearch(md))                                                   // imágenes: ZIM + portadas/logos de vídeos
 	adminMux.HandleFunc("/api/admin/media/delete", s.handleMediaDelete(md))                                  // borrar item del pool (admin)

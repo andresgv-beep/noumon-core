@@ -24,7 +24,9 @@ import (
 
 const (
 	studioMaxImageBytes     = int64(12 << 20)
-	studioMaxDocumentAssets = int64(100 << 20)
+	studioMaxTextAssetBytes = int64(5 << 20)
+	studioMaxMediaBytes     = int64(2 << 30)
+	studioMaxDocumentAssets = int64(2 << 30)
 	studioUploadTokenTTL    = 5 * time.Minute
 )
 
@@ -144,6 +146,14 @@ func (s *Server) handleStudioAssetUpload(w http.ResponseWriter, r *http.Request,
 		writeStudioError(w, http.StatusConflict, "studio.asset_invalid", nil)
 		return
 	}
+	purpose := strings.TrimSpace(r.URL.Query().Get("purpose"))
+	if purpose == "" {
+		purpose = "image"
+	}
+	if !studioAssetPurposeAllowed(document.TemplateKey, purpose) {
+		writeStudioError(w, http.StatusUnsupportedMediaType, "studio.asset_type_invalid", nil)
+		return
+	}
 	if s.studioRoot == "" {
 		writeStudioError(w, http.StatusServiceUnavailable, "studio.assets_unavailable", nil)
 		return
@@ -165,7 +175,8 @@ func (s *Server) handleStudioAssetUpload(w http.ResponseWriter, r *http.Request,
 		writeStudioError(w, http.StatusInsufficientStorage, "studio.storage_low", nil)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, studioMaxImageBytes+(1<<20))
+	maxBytes := studioMaxBytesForPurpose(purpose)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes+(1<<20))
 	reader, err := r.MultipartReader()
 	if err != nil {
 		writeStudioError(w, http.StatusBadRequest, "studio.asset_invalid", nil)
@@ -178,12 +189,8 @@ func (s *Server) handleStudioAssetUpload(w http.ResponseWriter, r *http.Request,
 	}
 	defer part.Close()
 
-	extension := strings.ToLower(filepath.Ext(filename))
-	if !studioAllowedImageExtension(extension) {
-		writeStudioError(w, http.StatusUnsupportedMediaType, "studio.asset_type_invalid", nil)
-		return
-	}
-	asset, stagingPath, finalPath, err := s.persistStudioAsset(documentID, user, filename, part)
+	asset, stagingPath, finalPath, err := s.persistStudioAssetForPurpose(
+		documentID, user, filename, purpose, maxBytes, part)
 	if err != nil {
 		switch {
 		case errors.Is(err, errStudioAssetTooLarge):
@@ -195,6 +202,11 @@ func (s *Server) handleStudioAssetUpload(w http.ResponseWriter, r *http.Request,
 		default:
 			writeStudioError(w, http.StatusInternalServerError, "studio.internal", nil)
 		}
+		return
+	}
+	if !studioAssetRoleMIMEAllowed(document.TemplateKey, purpose, asset.MIMEType) {
+		_ = os.Remove(stagingPath)
+		writeStudioError(w, http.StatusUnsupportedMediaType, "studio.asset_type_invalid", nil)
 		return
 	}
 	if err := s.insertStudioAsset(asset, user.ID, s.studioCapabilities(user).QuotaBytes); err != nil {
@@ -270,6 +282,62 @@ func studioAllowedImageExtension(extension string) bool {
 	}
 }
 
+func studioAssetPurposeAllowed(template, purpose string) bool {
+	switch purpose {
+	case "image":
+		return template == "document" || template == "technical" || template == "story"
+	case "cover":
+		return strings.HasPrefix(template, "cabinet.") || template == "moments.video"
+	case "avatar":
+		return template == "moments.video"
+	case "primary":
+		return strings.HasPrefix(template, "cabinet.") || template == "moments.video"
+	case "track", "waveform":
+		return template == "cabinet.audio"
+	case "subtitle":
+		return template == "moments.video"
+	default:
+		return false
+	}
+}
+
+func studioMaxBytesForPurpose(purpose string) int64 {
+	switch purpose {
+	case "image", "cover", "avatar", "waveform":
+		return studioMaxImageBytes
+	case "subtitle":
+		return studioMaxTextAssetBytes
+	default:
+		return studioMaxMediaBytes
+	}
+}
+
+func studioAssetRoleMIMEAllowed(template, purpose, mimeType string) bool {
+	switch purpose {
+	case "image", "cover", "avatar", "waveform":
+		return strings.HasPrefix(mimeType, "image/")
+	case "subtitle":
+		return mimeType == "text/vtt"
+	case "track":
+		return template == "cabinet.audio" && strings.HasPrefix(mimeType, "audio/")
+	case "primary":
+		switch template {
+		case "moments.video", "cabinet.video":
+			return strings.HasPrefix(mimeType, "video/")
+		case "cabinet.audio":
+			return strings.HasPrefix(mimeType, "audio/")
+		case "cabinet.pdf":
+			return mimeType == "application/pdf"
+		case "cabinet.reader":
+			return mimeType == "application/epub+zip" ||
+				mimeType == "text/plain" || mimeType == "text/markdown"
+		case "cabinet.gallery":
+			return strings.HasPrefix(mimeType, "image/")
+		}
+	}
+	return false
+}
+
 func studioImageFormat(header []byte) (mimeType, extension string, err error) {
 	mimeType = http.DetectContentType(header)
 	switch mimeType {
@@ -287,6 +355,18 @@ func studioImageFormat(header []byte) (mimeType, extension string, err error) {
 }
 
 func (s *Server) persistStudioAsset(documentID string, user *User, originalName string, src io.Reader) (StudioAsset, string, string, error) {
+	return s.persistStudioAssetForPurpose(
+		documentID, user, originalName, "image", studioMaxImageBytes, src)
+}
+
+func (s *Server) persistStudioAssetForPurpose(
+	documentID string,
+	user *User,
+	originalName string,
+	purpose string,
+	maxBytes int64,
+	src io.Reader,
+) (StudioAsset, string, string, error) {
 	var asset StudioAsset
 	dir, err := secureStudioAssetDir(s.studioRoot, documentID, true)
 	if err != nil {
@@ -315,19 +395,17 @@ func (s *Server) persistStudioAsset(documentID string, user *User, originalName 
 	if readErr != nil && readErr != io.ErrUnexpectedEOF {
 		return asset, "", "", readErr
 	}
-	mimeType, extension, err := studioImageFormat(header[:n])
+	mimeType, extension, err := studioAssetFormat(
+		purpose, strings.ToLower(filepath.Ext(originalName)), header[:n])
 	if err != nil {
 		return asset, "", "", err
-	}
-	if !studioImageExtensionMatches(strings.ToLower(filepath.Ext(originalName)), mimeType) {
-		return asset, "", "", errStudioAssetType
 	}
 	total, err := io.Copy(io.MultiWriter(out, hasher),
-		io.LimitReader(io.MultiReader(bytes.NewReader(header[:n]), src), studioMaxImageBytes+1))
+		io.LimitReader(io.MultiReader(bytes.NewReader(header[:n]), src), maxBytes+1))
 	if err != nil {
 		return asset, "", "", err
 	}
-	if total > studioMaxImageBytes {
+	if total > maxBytes {
 		return asset, "", "", errStudioAssetTooLarge
 	}
 	if err := out.Sync(); err != nil {
@@ -336,8 +414,10 @@ func (s *Server) persistStudioAsset(documentID string, user *User, originalName 
 	if err := out.Close(); err != nil {
 		return asset, "", "", err
 	}
-	if err := validateStoredStudioRaster(tmpPath, mimeType); err != nil {
-		return asset, "", "", err
+	if studioAssetPurposeIsRaster(purpose) {
+		if err := validateStoredStudioRaster(tmpPath, mimeType); err != nil {
+			return asset, "", "", err
+		}
 	}
 	if err := s.checkStudioAssetQuota(documentID, user, total); err != nil {
 		return asset, "", "", err
@@ -350,6 +430,111 @@ func (s *Server) persistStudioAsset(documentID string, user *User, originalName 
 		SHA256: hex.EncodeToString(hasher.Sum(nil)), State: "staging", Created: now,
 	}
 	return asset, tmpPath, filepath.Join(dir, id+extension), nil
+}
+
+func studioAssetPurposeIsRaster(purpose string) bool {
+	switch purpose {
+	case "image", "cover", "avatar", "waveform":
+		return true
+	default:
+		return false
+	}
+}
+
+func studioAssetFormat(purpose, extension string, header []byte) (string, string, error) {
+	if studioAssetPurposeIsRaster(purpose) {
+		mimeType, normalizedExtension, err := studioImageFormat(header)
+		if err != nil || !studioImageExtensionMatches(extension, mimeType) {
+			return "", "", errStudioAssetType
+		}
+		return mimeType, normalizedExtension, nil
+	}
+	if purpose == "subtitle" {
+		text := strings.TrimPrefix(string(header), "\ufeff")
+		if extension != ".vtt" || !strings.HasPrefix(strings.TrimSpace(text), "WEBVTT") {
+			return "", "", errStudioAssetType
+		}
+		return "text/vtt", ".vtt", nil
+	}
+	mimeType, normalizedExtension, kind := studioMediaFormat(extension, header)
+	if mimeType == "" || !studioPurposeAcceptsMediaKind(purpose, kind) {
+		return "", "", errStudioAssetType
+	}
+	return mimeType, normalizedExtension, nil
+}
+
+func studioPurposeAcceptsMediaKind(purpose, kind string) bool {
+	switch purpose {
+	case "track":
+		return kind == "audio"
+	case "primary":
+		return kind == "video" || kind == "audio" || kind == "pdf" ||
+			kind == "reader" || kind == "image"
+	default:
+		return false
+	}
+}
+
+func studioMediaFormat(extension string, header []byte) (mimeType, normalizedExtension, kind string) {
+	hasPrefix := func(prefix string) bool {
+		return len(header) >= len(prefix) && string(header[:len(prefix)]) == prefix
+	}
+	switch extension {
+	case ".mp4", ".m4v":
+		if len(header) >= 12 && string(header[4:8]) == "ftyp" {
+			return "video/mp4", extension, "video"
+		}
+	case ".mov":
+		if len(header) >= 12 && string(header[4:8]) == "ftyp" {
+			return "video/quicktime", ".mov", "video"
+		}
+	case ".webm":
+		if len(header) >= 4 && bytes.Equal(header[:4], []byte{0x1a, 0x45, 0xdf, 0xa3}) {
+			return "video/webm", ".webm", "video"
+		}
+	case ".mp3":
+		if hasPrefix("ID3") || (len(header) >= 2 && header[0] == 0xff && header[1]&0xe0 == 0xe0) {
+			return "audio/mpeg", ".mp3", "audio"
+		}
+	case ".ogg", ".oga":
+		if hasPrefix("OggS") {
+			return "audio/ogg", extension, "audio"
+		}
+	case ".flac":
+		if hasPrefix("fLaC") {
+			return "audio/flac", ".flac", "audio"
+		}
+	case ".wav":
+		if len(header) >= 12 && string(header[:4]) == "RIFF" && string(header[8:12]) == "WAVE" {
+			return "audio/wav", ".wav", "audio"
+		}
+	case ".m4a":
+		if len(header) >= 12 && string(header[4:8]) == "ftyp" {
+			return "audio/mp4", ".m4a", "audio"
+		}
+	case ".pdf":
+		if hasPrefix("%PDF-") {
+			return "application/pdf", ".pdf", "pdf"
+		}
+	case ".epub":
+		if len(header) >= 4 && bytes.Equal(header[:4], []byte{'P', 'K', 3, 4}) {
+			return "application/epub+zip", ".epub", "reader"
+		}
+	case ".txt":
+		if strings.HasPrefix(http.DetectContentType(header), "text/plain") {
+			return "text/plain", ".txt", "reader"
+		}
+	case ".md", ".markdown":
+		if strings.HasPrefix(http.DetectContentType(header), "text/plain") {
+			return "text/markdown", ".md", "reader"
+		}
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+		mimeType, normalized, err := studioImageFormat(header)
+		if err == nil && studioImageExtensionMatches(extension, mimeType) {
+			return mimeType, normalized, "image"
+		}
+	}
+	return "", "", ""
 }
 
 func validateStoredStudioRaster(path, mimeType string) error {
@@ -617,8 +802,9 @@ func (s *Server) serveStudioAsset(w http.ResponseWriter, r *http.Request, docume
 			writeStudioError(w, http.StatusNotFound, "studio.asset_not_found", nil)
 			return
 		}
-		published, pubErr := s.store.publishedStudioDocument(documentID)
-		if pubErr != nil || !studioAssetReferenced(published, assetID) {
+		published, pubErr := s.store.publishedStudioSnapshot(documentID)
+		if pubErr != nil || published.PublicationKind != "documents" ||
+			!studioAssetReferenced(published, assetID) {
 			writeStudioError(w, http.StatusNotFound, "studio.asset_not_found", nil)
 			return
 		}
@@ -662,6 +848,32 @@ func studioExtensionForMIME(mimeType string) string {
 		return ".gif"
 	case "image/webp":
 		return ".webp"
+	case "video/mp4":
+		return ".mp4"
+	case "video/quicktime":
+		return ".mov"
+	case "video/webm":
+		return ".webm"
+	case "audio/mpeg":
+		return ".mp3"
+	case "audio/ogg":
+		return ".ogg"
+	case "audio/flac":
+		return ".flac"
+	case "audio/wav":
+		return ".wav"
+	case "audio/mp4":
+		return ".m4a"
+	case "application/pdf":
+		return ".pdf"
+	case "application/epub+zip":
+		return ".epub"
+	case "text/plain":
+		return ".txt"
+	case "text/markdown":
+		return ".md"
+	case "text/vtt":
+		return ".vtt"
 	default:
 		return ""
 	}
@@ -677,7 +889,7 @@ func (s *Server) deleteStudioAsset(w http.ResponseWriter, documentID, assetID st
 		writeStudioError(w, http.StatusConflict, "studio.asset_in_use", nil)
 		return
 	}
-	if published, err := s.store.publishedStudioDocument(documentID); err == nil &&
+	if published, err := s.store.publishedStudioSnapshot(documentID); err == nil &&
 		studioAssetReferenced(published, assetID) {
 		writeStudioError(w, http.StatusConflict, "studio.asset_in_use", nil)
 		return

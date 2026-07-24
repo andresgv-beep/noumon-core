@@ -22,6 +22,7 @@
       .slice(0, 12);
   });
   let recent = $derived(documents.slice(0, 4));
+  let featured = $derived(documents.filter((doc) => doc.featured).slice(0, 4));
   let filtered = $derived.by(() => {
     const needle = query.trim().toLocaleLowerCase();
     return documents.filter((doc) =>
@@ -75,6 +76,20 @@
     {/if}
 
     {#if !query.trim() && !selectedTopic && recent.length}
+      {#if featured.length}
+        <section class="recent featured">
+          <div class="section-title"><span>{t('documents.featured')}</span></div>
+          <div class="recent-grid">
+            {#each featured as doc (doc.id)}
+              <button onclick={() => onOpenItem?.(`studio:${doc.id}`)}>
+                <small>{doc.classification?.workType || t('documents.article')}</small>
+                <b>{doc.title}</b>
+                <span>{doc.summary || t('documents.noSummary')}</span>
+              </button>
+            {/each}
+          </div>
+        </section>
+      {/if}
       <section class="recent">
         <div class="section-title"><span>{t('documents.recent')}</span></div>
         <div class="recent-grid">

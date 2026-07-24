@@ -180,6 +180,16 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	if err := json.Unmarshal(in.Metadata, &metadataObject); err != nil {
 		return studioValidatedInput{}, fmt.Errorf("metadata: object required")
 	}
+	mediaMetadata, mediaAssets, err := validateStudioMediaMetadata(in.TemplateKey, in.Metadata)
+	if err != nil {
+		return studioValidatedInput{}, err
+	}
+	if strings.HasPrefix(in.TemplateKey, "cabinet.") || in.TemplateKey == "moments.video" {
+		in.Metadata, err = json.Marshal(mediaMetadata)
+		if err != nil {
+			return studioValidatedInput{}, err
+		}
+	}
 
 	if len(in.Content) == 0 || len(in.Content) > studioMaxRequest || !json.Valid(in.Content) {
 		return studioValidatedInput{}, fmt.Errorf("content: invalid or too large")
@@ -230,6 +240,11 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	assets := make([]string, 0, len(state.assets))
 	for id := range state.assets {
 		assets = append(assets, id)
+	}
+	for _, id := range mediaAssets {
+		if !state.assets[id] {
+			assets = append(assets, id)
+		}
 	}
 	sort.Strings(assets)
 	normalizedContent, err := json.Marshal(content)
@@ -417,8 +432,8 @@ func (s *studioBlockValidation) validate(raw json.RawMessage, depth int) error {
 	}
 	if field, ok := obj["columns"]; ok {
 		var columns [][]json.RawMessage
-		if err := json.Unmarshal(field, &columns); err != nil || len(columns) != 2 {
-			return fmt.Errorf("columns: exactly two columns required")
+		if err := json.Unmarshal(field, &columns); err != nil || len(columns) < 1 || len(columns) > 3 {
+			return fmt.Errorf("columns: one to three columns required")
 		}
 		for _, column := range columns {
 			for _, child := range column {

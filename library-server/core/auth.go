@@ -959,7 +959,34 @@ func (s *Server) handleAdminUserOp(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	s.studioPublishMu.Lock()
+	defer s.studioPublishMu.Unlock()
+	var withdrawnMedia []StudioDocument
+	var withdrawnMediaBackups []studioMediaMaterialization
+	if strategy == "withdraw" {
+		withdrawnMedia, err = s.studioPublishedMediaOwnedBy(id)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		for _, document := range withdrawnMedia {
+			backup, withdrawErr := s.withdrawStudioMediaSidecar(document)
+			if withdrawErr != nil {
+				for i := range withdrawnMediaBackups {
+					withdrawnMediaBackups[i].rollback()
+				}
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": withdrawErr.Error()})
+				return
+			}
+			withdrawnMediaBackups = append(withdrawnMediaBackups, backup)
+		}
+	}
 	impact, err := s.store.deleteUserWithStudioStrategy(id, username, me, strategy, transferTo)
+	if err != nil {
+		for i := range withdrawnMediaBackups {
+			withdrawnMediaBackups[i].rollback()
+		}
+	}
 	switch {
 	case errors.Is(err, errStudioDeletionStrategyRequired):
 		writeJSON(w, http.StatusConflict, map[string]any{
@@ -985,6 +1012,12 @@ func (s *Server) handleAdminUserOp(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+	for _, document := range withdrawnMedia {
+		s.removeStudioMediaFiles(document)
+	}
+	if len(withdrawnMedia) > 0 && s.media != nil {
+		s.media.invalidate()
 	}
 	s.invalidateSessionCache() // DeleteUserData eliminó sus sesiones: fuera también de RAM
 	s.invalidateAccessCache()

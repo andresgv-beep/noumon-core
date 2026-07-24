@@ -38,7 +38,9 @@ function pdfjsAssets() {
 export default defineConfig({
   plugins: [svelte(), pdfjsAssets()],
   server: {
+    host: '127.0.0.1',
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api': 'http://127.0.0.1:8090',
       '/content': 'http://127.0.0.1:8090',

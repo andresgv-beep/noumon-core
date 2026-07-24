@@ -185,6 +185,17 @@ CREATE TABLE IF NOT EXISTS studio_facets (
   PRIMARY KEY (document_id, facet, value)
 );
 CREATE INDEX IF NOT EXISTS idx_studio_facets_lookup ON studio_facets(facet, value, document_id);
+CREATE VIRTUAL TABLE IF NOT EXISTS studio_published_fts USING fts5(
+  document_id UNINDEXED,
+  title,
+  summary,
+  plain_text,
+  tags,
+  work_type,
+  topics,
+  author_label,
+  tokenize='unicode61 remove_diacritics 2'
+);
 CREATE TABLE IF NOT EXISTS content_origins (
   document_id        TEXT PRIMARY KEY,
   origin_content_id  TEXT NOT NULL,
@@ -244,7 +255,7 @@ func openStore(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if err := st.backfillStudioPublishedLinks(); err != nil {
+	if err := st.backfillStudioPublishedDerived(); err != nil {
 		db.Close()
 		return nil, err
 	}

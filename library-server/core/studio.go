@@ -286,9 +286,9 @@ func (s *Server) handleStudioDocumentSub(w http.ResponseWriter, r *http.Request)
 		var document StudioDocument
 		var err error
 		if sub == "publish" {
-			document, err = s.store.publishStudioDocument(id, user)
+			document, err = s.publishStudioContent(id, user)
 		} else {
-			document, err = s.store.unpublishStudioDocument(id, user)
+			document, err = s.unpublishStudioContent(id, user)
 		}
 		if err != nil {
 			writeStudioStoreError(w, err, 0)
@@ -329,7 +329,7 @@ func (s *Server) handleStudioDocumentSub(w http.ResponseWriter, r *http.Request)
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"document": document})
 	case http.MethodDelete:
-		document, err := s.store.archiveStudioDocument(id, user)
+		document, err := s.archiveStudioContent(id, user)
 		if err != nil {
 			writeStudioStoreError(w, err, 0)
 			return
@@ -445,6 +445,8 @@ func writeStudioStoreError(w http.ResponseWriter, err error, currentRevision int
 		writeStudioError(w, http.StatusNotFound, "studio.revision_not_found", nil)
 	case errors.Is(err, errStudioAssetInvalid):
 		writeStudioError(w, http.StatusUnprocessableEntity, "studio.asset_invalid", nil)
+	case errors.Is(err, errStudioMediaIncomplete):
+		writeStudioError(w, http.StatusUnprocessableEntity, "studio.media_incomplete", nil)
 	default:
 		writeStudioError(w, http.StatusInternalServerError, "studio.internal", nil)
 	}

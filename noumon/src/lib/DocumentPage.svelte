@@ -9,6 +9,7 @@
   let loading = $state(true);
   let error = $state(false);
   let backlinks = $state([]);
+  let related = $state([]);
 
   onMount(async () => {
     const id = String(tab.itemId || tab.open?.itemId || '').replace(/^studio:/, '');
@@ -17,7 +18,11 @@
       try {
         const relations = await getPublishedDocumentRelations(id);
         backlinks = relations.backlinks || [];
-      } catch { backlinks = []; }
+        related = relations.related || [];
+      } catch {
+        backlinks = [];
+        related = [];
+      }
     }
     catch (e) { error = true; }
     loading = false;
@@ -36,6 +41,19 @@
         <span>{t('documents.linksHere')}</span>
         <div>
           {#each backlinks as item (item.id)}
+            <button onclick={() => onOpenItem?.(`studio:${item.id}`)}>
+              <b>{item.title}</b>
+              <small>{item.summary || t('documents.noSummary')}</small>
+            </button>
+          {/each}
+        </div>
+      </section>
+    {/if}
+    {#if related.length}
+      <section class="backlinks related">
+        <span>{t('documents.related')}</span>
+        <div>
+          {#each related as item (item.id)}
             <button onclick={() => onOpenItem?.(`studio:${item.id}`)}>
               <b>{item.title}</b>
               <small>{item.summary || t('documents.noSummary')}</small>

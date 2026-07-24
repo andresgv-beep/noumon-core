@@ -200,7 +200,7 @@ func writeJSONFileOverwrite(path string, v any) error {
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := replaceStudioFile(tmp, path); err != nil {
 		os.Remove(tmp)
 		return err
 	}

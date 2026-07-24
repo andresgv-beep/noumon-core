@@ -61,6 +61,9 @@ func (s *Store) publishStudioDocument(id string, editor *User) (StudioDocument, 
 	if err := replaceStudioPublishedLinks(tx, id, valid.Links); err != nil {
 		return StudioDocument{}, err
 	}
+	if err := replaceStudioPublishedFTS(tx, id, valid); err != nil {
+		return StudioDocument{}, err
+	}
 	if _, err = tx.Exec(`
 		INSERT INTO content_origins
 			(document_id, origin_content_id, origin_creator_key, origin_version, imported)
@@ -123,6 +126,9 @@ func (s *Store) unpublishStudioDocument(id string, editor *User) (StudioDocument
 	if err := replaceStudioPublishedLinks(tx, id, nil); err != nil {
 		return StudioDocument{}, err
 	}
+	if _, err := tx.Exec(`DELETE FROM studio_published_fts WHERE document_id=?`, id); err != nil {
+		return StudioDocument{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return StudioDocument{}, err
 	}
@@ -136,13 +142,25 @@ func (s *Store) unpublishStudioDocument(id string, editor *User) (StudioDocument
 }
 
 func (s *Store) publishedStudioDocument(id string) (StudioDocument, error) {
+	doc, err := s.publishedStudioSnapshot(id)
+	if err != nil {
+		return StudioDocument{}, err
+	}
+	if doc.PublicationKind != "documents" {
+		return StudioDocument{}, errStudioNotFound
+	}
+	return doc, nil
+}
+
+func (s *Store) publishedStudioSnapshot(id string) (StudioDocument, error) {
 	var revision int
 	var published sql.NullInt64
+	var publicationKind, publicationTarget sql.NullString
 	err := s.db.QueryRow(`
-		SELECT published_revision, published
+		SELECT published_revision, published, publication_kind, publication_target
 		FROM studio_documents
 		WHERE id=? AND published_revision IS NOT NULL AND status!='archived'`, id).
-		Scan(&revision, &published)
+		Scan(&revision, &published, &publicationKind, &publicationTarget)
 	if err == sql.ErrNoRows {
 		return StudioDocument{}, errStudioNotFound
 	}
@@ -161,8 +179,8 @@ func (s *Store) publishedStudioDocument(id string) (StudioDocument, error) {
 	}
 	doc.Status = "published"
 	doc.PublishedRevision = &revision
-	doc.PublicationKind = "documents"
-	doc.PublicationTarget = studioDocumentsCollectionID
+	doc.PublicationKind = publicationKind.String
+	doc.PublicationTarget = publicationTarget.String
 	if published.Valid {
 		v := published.Int64
 		doc.Published = &v
@@ -178,6 +196,7 @@ func (s *Store) listPublishedStudioDocuments() ([]StudioDocumentSummary, error) 
 	rows, err := s.db.Query(`
 		SELECT id FROM studio_documents
 		WHERE published_revision IS NOT NULL AND status!='archived'
+		  AND publication_kind='documents'
 		ORDER BY published DESC, title`)
 	if err != nil {
 		return nil, err
@@ -211,12 +230,14 @@ func (s *Store) listPublishedStudioDocuments() ([]StudioDocumentSummary, error) 
 type StudioDocumentRelations struct {
 	OutgoingItemIDs []string                `json:"outgoingItemIds"`
 	Backlinks       []StudioDocumentSummary `json:"backlinks"`
+	Related         []StudioDocumentSummary `json:"related"`
 }
 
 func (s *Store) publishedStudioRelations(id string) (StudioDocumentRelations, error) {
 	relations := StudioDocumentRelations{
 		OutgoingItemIDs: []string{},
 		Backlinks:       []StudioDocumentSummary{},
+		Related:         []StudioDocumentSummary{},
 	}
 	rows, err := s.db.Query(`
 		SELECT target_item_id FROM studio_published_links
@@ -273,7 +294,81 @@ func (s *Store) publishedStudioRelations(id string) (StudioDocumentRelations, er
 		}
 		relations.Backlinks = append(relations.Backlinks, studioSummary(document))
 	}
+	current, err := s.publishedStudioDocument(id)
+	if err != nil {
+		return relations, err
+	}
+	candidates, err := s.listPublishedStudioDocuments()
+	if err != nil {
+		return relations, err
+	}
+	outgoing := make(map[string]bool, len(relations.OutgoingItemIDs))
+	for _, target := range relations.OutgoingItemIDs {
+		outgoing[target] = true
+	}
+	incoming := make(map[string]bool, len(relations.Backlinks))
+	for _, source := range relations.Backlinks {
+		incoming[source.ID] = true
+	}
+	currentTopics := normalizedStudioValueSet(current.Classification.Topics)
+	currentTags := normalizedStudioValueSet(current.Tags)
+	type scoredSummary struct {
+		summary StudioDocumentSummary
+		score   int
+	}
+	scored := make([]scoredSummary, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.ID == id {
+			continue
+		}
+		score := 0
+		if outgoing["studio:"+candidate.ID] {
+			score += 5
+		}
+		if incoming[candidate.ID] {
+			score += 5
+		}
+		for topic := range normalizedStudioValueSet(candidate.Classification.Topics) {
+			if currentTopics[topic] {
+				score += 3
+			}
+		}
+		for tag := range normalizedStudioValueSet(candidate.Tags) {
+			if currentTags[tag] {
+				score++
+			}
+		}
+		if score > 0 {
+			scored = append(scored, scoredSummary{summary: candidate, score: score})
+		}
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		left, right := scored[i].summary.Published, scored[j].summary.Published
+		if left != nil && right != nil && *left != *right {
+			return *left > *right
+		}
+		return scored[i].summary.Title < scored[j].summary.Title
+	})
+	for _, candidate := range scored {
+		if len(relations.Related) == 6 {
+			break
+		}
+		relations.Related = append(relations.Related, candidate.summary)
+	}
 	return relations, nil
+}
+
+func normalizedStudioValueSet(values []string) map[string]bool {
+	set := make(map[string]bool, len(values))
+	for _, value := range values {
+		if normalized := normalizeText(value); normalized != "" {
+			set[normalized] = true
+		}
+	}
+	return set
 }
 
 func (s *Server) registerPublishedDocumentRoutes(mux *http.ServeMux) {
@@ -369,48 +464,42 @@ func compactStudioAuthor(author string) []string {
 }
 
 func (s *Store) searchPublishedStudioDocuments(query string) ([]FederatedSearchResult, error) {
+	tokens := queryTokens(query)
+	if len(tokens) == 0 {
+		return []FederatedSearchResult{}, nil
+	}
+	match := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		match = append(match, `"`+token+`"*`)
+	}
 	rows, err := s.db.Query(`
-		SELECT d.id, r.snapshot_json, d.published_plain_text
-		FROM studio_documents d
-		JOIN studio_revisions r
-		  ON r.document_id=d.id AND r.revision=d.published_revision
-		WHERE d.published_revision IS NOT NULL AND d.status!='archived'`)
+		SELECT f.document_id, f.title, f.summary, f.author_label,
+		       bm25(studio_published_fts, 0, 10, 5, 1, 2, 3, 3, 4)
+		FROM studio_published_fts f
+		JOIN studio_documents d ON d.id=f.document_id
+		WHERE studio_published_fts MATCH ?
+		  AND d.published_revision IS NOT NULL AND d.status!='archived'
+		ORDER BY bm25(studio_published_fts, 0, 10, 5, 1, 2, 3, 3, 4)
+		LIMIT 50`, strings.Join(match, " AND "))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	nq := normalizeText(query)
-	tokens := queryTokens(query)
 	out := []FederatedSearchResult{}
 	for rows.Next() {
-		var id, snapshot, plain string
-		if err := rows.Scan(&id, &snapshot, &plain); err != nil {
+		var id, title, summary, author string
+		var rank float64
+		if err := rows.Scan(&id, &title, &summary, &author, &rank); err != nil {
 			return nil, err
 		}
-		var published StudioDocument
-		if err := json.Unmarshal([]byte(snapshot), &published); err != nil {
-			return nil, err
-		}
-		haystack := strings.Join([]string{
-			published.Title, published.Summary, published.AuthorLabel,
-			strings.Join(published.Tags, " "), plain,
-		}, " ")
-		normalized := normalizeText(haystack)
-		if !strings.Contains(normalized, nq) && !coversAllTokens(tokens, haystack) {
-			continue
-		}
-		score := scoreHit(query, published.Title, published.AuthorLabel, published.Summary)
-		if strings.Contains(normalizeText(published.Title), nq) {
-			score += 300
-		}
+		score := scoreHit(query, title, author, summary) + 140 + int(-rank*100)
 		out = append(out, FederatedSearchResult{
 			ItemID: "studio:" + id, CollectionID: studioDocumentsCollectionID,
-			Title: published.Title, Subtitle: published.AuthorLabel,
-			Snippet: published.Summary, Kind: "document",
-			Score:   score + 140,
-			Preview: Preview{Kind: "text", Text: published.Summary, Icon: "note"},
+			Title: title, Subtitle: author,
+			Snippet: summary, Kind: "document",
+			Score:   score,
+			Preview: Preview{Kind: "text", Text: summary, Icon: "note"},
 		})
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
 	return out, rows.Err()
 }

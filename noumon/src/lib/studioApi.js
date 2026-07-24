@@ -19,6 +19,11 @@ export async function getStudioCapabilities() {
   return studioJSON('/api/studio/capabilities');
 }
 
+export async function listStudioTemplates() {
+  const body = await studioJSON('/api/studio/templates');
+  return body.templates || [];
+}
+
 export async function listStudioDocuments(status = 'all') {
   const body = await studioJSON(`/api/studio/documents?status=${encodeURIComponent(status)}`);
   return body.documents || [];
@@ -87,10 +92,10 @@ export async function unpublishStudioDocument(id) {
   return body.document;
 }
 
-export async function uploadStudioAsset(documentId, file) {
+export async function uploadStudioAsset(documentId, file, purpose = 'image') {
   const form = new FormData();
   form.append('file', file, file.name);
-  const assetPath = `/api/studio/documents/${encodeURIComponent(documentId)}/assets`;
+  const assetPath = `/api/studio/documents/${encodeURIComponent(documentId)}/assets?purpose=${encodeURIComponent(purpose)}`;
   let response;
   if (!isShell()) {
     response = await serverFetch(assetPath, { method: 'POST', body: form });
@@ -102,7 +107,7 @@ export async function uploadStudioAsset(documentId, file) {
     const base = isGateway() ? await getGatewayTarget() : getServerBase();
     if (!base) throw new Error('studio.assets_unavailable');
     response = await fetch(
-      `${String(base).replace(/\/+$/, '')}${assetPath}?ut=${encodeURIComponent(grant.token)}`,
+      `${String(base).replace(/\/+$/, '')}${assetPath}&ut=${encodeURIComponent(grant.token)}`,
       { method: 'POST', credentials: 'omit', body: form },
     );
   }

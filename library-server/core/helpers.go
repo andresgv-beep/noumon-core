@@ -13,9 +13,8 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// isOwnMediaSource: los carriles que library-core reconoce como CONTENIDO PROPIO
-// (subido por el operador). Cualquier otro (archives/youtube/local… de un pool
-// legacy compartido) se ignora en todas las superficies y el buscador.
+// isOwnMediaSource: los carriles que library-core reconoce como CONTENIDO PROPIO.
+// Cualquier otro carril heredado de un pool compartido se ignora.
 func isOwnMediaSource(source string) bool {
 	return source == "moments" || source == "cabinet"
 }

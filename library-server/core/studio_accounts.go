@@ -158,6 +158,12 @@ func (s *Store) deleteUserWithStudioStrategy(
 			document.ID, document.Revision, actor.ID, actor.Username, string(snapshot), now); err != nil {
 			return impact, err
 		}
+		if strategy == "withdraw" {
+			if _, err := tx.Exec(`DELETE FROM studio_published_fts WHERE document_id=?`,
+				document.ID); err != nil {
+				return impact, err
+			}
+		}
 	}
 
 	var assetOwner any

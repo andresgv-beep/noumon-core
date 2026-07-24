@@ -378,9 +378,8 @@ func (m *mediaDeps) scan(collection string) ([]mediaItem, error) {
 		if json.Unmarshal(raw, &sc) != nil || sc.Media == "" {
 			return nil // no es un sidecar válido (o le falta el fichero de media)
 		}
-		// library-core solo gestiona SU propio contenido (subido a Moments/Cabinet).
-		// Un pool compartido con la versión legacy puede tener ítems de otros carriles
-		// (archives/youtube/local…): se ignoran por completo, en cualquier superficie.
+		// library-core solo gestiona SU propio contenido (Moments/Cabinet).
+		// Los carriles heredados de un pool compartido se ignoran por completo.
 		if !isOwnMediaSource(sc.Source) {
 			return nil
 		}

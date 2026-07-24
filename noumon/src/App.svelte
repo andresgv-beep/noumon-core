@@ -5,7 +5,9 @@
   import * as readerState from './lib/readerStateApi.js';
   import Tabs from './lib/Tabs.svelte';
   import NavBar from './lib/NavBar.svelte';
+  import StudioNavBar from './lib/StudioNavBar.svelte';
   import Sidebar from './lib/Sidebar.svelte';
+  import StudioSidebar from './lib/StudioSidebar.svelte';
   import Reader from './lib/Reader.svelte';
   import BookmarksBar from './lib/BookmarksBar.svelte';
   import NoteEditor from './lib/NoteEditor.svelte';
@@ -51,6 +53,9 @@
   let uid = 1;
 
   let active = $derived(tabs.find((tb) => tb.id === activeId) || null);
+  let studioMode = $derived(active?.kind === 'view' && active?.view === 'studio');
+  let studioShell = $state({ mode: 'home', documents: [] });
+  function updateStudioShell(state) { studioShell = state || { mode: 'home', documents: [] }; }
   // La barra de marcadores (páginas guardadas) vive a nivel de app: visible en
   // TODAS las pestañas mientras haya algún favorito. Al final de la barra vive el
   // menú Favoritos, así que si no hay favoritos, barra y menú desaparecen juntos.
@@ -261,6 +266,7 @@
     pushHistory(tb);
     if (tb.search) tb.search = emptySearch();
     setView(tb, view);
+    if (view === 'studio') sidebarOpen = true;
   }
 
   // Abrir un artículo: en la pestaña activa (empujando historial) o en una nueva.
@@ -385,30 +391,42 @@
   }
 </script>
 
-<div class="app" class:side-hidden={!sidebarOpen} class:bookmarks-open={barOn}>
+<div class="app" class:side-hidden={!sidebarOpen} class:bookmarks-open={barOn && !studioMode} class:studio-mode={studioMode}>
   <div class="r-top"><Tabs {tabs} {activeId} onActivate={activate} onClose={closeTab} onNew={newTab} /></div>
   <div class="r-nav">
-    <NavBar {active} {sidebarOpen} {indexOpen} user={auth.user}
-      onToggleSidebar={toggleSidebar} onToggleIndex={toggleIndex}
-      onBack={back} onForward={forward} onReload={reload} onHome={goHome}
-      onNavigateAddress={navigateAddress}
-      starred={activeFav} onToggleFav={toggleFav} noted={activeNoted} onOpenNote={openActiveNote}
-      tagged={activeTagged} onOpenTags={openActiveTags}
-      onAccount={() => (accountOpen = true)} />
+    {#if studioMode}
+      <StudioNavBar state={studioShell} {sidebarOpen} user={auth.user}
+        onToggleSidebar={toggleSidebar} onAccount={() => (accountOpen = true)} />
+    {:else}
+      <NavBar {active} {sidebarOpen} {indexOpen} user={auth.user}
+        onToggleSidebar={toggleSidebar} onToggleIndex={toggleIndex}
+        onBack={back} onForward={forward} onReload={reload} onHome={goHome}
+        onNavigateAddress={navigateAddress}
+        starred={activeFav} onToggleFav={toggleFav} noted={activeNoted} onOpenNote={openActiveNote}
+        tagged={activeTagged} onOpenTags={openActiveTags}
+        onAccount={() => (accountOpen = true)} />
+    {/if}
   </div>
-  {#if barOn}
+  {#if barOn && !studioMode}
     <div class="r-bar">
       <BookmarksBar {favorites} {libraries} onOpen={openFav} onToggleHome={toggleHome} onRemoveFav={removeFav} />
     </div>
   {/if}
-  <div class="r-side"><Sidebar {libraries} activeLib={active?.lib} {activeView} user={auth.user} {studioCapabilities}
-      onOpenLibrary={openLibrary} onOpenHome={goHome} onOpenView={openView} onAccount={() => (accountOpen = true)} /></div>
+  <div class="r-side">
+    {#if studioMode}
+      <StudioSidebar state={studioShell} />
+    {:else}
+      <Sidebar {libraries} activeLib={active?.lib} {activeView} user={auth.user} {studioCapabilities}
+        onOpenLibrary={openLibrary} onOpenHome={goHome} onOpenView={openView} onAccount={() => (accountOpen = true)} />
+    {/if}
+  </div>
   <div class="r-main">
     {#if active}
       <div class="r-reader">
         <Reader tab={active} {libraries} {favorites} {indexOpen} {notesVersion} {tagsVersion} onNavigate={navigate}
           onOpenItem={openItemById} onOpenView={openView} onToggleHome={toggleHome} onFrameNav={frameNav}
-          onRemoveFav={removeFav} onOpenNote={openNoteItem} onDeleteNote={deleteNoteItem} />
+          onRemoveFav={removeFav} onOpenNote={openNoteItem} onDeleteNote={deleteNoteItem}
+          onStudioShellChange={updateStudioShell} />
       </div>
     {/if}
   </div>
@@ -448,4 +466,10 @@
   .app.side-hidden .r-side{border-right:none}
   .r-main{grid-area:main;min-width:0;overflow:hidden;display:flex;flex-direction:column}
   .r-reader{flex:1;min-height:0;min-width:0}
+  @media(max-width:700px){
+    .app.studio-mode{grid-template-columns:1fr;grid-template-areas:"top" "nav" "bar" "main"}
+    .app.studio-mode.side-hidden{grid-template-columns:1fr}
+    .app.studio-mode .r-side{position:fixed;z-index:20;left:0;top:98px;bottom:0;width:min(262px,84vw);display:block;box-shadow:8px 0 24px color-mix(in srgb,#000 28%,transparent);transition:transform .18s ease}
+    .app.studio-mode.side-hidden .r-side{transform:translateX(-105%);pointer-events:none}
+  }
 </style>

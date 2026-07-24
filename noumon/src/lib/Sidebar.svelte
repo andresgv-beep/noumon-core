@@ -37,6 +37,18 @@
     {/each}
   </nav>
 
+  {#if studioCapabilities.canAuthor}
+    <div class="sec-label create-label">
+      <span class="sec-title"><Icon name="edit" size={15} />{t('side.create')}</span>
+    </div>
+    <div class="create-list">
+      <button class="create-link" class:active={activeView === 'studio'} onclick={() => onOpenView?.('studio')}>
+        <span class="studio-icon"><Icon name="edit" size={16} /></span>
+        <span><b>{t('menu.studio')}</b><small>{t('studio.sidebarSub')}</small></span>
+      </button>
+    </div>
+  {/if}
+
   <div class="sec-label">
     <span class="sec-title">
       <svg class="library-mark" viewBox="0 0 100 100" width="16" height="16" aria-hidden="true">
@@ -81,17 +93,6 @@
       </button>
       <button class="star" class:on={siteShown('moments')} title={siteShown('moments') ? t('side.unpinSite') : t('side.pinSite')} onclick={() => toggleSite('moments')}><Icon name="star" size={15} /></button>
     </div>
-    {#if studioCapabilities.canAuthor}
-      <div class="lib" class:active={activeView === 'studio'}>
-        <button class="libopen" onclick={() => onOpenView?.('studio')} title={t('menu.studio')}>
-          <span class="studio-icon"><Icon name="edit" size={16} /></span>
-          <span class="meta">
-            <span class="nm">{t('menu.studio')}</span>
-            <span class="sub">{t('studio.sidebarSub')}</span>
-          </span>
-        </button>
-      </div>
-    {/if}
     {#each libraries as lib}
       <div class="lib" class:active={activeLib === lib.id}>
         <button class="libopen" onclick={() => onOpenLibrary?.(lib)} title={lib.name}>
@@ -133,6 +134,7 @@
   .navlink.active{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent-line)}
   .navlink.active :global(.ic){color:var(--accent-2)}
   .sec-label{padding:16px 20px 8px;font-size:11px;font-weight:650;letter-spacing:.7px;color:var(--faint);text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
+  .create-label{padding-top:14px}
   .sec-title{display:flex;align-items:center;gap:7px}
   .library-mark{display:block;flex:none;color:var(--muted)}
   .add{width:20px;height:20px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--muted)}
@@ -150,6 +152,13 @@
   .star.on{color:var(--accent-2)}
   .star.on :global(.ic){fill:var(--accent-2);stroke:var(--accent-2)}
   .empty{padding:14px;color:var(--faint);font-size:13px}
+  .create-list{padding:0 10px}
+  .create-link{width:100%;display:flex;align-items:center;gap:11px;padding:7px 10px;border-radius:var(--r-md);text-align:left}
+  .create-link:hover{background:var(--raise)}
+  .create-link.active{background:var(--accent-weak);box-shadow:inset 0 0 0 1px var(--accent-line)}
+  .create-link>span:last-child{min-width:0;display:flex;flex-direction:column}
+  .create-link b{color:var(--ink);font-size:13.5px;font-weight:550}
+  .create-link small{color:var(--muted);font-size:11.5px}
   .studio-icon{width:26px;height:26px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;background:color-mix(in srgb,var(--accent) 18%,var(--panel-2));color:var(--accent-2);border:1px solid var(--accent-line)}
   .documents-icon{width:26px;height:26px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;background:color-mix(in srgb,#5a92d8 17%,var(--panel-2));color:#79a9e4;border:1px solid color-mix(in srgb,#5a92d8 35%,var(--border))}
   .foot{padding:8px 10px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px}

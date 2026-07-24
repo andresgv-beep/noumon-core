@@ -21,7 +21,8 @@
   import { serverUrl } from './connection.js';
 
   let { tab, libraries = [], favorites = [], indexOpen = false, notesVersion = 0, tagsVersion = 0,
-        onNavigate, onOpenItem, onOpenView, onToggleHome, onFrameNav, onRemoveFav, onOpenNote, onDeleteNote } = $props();
+        onNavigate, onOpenItem, onOpenView, onToggleHome, onFrameNav, onRemoveFav, onOpenNote, onDeleteNote,
+        onStudioShellChange } = $props();
 
   let frameEl = $state(null);
   let toc = $state([]);
@@ -218,7 +219,7 @@
   {:else if tab.kind === 'view' && tab.view === 'moments'}
     <Moments {onOpenItem} />
   {:else if tab.kind === 'view' && tab.view === 'studio'}
-    <Studio {onOpenItem} />
+    <Studio {onOpenItem} onShellChange={onStudioShellChange} />
   {:else if tab.kind === 'view' && tab.view === 'documents'}
     <Documents {onOpenItem} />
   {:else if tab.kind === 'item'}

@@ -31,6 +31,7 @@ type StudioDocumentSummary struct {
 	Created           int64                `json:"created"`
 	Updated           int64                `json:"updated"`
 	Published         *int64               `json:"published,omitempty"`
+	Featured          bool                 `json:"featured,omitempty"`
 }
 
 type studioScanner interface {
@@ -99,7 +100,15 @@ func studioSummary(doc StudioDocument) StudioDocumentSummary {
 		Classification: doc.Classification, Revision: doc.Revision,
 		PublishedRevision: doc.PublishedRevision, PublicationKind: doc.PublicationKind,
 		Created: doc.Created, Updated: doc.Updated, Published: doc.Published,
+		Featured: studioDocumentFeatured(doc.Metadata),
 	}
+}
+
+func studioDocumentFeatured(metadata json.RawMessage) bool {
+	var fields struct {
+		Featured bool `json:"featured"`
+	}
+	return json.Unmarshal(metadata, &fields) == nil && fields.Featured
 }
 
 func (s *Store) createStudioDocument(owner *User, valid studioValidatedInput) (StudioDocument, error) {
@@ -195,7 +204,22 @@ func replaceStudioPublishedLinks(tx *sql.Tx, documentID string, links []string) 
 	return nil
 }
 
-func (s *Store) backfillStudioPublishedLinks() error {
+func replaceStudioPublishedFTS(tx *sql.Tx, documentID string, valid studioValidatedInput) error {
+	if _, err := tx.Exec(`DELETE FROM studio_published_fts WHERE document_id=?`, documentID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`
+		INSERT INTO studio_published_fts (
+			document_id, title, summary, plain_text, tags,
+			work_type, topics, author_label
+		) VALUES (?,?,?,?,?,?,?,?)`,
+		documentID, valid.Input.Title, valid.Input.Summary, valid.PlainText,
+		strings.Join(valid.Input.Tags, " "), valid.Classification.WorkType,
+		strings.Join(valid.Classification.Topics, " "), valid.Input.AuthorLabel)
+	return err
+}
+
+func (s *Store) backfillStudioPublishedDerived() error {
 	rows, err := s.db.Query(`
 		SELECT d.id, r.snapshot_json
 		FROM studio_documents d
@@ -234,6 +258,9 @@ func (s *Store) backfillStudioPublishedLinks() error {
 	if _, err := tx.Exec(`DELETE FROM studio_published_links`); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(`DELETE FROM studio_published_fts`); err != nil {
+		return err
+	}
 	for _, item := range snapshots {
 		var document StudioDocument
 		if err := json.Unmarshal([]byte(item.snapshot), &document); err != nil {
@@ -258,6 +285,9 @@ func (s *Store) backfillStudioPublishedLinks() error {
 			continue
 		}
 		if err := replaceStudioPublishedLinks(tx, item.id, valid.Links); err != nil {
+			return err
+		}
+		if err := replaceStudioPublishedFTS(tx, item.id, valid); err != nil {
 			return err
 		}
 	}
@@ -460,6 +490,9 @@ func (s *Store) archiveStudioDocument(id string, editor *User) (StudioDocument, 
 		id, current.Revision, editor.ID, editor.Username, string(snapshot), now); err != nil {
 		return StudioDocument{}, err
 	}
+	if _, err := tx.Exec(`DELETE FROM studio_published_fts WHERE document_id=?`, id); err != nil {
+		return StudioDocument{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return StudioDocument{}, err
 	}
@@ -625,6 +658,14 @@ func (s *Store) restoreStudioRevision(
 	}
 	if err := replaceStudioDerived(tx, id, valid); err != nil {
 		return StudioDocument{}, baseRevision, err
+	}
+	// Restaurar crea una revisión nueva del borrador, no una publicación.
+	// Si existe un snapshot publicado, su fila FTS debe seguir apuntando a esa
+	// revisión inmutable hasta que el autor pulse Publicar de nuevo.
+	if current.PublishedRevision == nil {
+		if _, err := tx.Exec(`DELETE FROM studio_published_fts WHERE document_id=?`, id); err != nil {
+			return StudioDocument{}, baseRevision, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return StudioDocument{}, baseRevision, err

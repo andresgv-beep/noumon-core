@@ -201,7 +201,7 @@ func TestStudioSchemaIsAdditive(t *testing.T) {
 	for _, table := range []string{
 		"user_capabilities", "studio_documents", "studio_revisions", "studio_assets",
 		"studio_publish_targets", "studio_links", "studio_published_links",
-		"studio_facets", "content_origins",
+		"studio_facets", "studio_published_fts", "content_origins",
 		"users", "sessions", "collection_access",
 	} {
 		var found string
@@ -307,6 +307,247 @@ func TestStudioCapabilitiesAndPrivateDraftLifecycle(t *testing.T) {
 	}
 }
 
+func TestStudioDocumentTemplateCatalogAndPublicationSurface(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	authorCookie := sessionFor(t, s, "autora-plantillas", 30, false)
+	grantStudio(t, s, "autora-plantillas", true)
+
+	catalogRec := studioRequest(h, http.MethodGet, "/api/studio/templates", "", authorCookie)
+	if catalogRec.Code != http.StatusOK {
+		t.Fatalf("catálogo de plantillas: %d %s", catalogRec.Code, catalogRec.Body.String())
+	}
+	var catalog struct {
+		Templates []studioTemplateDescriptor `json:"templates"`
+	}
+	if err := json.Unmarshal(catalogRec.Body.Bytes(), &catalog); err != nil {
+		t.Fatal(err)
+	}
+	documentTemplates := map[string]studioTemplateDescriptor{}
+	for _, template := range catalog.Templates {
+		if template.Surface == "documents" {
+			documentTemplates[template.Key] = template
+		}
+	}
+	for _, key := range []string{"document", "technical", "story"} {
+		template, ok := documentTemplates[key]
+		if !ok || template.LabelKey == "" || template.DescriptionKey == "" {
+			t.Fatalf("plantilla Documentos incompleta %q: %#v", key, template)
+		}
+
+		var body map[string]any
+		if err := json.Unmarshal([]byte(validStudioDocumentBody("Plantilla "+key, 0)), &body); err != nil {
+			t.Fatal(err)
+		}
+		body["templateKey"] = key
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		createdRec := studioRequest(h, http.MethodPost, "/api/studio/documents",
+			string(encoded), authorCookie)
+		if createdRec.Code != http.StatusCreated {
+			t.Fatalf("crear %s: %d %s", key, createdRec.Code, createdRec.Body.String())
+		}
+		created := decodeStudioDocumentResponse(t, createdRec)
+		if created.TemplateKey != key {
+			t.Fatalf("templateKey de %s = %q", key, created.TemplateKey)
+		}
+		publishedRec := studioRequest(h, http.MethodPost,
+			"/api/studio/documents/"+created.ID+"/publish", "", authorCookie)
+		published := decodeStudioDocumentResponse(t, publishedRec)
+		if publishedRec.Code != http.StatusOK ||
+			published.PublicationKind != "documents" ||
+			published.PublicationTarget != studioDocumentsCollectionID {
+			t.Fatalf("publicación de %s salió de Documentos: %d %#v",
+				key, publishedRec.Code, published)
+		}
+	}
+	if len(documentTemplates) != 3 {
+		t.Fatalf("catálogo Documentos inesperado: %#v", documentTemplates)
+	}
+}
+
+func TestStudioColumnsValidateAndIndexNestedContent(t *testing.T) {
+	content := map[string]any{
+		"schemaVersion": 1,
+		"classification": map[string]any{
+			"workType": "article",
+		},
+		"presentation": map[string]any{
+			"contentWidth": "wide",
+			"fontPreset":   "editorial",
+		},
+		"blocks": []any{
+			map[string]any{
+				"id":   "columns",
+				"type": "columns",
+				"columns": []any{
+					[]any{
+						map[string]any{
+							"id": "left", "type": "paragraph",
+							"text": "Texto izquierdo indexable",
+						},
+					},
+					[]any{
+						map[string]any{
+							"id": "right", "type": "heading",
+							"level": 2, "text": "Texto derecho indexable",
+						},
+					},
+				},
+			},
+		},
+	}
+	encoded, err := json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := StudioDocumentInput{
+		TemplateKey: "document",
+		Title:       "Documento a dos columnas",
+		Content:     encoded,
+	}
+	valid, err := validateStudioInput(input)
+	if err != nil {
+		t.Fatalf("valid columns rejected: %v", err)
+	}
+	for _, expected := range []string{"Texto izquierdo indexable", "Texto derecho indexable"} {
+		if !strings.Contains(valid.PlainText, expected) {
+			t.Fatalf("nested text %q missing from plain text %q", expected, valid.PlainText)
+		}
+	}
+
+	columnsBlock := content["blocks"].([]any)[0].(map[string]any)
+	columnsBlock["columns"] = append(columnsBlock["columns"].([]any), []any{
+		map[string]any{
+			"id": "third", "type": "paragraph",
+			"text": "Texto tercera columna indexable",
+		},
+	})
+	encoded, err = json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.Content = encoded
+	valid, err = validateStudioInput(input)
+	if err != nil || !strings.Contains(valid.PlainText, "Texto tercera columna indexable") {
+		t.Fatalf("valid three-column layout rejected or not indexed: %v %#v", err, valid)
+	}
+
+	columnsBlock["columns"] = columnsBlock["columns"].([]any)[:1]
+	encoded, err = json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.Content = encoded
+	valid, err = validateStudioInput(input)
+	if err != nil || !strings.Contains(valid.PlainText, "Texto izquierdo indexable") {
+		t.Fatalf("valid one-column layout rejected or not indexed: %v %#v", err, valid)
+	}
+
+	columnsBlock["columns"] = []any{}
+	encoded, err = json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.Content = encoded
+	if _, err := validateStudioInput(input); err == nil ||
+		!strings.Contains(err.Error(), "one to three columns") {
+		t.Fatalf("zero-column layout accepted: %v", err)
+	}
+}
+
+func TestStudioFeaturedAndRelatedUsePublishedSnapshots(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	cookie := sessionFor(t, s, "autora-relaciones", 30, false)
+	grantStudio(t, s, "autora-relaciones", true)
+
+	first := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodPost,
+		"/api/studio/documents", validStudioDocumentBody("Página principal", 0), cookie))
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+first.ID+"/publish", "", cookie); rec.Code != http.StatusOK {
+		t.Fatalf("publish first: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var secondBody map[string]any
+	if err := json.Unmarshal([]byte(validStudioDocumentBody("Página relacionada", 0)), &secondBody); err != nil {
+		t.Fatal(err)
+	}
+	secondBody["metadata"] = map[string]any{"featured": true}
+	encoded, err := json.Marshal(secondBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodPost,
+		"/api/studio/documents", string(encoded), cookie))
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+second.ID+"/publish", "", cookie); rec.Code != http.StatusOK {
+		t.Fatalf("publish second: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var list struct {
+		Documents []StudioDocumentSummary `json:"documents"`
+	}
+	listRec := studioRequest(h, http.MethodGet, "/api/documents", "", cookie)
+	if err := json.Unmarshal(listRec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	var publishedSecond StudioDocumentSummary
+	for _, document := range list.Documents {
+		if document.ID == second.ID {
+			publishedSecond = document
+		}
+	}
+	if !publishedSecond.Featured {
+		t.Fatalf("published featured flag missing: %#v", publishedSecond)
+	}
+
+	secondBody["title"] = "Título privado sin republicar"
+	secondBody["metadata"] = map[string]any{"featured": false}
+	secondBody["tags"] = []string{"privado"}
+	content := secondBody["content"].(map[string]any)
+	classification := content["classification"].(map[string]any)
+	classification["topics"] = []string{"privado"}
+	secondBody["baseRevision"] = second.Revision
+	encoded, err = json.Marshal(secondBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := studioRequest(h, http.MethodPut,
+		"/api/studio/documents/"+second.ID, string(encoded), cookie); rec.Code != http.StatusOK {
+		t.Fatalf("private update: %d %s", rec.Code, rec.Body.String())
+	}
+
+	relationsRec := studioRequest(h, http.MethodGet,
+		"/api/documents/"+first.ID+"/relations", "", cookie)
+	if relationsRec.Code != http.StatusOK {
+		t.Fatalf("relations: %d %s", relationsRec.Code, relationsRec.Body.String())
+	}
+	var relations StudioDocumentRelations
+	if err := json.Unmarshal(relationsRec.Body.Bytes(), &relations); err != nil {
+		t.Fatal(err)
+	}
+	if len(relations.Related) != 1 ||
+		relations.Related[0].ID != second.ID ||
+		relations.Related[0].Title != "Página relacionada" ||
+		!relations.Related[0].Featured {
+		t.Fatalf("relations leaked or lost the published snapshot: %#v", relations.Related)
+	}
+
+	listRec = studioRequest(h, http.MethodGet, "/api/documents", "", cookie)
+	if err := json.Unmarshal(listRec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	for _, document := range list.Documents {
+		if document.ID == second.ID &&
+			(document.Title != "Página relacionada" || !document.Featured) {
+			t.Fatalf("published list leaked draft metadata: %#v", document)
+		}
+	}
+}
+
 func TestStudioRestoreCreatesRevisionWithoutChangingPublishedSnapshot(t *testing.T) {
 	s := testAuthServer(t, "")
 	h := studioTestMux(s)
@@ -349,6 +590,17 @@ func TestStudioRestoreCreatesRevisionWithoutChangingPublishedSnapshot(t *testing
 	public, err := s.store.publishedStudioDocument(created.ID)
 	if err != nil || public.Title != "Versión pública dos" || public.Revision != 2 {
 		t.Fatalf("restaurar alteró la publicación inmutable: %#v err=%v", public, err)
+	}
+	privateHits, err := s.store.searchPublishedStudioDocuments("Versión uno")
+	if err != nil || len(privateHits) != 0 {
+		t.Fatalf("restaurar filtró el borrador al FTS público: hits=%#v err=%v",
+			privateHits, err)
+	}
+	publicHits, err := s.store.searchPublishedStudioDocuments("pública dos")
+	if err != nil || len(publicHits) != 1 ||
+		publicHits[0].Title != "Versión pública dos" {
+		t.Fatalf("restaurar retiró el snapshot del FTS público: hits=%#v err=%v",
+			publicHits, err)
 	}
 
 	revisionsRec := studioRequest(h, http.MethodGet,
@@ -523,6 +775,10 @@ func TestStudioPublicationUsesImmutableRevisionSnapshot(t *testing.T) {
 	if _, err := s.store.publishedStudioDocument(created.ID); !errors.Is(err, errStudioNotFound) {
 		t.Fatalf("despublicar dejó el documento visible: %v", err)
 	}
+	hits, err = s.store.searchPublishedStudioDocuments("secreto nuevo")
+	if err != nil || len(hits) != 0 {
+		t.Fatalf("despublicar dejó el documento en FTS: hits=%#v err=%v", hits, err)
+	}
 }
 
 func TestStudioPublishedLinksFollowOnlyPublishedSnapshot(t *testing.T) {
@@ -589,6 +845,34 @@ func TestStudioPublishedLinksFollowOnlyPublishedSnapshot(t *testing.T) {
 	}
 	if publishedLinks != 0 {
 		t.Fatalf("retirar dejó %d enlaces publicados", publishedLinks)
+	}
+}
+
+func TestStudioPublishedFTSBackfillRebuildsFromSnapshots(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	cookie := sessionFor(t, s, "autora-fts", 30, false)
+	grantStudio(t, s, "autora-fts", true)
+	created := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodPost,
+		"/api/studio/documents", validStudioDocumentBody("Energía solar doméstica", 0), cookie))
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/publish", "", cookie); rec.Code != http.StatusOK {
+		t.Fatalf("publish: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := s.store.db.Exec(`DELETE FROM studio_published_fts`); err != nil {
+		t.Fatal(err)
+	}
+	if hits, err := s.store.searchPublishedStudioDocuments("energía solar"); err != nil || len(hits) != 0 {
+		t.Fatalf("empty FTS unexpectedly returned hits=%#v err=%v", hits, err)
+	}
+	if err := s.store.backfillStudioPublishedDerived(); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := s.store.searchPublishedStudioDocuments("energia solar")
+	if err != nil || len(hits) != 1 ||
+		hits[0].ItemID != "studio:"+created.ID ||
+		hits[0].Title != "Energía solar doméstica" {
+		t.Fatalf("backfilled FTS hits=%#v err=%v", hits, err)
 	}
 }
 
@@ -984,5 +1268,220 @@ func TestStudioDocumentCannotReferenceForeignAsset(t *testing.T) {
 		studioDocumentBodyWithImage(t, "Dos", second.Revision, asset.ID), secondCookie)
 	if update.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("foreign asset reference accepted: %d %s", update.Code, update.Body.String())
+	}
+}
+
+func TestStudioMomentsPublishesImmutableLocalPackage(t *testing.T) {
+	s := testAuthServer(t, "")
+	s.studioRoot = t.TempDir()
+	s.mediaRoot = t.TempDir()
+	s.media = &mediaDeps{root: s.mediaRoot}
+	cookie := sessionFor(t, s, "autora-moments", 30, false)
+	grantStudio(t, s, "autora-moments", true)
+	h := studioTestMux(s)
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(validStudioDocumentBody("Clase de ciencias", 0)), &body); err != nil {
+		t.Fatal(err)
+	}
+	body["templateKey"] = "moments.video"
+	body["summary"] = "Una explicación local"
+	body["authorLabel"] = "Canal del aula"
+	body["language"] = "es"
+	body["tags"] = []string{"ciencia", "clase"}
+	body["metadata"] = map[string]any{"collection": "Aula"}
+	encoded, _ := json.Marshal(body)
+	createdRec := studioRequest(h, http.MethodPost, "/api/studio/documents", string(encoded), cookie)
+	if createdRec.Code != http.StatusCreated {
+		t.Fatalf("create moments: %d %s", createdRec.Code, createdRec.Body.String())
+	}
+	document := decodeStudioDocumentResponse(t, createdRec)
+
+	mp4 := make([]byte, 32)
+	copy(mp4[4:8], []byte("ftyp"))
+	mediaAsset := decodeStudioAssetResponse(t, studioUploadRequest(t, h,
+		"/api/studio/documents/"+document.ID+"/assets?purpose=primary",
+		"clase.mp4", mp4, cookie))
+	coverAsset := decodeStudioAssetResponse(t, studioUploadRequest(t, h,
+		"/api/studio/documents/"+document.ID+"/assets?purpose=cover",
+		"miniatura.png", studioTestPNG(t), cookie))
+	avatarAsset := decodeStudioAssetResponse(t, studioUploadRequest(t, h,
+		"/api/studio/documents/"+document.ID+"/assets?purpose=avatar",
+		"canal.png", studioTestPNG(t), cookie))
+	subtitleAsset := decodeStudioAssetResponse(t, studioUploadRequest(t, h,
+		"/api/studio/documents/"+document.ID+"/assets?purpose=subtitle",
+		"clase.vtt", []byte("WEBVTT\n\n00:00.000 --> 00:02.000\nHola\n"), cookie))
+
+	body["baseRevision"] = document.Revision
+	body["metadata"] = map[string]any{
+		"collection":           "Aula",
+		"primaryAssetId":       mediaAsset.ID,
+		"coverAssetId":         coverAsset.ID,
+		"channelAvatarAssetId": avatarAsset.ID,
+		"duration":             90,
+		"chapters": []map[string]any{
+			{"start": 0, "title": "Introducción"},
+			{"start": 60, "title": "Experimento"},
+		},
+		"subtitles": []map[string]any{
+			{"lang": "es", "assetId": subtitleAsset.ID},
+		},
+	}
+	encoded, _ = json.Marshal(body)
+	updateRec := studioRequest(h, http.MethodPut,
+		"/api/studio/documents/"+document.ID, string(encoded), cookie)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("update moments: %d %s", updateRec.Code, updateRec.Body.String())
+	}
+	document = decodeStudioDocumentResponse(t, updateRec)
+
+	publishRec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+document.ID+"/publish", "", cookie)
+	if publishRec.Code != http.StatusOK {
+		t.Fatalf("publish moments: %d %s", publishRec.Code, publishRec.Body.String())
+	}
+	published := decodeStudioDocumentResponse(t, publishRec)
+	if published.PublicationKind != "moments" || published.PublicationTarget == "" {
+		t.Fatalf("unexpected publication: %#v", published)
+	}
+	if documents, err := s.store.listPublishedStudioDocuments(); err != nil || len(documents) != 0 {
+		t.Fatalf("Moments leaked into Documents: %#v err=%v", documents, err)
+	}
+
+	sidecarPath := filepath.Join(
+		s.mediaRoot, "Moments", "Aula", "studio-"+document.ID+".json")
+	raw, err := os.ReadFile(sidecarPath)
+	if err != nil {
+		t.Fatalf("missing local package: %v", err)
+	}
+	var sc sidecar
+	if err := json.Unmarshal(raw, &sc); err != nil {
+		t.Fatal(err)
+	}
+	if sc.Source != "moments" || sc.SourceID != document.ID ||
+		sc.Title != "Clase de ciencias" || sc.Cover == "" ||
+		sc.ChannelAvatar == "" || len(sc.Subtitles) != 1 ||
+		len(sc.Chapters) != 2 || sc.Media == "" {
+		t.Fatalf("incomplete moments sidecar: %#v", sc)
+	}
+	items, err := s.media.scan("")
+	if err != nil || len(items) != 1 || items[0].Title != "Clase de ciencias" ||
+		items[0].ChannelAvatarURL == "" || len(items[0].Subtitles) != 1 {
+		t.Fatalf("published package not consumable: items=%#v err=%v", items, err)
+	}
+
+	body["baseRevision"] = document.Revision
+	body["title"] = "Borrador privado"
+	encoded, _ = json.Marshal(body)
+	privateUpdate := studioRequest(h, http.MethodPut,
+		"/api/studio/documents/"+document.ID, string(encoded), cookie)
+	if privateUpdate.Code != http.StatusOK {
+		t.Fatalf("private update: %d %s", privateUpdate.Code, privateUpdate.Body.String())
+	}
+	raw, err = os.ReadFile(sidecarPath)
+	if err != nil || json.Unmarshal(raw, &sc) != nil || sc.Title != "Clase de ciencias" {
+		t.Fatalf("draft leaked into local package: title=%q err=%v", sc.Title, err)
+	}
+
+	unpublishRec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+document.ID+"/unpublish", "", cookie)
+	if unpublishRec.Code != http.StatusOK {
+		t.Fatalf("unpublish moments: %d %s", unpublishRec.Code, unpublishRec.Body.String())
+	}
+	if _, err := os.Stat(sidecarPath); !os.IsNotExist(err) {
+		t.Fatalf("sidecar remains visible after unpublish: %v", err)
+	}
+}
+
+func TestStudioCabinetPublishesMultipleAudioTracks(t *testing.T) {
+	s := testAuthServer(t, "")
+	s.studioRoot = t.TempDir()
+	s.mediaRoot = t.TempDir()
+	s.media = &mediaDeps{root: s.mediaRoot}
+	cookie := sessionFor(t, s, "autora-cabinet", 30, false)
+	grantStudio(t, s, "autora-cabinet", true)
+	h := studioTestMux(s)
+
+	var body map[string]any
+	_ = json.Unmarshal([]byte(validStudioDocumentBody("Historia oral", 0)), &body)
+	body["templateKey"] = "cabinet.audio"
+	body["authorLabel"] = "Archivo escolar"
+	body["metadata"] = map[string]any{"collection": "Historia"}
+	encoded, _ := json.Marshal(body)
+	document := decodeStudioDocumentResponse(t, studioRequest(
+		h, http.MethodPost, "/api/studio/documents", string(encoded), cookie))
+
+	audioOne := append([]byte("ID3"), make([]byte, 24)...)
+	audioTwo := append([]byte("ID3"), make([]byte, 28)...)
+	first := decodeStudioAssetResponse(t, studioUploadRequest(t, h,
+		"/api/studio/documents/"+document.ID+"/assets?purpose=track",
+		"01-introduccion.mp3", audioOne, cookie))
+	second := decodeStudioAssetResponse(t, studioUploadRequest(t, h,
+		"/api/studio/documents/"+document.ID+"/assets?purpose=track",
+		"02-testimonios.mp3", audioTwo, cookie))
+	cover := decodeStudioAssetResponse(t, studioUploadRequest(t, h,
+		"/api/studio/documents/"+document.ID+"/assets?purpose=cover",
+		"historia.png", studioTestPNG(t), cookie))
+
+	body["baseRevision"] = document.Revision
+	body["metadata"] = map[string]any{
+		"collection": "Historia", "coverAssetId": cover.ID,
+		"tracks": []map[string]any{
+			{"title": "Introducción", "assetId": first.ID},
+			{"title": "Testimonios", "assetId": second.ID},
+		},
+	}
+	encoded, _ = json.Marshal(body)
+	document = decodeStudioDocumentResponse(t, studioRequest(
+		h, http.MethodPut, "/api/studio/documents/"+document.ID, string(encoded), cookie))
+	publishedRec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+document.ID+"/publish", "", cookie)
+	if publishedRec.Code != http.StatusOK {
+		t.Fatalf("publish audio: %d %s", publishedRec.Code, publishedRec.Body.String())
+	}
+
+	raw, err := os.ReadFile(filepath.Join(
+		s.mediaRoot, "Cabinet", "Historia", "studio-"+document.ID+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sc sidecar
+	if json.Unmarshal(raw, &sc) != nil || sc.Template != "audio" ||
+		len(sc.Tracks) != 2 || sc.Media != sc.Tracks[0].Media {
+		t.Fatalf("invalid multi-track package: %#v", sc)
+	}
+	items, err := s.media.scan("")
+	if err != nil || len(items) != 1 || len(items[0].Tracks) != 2 ||
+		items[0].Tracks[0].Title != "Introducción" {
+		t.Fatalf("Cabinet cannot consume tracks: items=%#v err=%v", items, err)
+	}
+}
+
+func TestStudioMediaProfileRejectsWrongPrimaryType(t *testing.T) {
+	s := testAuthServer(t, "")
+	s.studioRoot = t.TempDir()
+	s.mediaRoot = t.TempDir()
+	s.media = &mediaDeps{root: s.mediaRoot}
+	cookie := sessionFor(t, s, "autora-tipos", 30, false)
+	grantStudio(t, s, "autora-tipos", true)
+	h := studioTestMux(s)
+
+	var body map[string]any
+	_ = json.Unmarshal([]byte(validStudioDocumentBody("Vídeo", 0)), &body)
+	body["templateKey"] = "moments.video"
+	body["metadata"] = map[string]any{"collection": "Aula"}
+	encoded, _ := json.Marshal(body)
+	document := decodeStudioDocumentResponse(t, studioRequest(
+		h, http.MethodPost, "/api/studio/documents", string(encoded), cookie))
+	audio := append([]byte("ID3"), make([]byte, 20)...)
+	upload := studioUploadRequest(t, h,
+		"/api/studio/documents/"+document.ID+"/assets?purpose=primary",
+		"audio.mp3", audio, cookie)
+	if upload.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("wrong primary type accepted: %d %s", upload.Code, upload.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(
+		s.mediaRoot, "Moments", "Aula", "studio-"+document.ID+".json")); !os.IsNotExist(err) {
+		t.Fatalf("failed publication left visible sidecar: %v", err)
 	}
 }
