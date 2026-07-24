@@ -399,12 +399,10 @@ func main() {
 	md := &mediaDeps{root: downloadRoot}
 	s.mediaRoot = downloadRoot
 	s.media = md
-	s.registerMediaRoutes(mux, md)                                                                           // /api/media + /media/* — detrás del gate de acceso
-	mux.HandleFunc("/api/images", s.handleImageSearch(md))                                                   // imágenes: ZIM + portadas/logos de vídeos
-	adminMux.HandleFunc("/api/admin/media/delete", s.handleMediaDelete(md))                                  // borrar item del pool (admin)
-	adminMux.HandleFunc("/api/admin/upload", s.handleUpload(&uploadDeps{root: downloadRoot}, md))            // carga manual (Moments/Cabinet)
-	adminMux.HandleFunc("/api/admin/media/update", s.handleMediaUpdate(&uploadDeps{root: downloadRoot}, md)) // editar ficha
-	adminMux.HandleFunc("/api/admin/cache/metrics", s.handleCacheMetrics(md))                                // métricas sin tokens/rutas
+	s.registerMediaRoutes(mux, md)                                            // /api/media + /media/* — detrás del gate de acceso
+	mux.HandleFunc("/api/images", s.handleImageSearch(md))                    // imágenes: ZIM + portadas/logos de vídeos
+	adminMux.HandleFunc("/api/admin/media/delete", s.handleMediaDelete(md))   // borrar item del pool (admin)
+	adminMux.HandleFunc("/api/admin/cache/metrics", s.handleCacheMetrics(md)) // métricas sin tokens/rutas
 	s.registerItemRoutes(mux, md)
 	s.registerStudioRoutes(mux)
 
@@ -590,10 +588,11 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		// Defensa CSRF para cualquier mutación iniciada por navegador. Clientes de
 		// sistema/CLI sin Origin siguen funcionando; los orígenes remotos permitidos
 		// se declaran en CLIENT_ORIGINS. Excepción: una petición autenticada SOLO por
-		// token explícito (Bearer o ?st=, sin cookie de sesión) es inmune a CSRF — el
-		// token no es ambiente, una web hostil no lo conoce ni lo puede adjuntar. Es
-		// lo que permite la subida DIRECTA al Core desde el webview de escritorio
-		// (Wails/WebView2 no reenvía el body del multipart por su proxy → MOMENTS-UPLOAD.md).
+		// token explícito (Bearer o ?ut=, sin cookie de sesión) es inmune a CSRF — el
+		// token no es ambiente, una web hostil no lo conoce ni lo puede adjuntar.
+		// Es el carril que usa Studio para subir DIRECTO al Core desde el webview
+		// de escritorio (el proxy no conserva de forma fiable el multipart;
+		// ver MOMENTS-UPLOAD.md).
 		if requestIsMutation(r) && !requestOriginAllowed(r) && !requestTokenOnly(r) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "origen de la petición no permitido"})
 			return

@@ -3,6 +3,7 @@
   import Icon from './Icon.svelte';
   import StudioCanvasBlock from './StudioCanvasBlock.svelte';
   import StudioDocumentView from './StudioDocumentView.svelte';
+  import StudioImage from './StudioImage.svelte';
   import StudioMediaEditor from './StudioMediaEditor.svelte';
   import { t, relTime } from './i18n.svelte.js';
   import {
@@ -58,6 +59,19 @@
   let blockSequence = 1;
 
   const content = () => selected?.content || { schemaVersion: 1, presentation: {}, classification: {}, blocks: [] };
+  const documentCover = () => (content().blocks || []).find((block) => block?.type === 'image' && block.role === 'cover') || null;
+  const documentBlocks = () => (content().blocks || []).filter((block) => block?.role !== 'cover');
+
+  function defaultSection(document = selected) {
+    if (document?.templateKey === 'cabinet.audio') return 'tracks';
+    if (document?.templateKey?.startsWith('cabinet.')) return 'file';
+    if (document?.templateKey?.startsWith('moments.')) return 'video';
+    return 'structure';
+  }
+
+  function firstEditableBlockID(document) {
+    return document?.content?.blocks?.find((block) => block?.role !== 'cover')?.id || '';
+  }
 
   function pageTextSize(field, fallback) {
     const value = Number(content().presentation?.[field]);
@@ -277,7 +291,8 @@
       documents = [{ ...doc }, ...documents];
       selected = doc;
       mode = 'editor';
-      selectedBlockID = doc.content?.blocks?.[0]?.id || '';
+      activeSection = defaultSection(doc);
+      selectedBlockID = firstEditableBlockID(doc);
       dirty = false;
       offline = false;
       changeVersion = 0;
@@ -301,7 +316,8 @@
       if (requestSequence !== openingSequence) return;
       selected = doc;
       mode = 'editor';
-      selectedBlockID = doc.content?.blocks?.[0]?.id || '';
+      activeSection = defaultSection(doc);
+      selectedBlockID = firstEditableBlockID(doc);
       dirty = false;
       offline = false;
       changeVersion = 0;
@@ -485,7 +501,13 @@
 
   function toggleRevisions() {
     showRevisions = !showRevisions;
-    if (showRevisions) loadRevisions();
+    if (showRevisions) {
+      activeSection = 'history';
+      mode = 'editor';
+      loadRevisions();
+    } else {
+      activeSection = defaultSection();
+    }
   }
 
   async function restoreRevision(revision) {
@@ -607,6 +629,18 @@
     imageInput?.click();
   }
 
+  function chooseDocumentCover() {
+    chooseImage({ cover: true });
+  }
+
+  function removeDocumentCover() {
+    const cover = documentCover();
+    if (!cover) return;
+    const index = content().blocks.indexOf(cover);
+    if (index >= 0) content().blocks.splice(index, 1);
+    touch();
+  }
+
   async function imageSelected(event) {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
@@ -627,6 +661,21 @@
         caption: '', alt: '', sideText: '',
         imageSize: 'original', imageAlign: 'center',
       };
+      if (targetColumn?.cover) {
+        const current = documentCover();
+        if (current) {
+          current.assetId = asset.id;
+          current.imageSize = 'poster';
+          current.imageAlign = 'center';
+        } else {
+          imageBlock.role = 'cover';
+          imageBlock.imageSize = 'poster';
+          selected.content.blocks.unshift(imageBlock);
+        }
+        selectedBlockID = '';
+        touch();
+        return;
+      }
       const target = targetColumn
         ? findBlockByID(targetColumn.blockID)
         : null;
@@ -911,6 +960,7 @@
   function openSection(key) {
     activeSection = key;
     mode = 'editor';
+    showRevisions = false;
     requestAnimationFrame(() => {
       globalThis.document?.querySelector(`[data-studio-section="${key}"]`)
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1074,7 +1124,7 @@
     </main>
   {:else if selected && surfaceOf() === 'document'}
     <main class="document-workspace scroll thin">
-      <aside class="document-palette" data-studio-section="design" aria-label={t('studio.documentPalette')}>
+      <aside class="document-palette" aria-label={t('studio.documentPalette')}>
         <h3>{t('studio.insertBlock')}</h3>
         <div class="block-grid">
           <button onclick={() => addBlock('paragraph')}><b>¶</b>{t('studio.block.paragraph')}</button>
@@ -1089,31 +1139,6 @@
           <button onclick={() => addBlock('code')}><b>&lt;/&gt;</b>{t('studio.block.code')}</button>
           <button onclick={() => addBlock('bulletList')}><b>≔</b>{t('studio.block.bulletList')}</button>
           <button onclick={() => addBlock('divider')}><b>—</b>{t('studio.block.divider')}</button>
-        </div>
-
-        <h3>{t('studio.pageDesign')}</h3>
-        <div class="style-options">
-          {#each [
-            ['reading', t('studio.widthReading'), '760 px'],
-            ['wide', t('studio.widthWide'), '980 px'],
-            ['editorial', t('studio.widthEditorial'), '1180 px'],
-            ['compact', t('studio.widthCompact'), '620 px'],
-          ] as option}
-            <button
-              class:active={content().presentation?.contentWidth === option[0]}
-              onclick={() => { selected.content.presentation.contentWidth = option[0]; touch(); }}
-            ><span>{option[1]}</span><small>{option[2]}</small></button>
-          {/each}
-        </div>
-
-        <h3>{t('studio.typography')}</h3>
-        <div class="style-options">
-          <button class:active={content().presentation?.fontPreset !== 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'editorial'; touch(); }}>
-            <span>{t('studio.fontEditorial')}</span><small>Serif</small>
-          </button>
-          <button class:active={content().presentation?.fontPreset === 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'sans'; touch(); }}>
-            <span>{t('studio.fontSans')}</span><small>Sans</small>
-          </button>
         </div>
 
         <button class="link-tool" class:active={linkPicker} onclick={toggleLinkPicker}>
@@ -1149,6 +1174,60 @@
         class:compact={content().presentation?.contentWidth === 'compact'}
       >
         {#if error}<div class="studio-error">{t(error)}</div>{/if}
+        {#if activeSection === 'design'}
+          <section class="document-inspector" data-studio-section="design">
+            <h3>{t('studio.pageDesign')}</h3>
+            <div class="style-options">
+              {#each [
+                ['reading', t('studio.widthReading'), '760 px'],
+                ['wide', t('studio.widthWide'), '980 px'],
+                ['editorial', t('studio.widthEditorial'), '1180 px'],
+                ['compact', t('studio.widthCompact'), '620 px'],
+              ] as option}
+                <button
+                  class:active={content().presentation?.contentWidth === option[0]}
+                  onclick={() => { selected.content.presentation.contentWidth = option[0]; touch(); }}
+                ><span>{option[1]}</span><small>{option[2]}</small></button>
+              {/each}
+            </div>
+            <h3>{t('studio.typography')}</h3>
+            <div class="style-options typography-options">
+              <button class:active={content().presentation?.fontPreset !== 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'editorial'; touch(); }}>
+                <span>{t('studio.fontEditorial')}</span><small>Serif</small>
+              </button>
+              <button class:active={content().presentation?.fontPreset === 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'sans'; touch(); }}>
+                <span>{t('studio.fontSans')}</span><small>Sans</small>
+              </button>
+            </div>
+          </section>
+        {:else if activeSection === 'metadata'}
+          <section class="document-inspector" data-studio-section="metadata">
+            <h3>{t('studio.metadata')}</h3>
+            <div class="metadata-grid">
+              <label>{t('studio.author')}<input value={selected.authorLabel || ''} oninput={(event) => { selected.authorLabel = event.currentTarget.value; touch(); }} /></label>
+              <label>{t('studio.language')}<input value={selected.language || ''} placeholder="es" oninput={(event) => { selected.language = event.currentTarget.value; touch(); }} /></label>
+              <label>{t('studio.tags')}<input value={tagsText()} placeholder={t('studio.tagsPlaceholder')} oninput={(event) => setTags(event.currentTarget.value)} /></label>
+              <label>{t('studio.workType')}<input value={content().classification?.workType || ''} placeholder="article" oninput={(event) => { selected.content.classification.workType = event.currentTarget.value; touch(); }} /></label>
+            </div>
+          </section>
+        {:else if activeSection === 'cover'}
+          <section class="document-inspector cover-inspector" data-studio-section="cover">
+            <h3>{t('studio.section.cover')}</h3>
+            <button class="document-cover" class:ready={!!documentCover()} onclick={chooseDocumentCover} disabled={uploadingImage}>
+              {#if documentCover()}
+                <StudioImage documentId={selected.id} assetId={documentCover().assetId} alt={t('studio.section.cover')} display="poster" />
+              {:else}
+                <b>＋</b><span>{uploadingImage ? t('studio.uploadingImage') : t('studio.addCover')}</span>
+              {/if}
+            </button>
+            {#if documentCover()}
+              <div class="cover-actions">
+                <button onclick={chooseDocumentCover} disabled={uploadingImage}>{t('studio.replaceCover')}</button>
+                <button class="remove" onclick={removeDocumentCover}>{t('studio.removeCover')}</button>
+              </div>
+            {/if}
+          </section>
+        {/if}
         {#if showRevisions}
           <section class="revision-panel">
             <header><b>{t('studio.revisions')}</b><span>{revisions.length}</span></header>
@@ -1196,7 +1275,7 @@
             >{selected.summary || t('studio.summaryPlaceholder')}</p>
           </div>
 
-          {#each content().blocks as block (block.id)}
+          {#each documentBlocks() as block (block.id)}
             <StudioCanvasBlock
               {block}
               documentId={selected.id}
@@ -1224,21 +1303,31 @@
           ><b>＋</b>{t('studio.addAnyBlock')}</button>
         </article>
 
-        <section class="document-metadata" data-studio-section="metadata">
-          <h3>{t('studio.metadata')}</h3>
-          <div class="metadata-grid">
-            <label>{t('studio.author')}<input value={selected.authorLabel || ''} oninput={(event) => { selected.authorLabel = event.currentTarget.value; touch(); }} /></label>
-            <label>{t('studio.language')}<input value={selected.language || ''} placeholder="es" oninput={(event) => { selected.language = event.currentTarget.value; touch(); }} /></label>
-            <label>{t('studio.tags')}<input value={tagsText()} placeholder={t('studio.tagsPlaceholder')} oninput={(event) => setTags(event.currentTarget.value)} /></label>
-            <label>{t('studio.workType')}<input value={content().classification?.workType || ''} placeholder="article" oninput={(event) => { selected.content.classification.workType = event.currentTarget.value; touch(); }} /></label>
-          </div>
-        </section>
       </div>
       <input class="file-input" bind:this={imageInput} type="file" accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp" onchange={imageSelected} />
     </main>
   {:else if selected}
     <main class="publication-workspace scroll thin">
       {#if error}<div class="studio-error">{t(error)}</div>{/if}
+      {#if showRevisions}
+        <section class="revision-panel media-revisions">
+          <header><b>{t('studio.revisions')}</b><span>{revisions.length}</span></header>
+          {#if revisionsLoading}
+            <div>{t('common.loading')}</div>
+          {:else}
+            <div class="revision-list">
+              {#each revisions as revision (revision.revision)}
+                <div class="revision-row">
+                  <span><b>{revision.title}</b><small>{t('studio.revisionNumber', { revision: revision.revision })} · {relTime(revision.created)}</small></span>
+                  <button disabled={restoringRevision || revision.revision === selected.revision} onclick={() => restoreRevision(revision)}>
+                    {t('studio.restore')}
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </section>
+      {/if}
       <StudioMediaEditor
         document={selected}
         onChange={touch}
@@ -1289,6 +1378,10 @@
   .document-palette .link-results button{padding:7px;background:var(--raise)}
   .canvas-column{width:100%;max-width:760px;min-width:0;margin:0 auto;transition:max-width .2s}
   .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:620px}
+  .document-inspector{width:100%;margin:0 auto 14px;padding:16px;border:1px solid var(--accent-line);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
+  .document-inspector h3{margin:0 0 10px;color:var(--ink);font-size:12px}.document-inspector h3:not(:first-child){margin-top:16px}
+  .document-inspector .style-options{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .document-inspector .typography-options{grid-template-columns:repeat(2,minmax(0,1fr))}
   .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
   .revision-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px}.revision-panel header span{color:var(--faint)}
   .revision-list{display:grid;gap:5px}.revision-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:var(--r-sm);background:var(--raise)}
@@ -1301,14 +1394,20 @@
   .canvas-summary p{min-height:28px;margin:0;outline:0;color:var(--muted);line-height:1.5}
   .add-any{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:11px;border:1px dashed var(--border);border-radius:var(--r-md);background:transparent;color:var(--faint);font-size:12px}
   .add-any:hover{border-color:var(--accent-line);color:var(--ink)}.add-any b{width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r-sm);background:var(--accent-weak);color:var(--accent-2)}
-  .document-metadata{width:100%;margin:18px auto 0;padding:16px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
-  .document-metadata h3{margin:0 0 12px;font-size:12px}.metadata-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  .document-metadata label{display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:10px;letter-spacing:.04em}
-  .document-metadata input{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);color:var(--ink);outline:0}
-  .document-metadata input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
+  .metadata-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .document-inspector label{display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:10px;letter-spacing:.04em}
+  .document-inspector input{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);color:var(--ink);outline:0}
+  .document-inspector input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
+  .document-cover{width:100%;min-height:180px;display:grid;place-items:center;gap:8px;overflow:hidden;border:1px dashed var(--border);border-radius:var(--r-md);background:var(--card);color:var(--muted)}
+  .document-cover:hover{border-color:var(--accent-line);color:var(--ink)}.document-cover.ready{border-style:solid}
+  .document-cover b{font-size:24px;color:var(--accent-2)}.document-cover span{font-size:12px}
+  .document-cover :global(img),.document-cover :global(.placeholder){width:100%;height:clamp(180px,28vw,360px);object-fit:cover;border-radius:0}
+  .cover-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:9px}.cover-actions button{padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
+  .cover-actions button:hover{border-color:var(--accent-line);color:var(--ink)}.cover-actions .remove{color:#df7474}
 
   .preview-mode{height:100%;overflow:auto;padding:28px clamp(18px,5vw,70px) 70px;background:var(--panel-2)}
   .publication-workspace{height:100%;overflow:auto;padding:34px clamp(22px,6vw,80px) 70px}
+  .media-revisions{max-width:1320px;margin-bottom:16px}
   .file-input{display:none}
 
   :global(:root[data-skin="retro"]) .create-card:hover{transform:none}
@@ -1316,6 +1415,7 @@
   @media(max-width:1080px){
     .document-workspace{grid-template-columns:1fr;justify-content:stretch}.document-palette{position:static;max-width:980px;width:100%;margin:0 auto}
     .block-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.style-options{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .document-inspector .style-options{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
   @media(max-width:700px){
     .studio-home{padding:24px 14px 50px}.create-grid{grid-template-columns:1fr}.create-card{min-height:124px}

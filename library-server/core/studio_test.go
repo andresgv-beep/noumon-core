@@ -254,6 +254,7 @@ func TestStudioValidationAcceptsOnlyKnownImagePresentation(t *testing.T) {
 			"blocks":[{
 				"id":"imagen-portada",
 				"type":"image",
+				"role":"cover",
 				"assetId":"asset-local",
 				"imageSize":"poster",
 				"imageAlign":"center",
@@ -269,6 +270,12 @@ func TestStudioValidationAcceptsOnlyKnownImagePresentation(t *testing.T) {
 	}
 	if !strings.Contains(valid.PlainText, "Texto que también debe indexarse") {
 		t.Fatalf("image side text missing from plain text: %q", valid.PlainText)
+	}
+	if len(valid.Assets) != 1 || valid.Assets[0] != "asset-local" {
+		t.Fatalf("cover asset missing from validated assets: %#v", valid.Assets)
+	}
+	if !bytes.Contains(valid.Input.Content, []byte(`"role":"cover"`)) {
+		t.Fatalf("cover role lost while normalizing content: %s", valid.Input.Content)
 	}
 
 	input.Content = json.RawMessage(`{

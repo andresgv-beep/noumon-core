@@ -49,8 +49,8 @@
       <Icon name="history" size={15} />{t('studio.revisions')}<span class="badge">{state.revisionCount || 0}</span>
     </button>
     <span class="side-title">{t('studio.publication')}</span>
-    <span class="side-item"><Icon name="storage" size={15} />{state.destination || t('studio.destinationDocuments')}</span>
-    <span class="side-item"><Icon name="download" size={15} />{state.quotaLabel || t('studio.quotaUnknown')}</span>
+    <span class="side-item info-item"><Icon name="storage" size={15} />{state.destination || t('studio.destinationDocuments')}</span>
+    <span class="side-item info-item"><Icon name="download" size={15} />{state.quotaLabel || t('studio.quotaUnknown')}</span>
     {#if state.unpublish}
       <button class="unpublish" onclick={() => state.unpublish?.()}><Icon name="close" size={14} />{t('studio.unpublish')}</button>
     {/if}
@@ -76,6 +76,7 @@
   .side-item i{width:7px;height:7px;border-radius:var(--r-round)}.side-item i.private{background:var(--accent)}.side-item i.published{background:#6fd39a}
   button.side-item{width:100%}button.side-item:hover,button.side-item.active{background:var(--raise);color:var(--ink)}
   button.side-item.active{box-shadow:inset 0 0 0 1px var(--accent-line);background:var(--accent-weak)}
+  .info-item{min-height:28px;padding-block:4px;color:var(--faint);font-size:10.5px}
   .badge{margin-left:auto;color:var(--faint);font-size:10px}
   .section-kind{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:9px 10px;border-radius:var(--r-md);background:var(--card)}
   .section-kind .glyph{color:var(--accent-2);font-size:16px}.section-kind span:last-child{display:flex;flex-direction:column}

@@ -1306,6 +1306,10 @@ En una Raspberry Pi, un documento de texto debe poder guardarse y aparecer en b�
 
 ### Fase 5 — retirada de la creación del Panel
 
+**Estado: completada.** Studio alcanzó paridad para Documentos, Cabinet y
+Moments; el Panel conserva catálogo, cola y administración global, pero ya no
+contiene un editor alternativo.
+
 - comprobar paridad de creación y edición en Studio para Cabinet y Moments;
 - eliminar de `Import.svelte` las pestañas y listados creativos de ambas
   superficies;

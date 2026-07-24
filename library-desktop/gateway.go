@@ -186,7 +186,7 @@ func (s *shell) installProxy(target *url.URL) {
 		}
 		response.Body.Close()
 		// __NOUMON_LIBRARY_CORE__ = URL REAL del Core (no vacía como SERVER). El
-		// front la usa SOLO para subir contenido (multipart) DIRECTO al Core: el
+		// Studio la usa para subir binarios (multipart) DIRECTO al Core: el
 		// webview de Wails/WebView2 no reenvía el body del POST por su AssetServer,
 		// así que las subidas relativas llegan vacías (ficheros de 0 bytes). Una
 		// petición a esta URL absoluta es red real (no la intercepta el AssetServer)
@@ -210,10 +210,10 @@ func isClientDocument(response *http.Response) bool {
 		return false
 	}
 	path := response.Request.URL.Path
-	// El index del PANEL también es un SPA del shell y necesita los globals
-	// inyectados (__NOUMON_LIBRARY_CORE__ para subir directo al Core — sin esto la
-	// subida cae al proxy de Wails y llega vacía, MOMENTS-UPLOAD.md). Sus
-	// subrecursos (/panel/assets/*.js|css) NO son text/html, así que no matchean.
+	// El index del PANEL también es un SPA del shell y recibe los mismos globals.
+	// Aunque el Panel ya no crea contenido, mantener una única inyección evita
+	// contratos distintos entre las dos SPA. Sus subrecursos
+	// (/panel/assets/*.js|css) NO son text/html, así que no matchean.
 	if path == "/panel" || path == "/panel/" || path == "/panel/index.html" {
 		return true
 	}

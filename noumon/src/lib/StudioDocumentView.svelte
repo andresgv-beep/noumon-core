@@ -1,11 +1,14 @@
 <script>
   import StudioBlockView from './StudioBlockView.svelte';
+  import StudioImage from './StudioImage.svelte';
   import { t, relTime } from './i18n.svelte.js';
 
   let { document, preview = false, onOpenItem, onToc } = $props();
 
   const content = () => document?.content || {};
   const presentation = () => content().presentation || {};
+  const cover = () => (content().blocks || []).find((block) => block?.type === 'image' && block.role === 'cover') || null;
+  const bodyBlocks = () => (content().blocks || []).filter((block) => block?.role !== 'cover');
 
   function pageTextSize(field) {
     const value = Number(presentation()[field]);
@@ -62,7 +65,14 @@
       </div>
     </header>
 
-    {#each content().blocks || [] as block (block.id)}
+    {#if cover()}
+      <figure class="cover">
+        <StudioImage documentId={document.id} assetId={cover().assetId} alt={cover().alt || document.title} display="poster" />
+        {#if cover().caption}<figcaption>{cover().caption}</figcaption>{/if}
+      </figure>
+    {/if}
+
+    {#each bodyBlocks() as block (block.id)}
       <StudioBlockView {block} documentId={document.id} {onOpenItem} />
     {/each}
 
@@ -85,6 +95,7 @@
   h1{font-size:clamp(30px,5vw,52px);line-height:1.08;margin:8px 0 16px}
   .lead{font-size:18px;color:var(--muted);line-height:1.55}
   .meta{font-family:var(--font,system-ui,sans-serif);font-size:12px;color:var(--faint)}
+  .cover{margin:0 0 38px}.cover :global(img),.cover :global(.placeholder){width:100%;max-height:560px;object-fit:cover;border-radius:var(--r-md)}.cover figcaption{margin-top:8px;color:var(--muted);font:12px var(--font,system-ui,sans-serif);text-align:center}
   footer{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:50px;padding-top:22px}
   footer span{font-family:var(--font,system-ui,sans-serif);font-size:11px;padding:4px 9px;border-radius:var(--r-pill);background:var(--raise);color:var(--muted)}
   .preview header{padding-bottom:20px;margin-bottom:26px}
