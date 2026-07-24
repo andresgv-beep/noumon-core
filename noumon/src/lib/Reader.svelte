@@ -6,7 +6,6 @@
   import TagsView from './TagsView.svelte';
   import Cabinet from './Cabinet.svelte';
   import Moments from './Moments.svelte';
-  import Studio from './Studio.svelte';
   import Documents from './Documents.svelte';
   import DocumentPage from './DocumentPage.svelte';
   import ItemPage from './ItemPage.svelte';
@@ -21,8 +20,8 @@
   import { serverUrl } from './connection.js';
 
   let { tab, libraries = [], favorites = [], indexOpen = false, notesVersion = 0, tagsVersion = 0,
-        onNavigate, onOpenItem, onOpenView, onToggleHome, onFrameNav, onRemoveFav, onOpenNote, onDeleteNote,
-        onStudioShellChange } = $props();
+        onNavigate, onOpenItem, onOpenView, onToggleHome, onFrameNav, onRemoveFav, onOpenNote, onDeleteNote
+      } = $props();
 
   let frameEl = $state(null);
   let toc = $state([]);
@@ -230,8 +229,6 @@
     <Cabinet {onOpenItem} />
   {:else if tab.kind === 'view' && tab.view === 'moments'}
     <Moments {onOpenItem} />
-  {:else if tab.kind === 'view' && tab.view === 'studio'}
-    <Studio {onOpenItem} onShellChange={onStudioShellChange} />
   {:else if tab.kind === 'view' && tab.view === 'documents'}
     <Documents {onOpenItem} />
   {:else if tab.kind === 'item'}

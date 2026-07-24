@@ -16,7 +16,7 @@
 
 <div class="studio-nav">
   <button
-    class="nav-icon mobile-side"
+    class="nav-icon"
     title={sidebarOpen ? t('nav.hideLibrary') : t('nav.showLibrary')}
     aria-label={sidebarOpen ? t('nav.hideLibrary') : t('nav.showLibrary')}
     onclick={() => onToggleSidebar?.()}
@@ -115,7 +115,6 @@
   button{flex:none}
   .nav-icon{width:32px;height:32px;display:grid;place-items:center;border-radius:var(--r-md);color:var(--ink-dim)}
   .nav-icon:hover{background:var(--panel)}
-  .mobile-side{display:none}
   .back{display:flex;align-items:center;gap:7px;height:34px;padding:0 12px;border:1px solid var(--ui-edge);border-radius:var(--r-md);background:var(--ui-face);color:var(--ink);font-size:12px;white-space:nowrap}
   .back:hover{background:var(--raise)}
   .identity{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px;padding:0 4px}
@@ -146,7 +145,7 @@
   .account:hover{background:var(--panel)}
   .account span{width:28px;height:28px;display:grid;place-items:center;border-radius:var(--r-round);color:#fff;font-size:11px;font-weight:650;border:1px solid rgba(255,255,255,.14)}
   @media(max-width:700px){
-    .mobile-side{display:grid}.back span,.context-tools,.text-context{display:none}
+    .back span,.context-tools,.text-context{display:none}
     .studio-nav{gap:6px;padding-inline:8px}.back{width:32px;padding:0;justify-content:center}
     .identity strong{font-size:12.5px}.save-state>span{display:none}
     .action{padding-inline:9px}.account{display:none}

@@ -1141,6 +1141,43 @@
           <button onclick={() => addBlock('divider')}><b>—</b>{t('studio.block.divider')}</button>
         </div>
 
+        <div class="palette-section" class:active={activeSection === 'design'} data-studio-section="design">
+          <h3>{t('studio.pageDesign')}</h3>
+          <div class="style-options">
+            {#each [
+              ['reading', t('studio.widthReading'), '760 px'],
+              ['wide', t('studio.widthWide'), '980 px'],
+              ['editorial', t('studio.widthEditorial'), '1180 px'],
+              ['compact', t('studio.widthCompact'), '620 px'],
+            ] as option}
+              <button
+                class:active={content().presentation?.contentWidth === option[0]}
+                onclick={() => { selected.content.presentation.contentWidth = option[0]; touch(); }}
+              ><span>{option[1]}</span><small>{option[2]}</small></button>
+            {/each}
+          </div>
+
+          <h3>{t('studio.typography')}</h3>
+          <div class="style-options">
+            <button class:active={content().presentation?.fontPreset !== 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'editorial'; touch(); }}>
+              <span>{t('studio.fontEditorial')}</span><small>Serif</small>
+            </button>
+            <button class:active={content().presentation?.fontPreset === 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'sans'; touch(); }}>
+              <span>{t('studio.fontSans')}</span><small>Sans</small>
+            </button>
+          </div>
+        </div>
+
+        <div class="palette-section metadata-palette" class:active={activeSection === 'metadata'} data-studio-section="metadata">
+          <h3>{t('studio.metadata')}</h3>
+          <div class="metadata-grid">
+            <label>{t('studio.author')}<input value={selected.authorLabel || ''} oninput={(event) => { selected.authorLabel = event.currentTarget.value; touch(); }} /></label>
+            <label>{t('studio.language')}<input value={selected.language || ''} placeholder="es" oninput={(event) => { selected.language = event.currentTarget.value; touch(); }} /></label>
+            <label>{t('studio.tags')}<input value={tagsText()} placeholder={t('studio.tagsPlaceholder')} oninput={(event) => setTags(event.currentTarget.value)} /></label>
+            <label>{t('studio.workType')}<input value={content().classification?.workType || ''} placeholder="article" oninput={(event) => { selected.content.classification.workType = event.currentTarget.value; touch(); }} /></label>
+          </div>
+        </div>
+
         <button class="link-tool" class:active={linkPicker} onclick={toggleLinkPicker}>
           <Icon name="book" size={14} />{t('studio.internalLink')}
         </button>
@@ -1174,43 +1211,7 @@
         class:compact={content().presentation?.contentWidth === 'compact'}
       >
         {#if error}<div class="studio-error">{t(error)}</div>{/if}
-        {#if activeSection === 'design'}
-          <section class="document-inspector" data-studio-section="design">
-            <h3>{t('studio.pageDesign')}</h3>
-            <div class="style-options">
-              {#each [
-                ['reading', t('studio.widthReading'), '760 px'],
-                ['wide', t('studio.widthWide'), '980 px'],
-                ['editorial', t('studio.widthEditorial'), '1180 px'],
-                ['compact', t('studio.widthCompact'), '620 px'],
-              ] as option}
-                <button
-                  class:active={content().presentation?.contentWidth === option[0]}
-                  onclick={() => { selected.content.presentation.contentWidth = option[0]; touch(); }}
-                ><span>{option[1]}</span><small>{option[2]}</small></button>
-              {/each}
-            </div>
-            <h3>{t('studio.typography')}</h3>
-            <div class="style-options typography-options">
-              <button class:active={content().presentation?.fontPreset !== 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'editorial'; touch(); }}>
-                <span>{t('studio.fontEditorial')}</span><small>Serif</small>
-              </button>
-              <button class:active={content().presentation?.fontPreset === 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'sans'; touch(); }}>
-                <span>{t('studio.fontSans')}</span><small>Sans</small>
-              </button>
-            </div>
-          </section>
-        {:else if activeSection === 'metadata'}
-          <section class="document-inspector" data-studio-section="metadata">
-            <h3>{t('studio.metadata')}</h3>
-            <div class="metadata-grid">
-              <label>{t('studio.author')}<input value={selected.authorLabel || ''} oninput={(event) => { selected.authorLabel = event.currentTarget.value; touch(); }} /></label>
-              <label>{t('studio.language')}<input value={selected.language || ''} placeholder="es" oninput={(event) => { selected.language = event.currentTarget.value; touch(); }} /></label>
-              <label>{t('studio.tags')}<input value={tagsText()} placeholder={t('studio.tagsPlaceholder')} oninput={(event) => setTags(event.currentTarget.value)} /></label>
-              <label>{t('studio.workType')}<input value={content().classification?.workType || ''} placeholder="article" oninput={(event) => { selected.content.classification.workType = event.currentTarget.value; touch(); }} /></label>
-            </div>
-          </section>
-        {:else if activeSection === 'cover'}
+        {#if activeSection === 'cover'}
           <section class="document-inspector cover-inspector" data-studio-section="cover">
             <h3>{t('studio.section.cover')}</h3>
             <button class="document-cover" class:ready={!!documentCover()} onclick={chooseDocumentCover} disabled={uploadingImage}>
@@ -1364,6 +1365,8 @@
   .document-workspace{height:100%;overflow:auto;display:grid;grid-template-columns:196px minmax(0,1180px);align-items:start;justify-content:center;gap:24px;padding:28px clamp(18px,3vw,48px) 70px}
   .document-palette{position:sticky;top:0;display:grid;gap:8px;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
   .document-palette h3{margin:6px 0 1px}.document-palette h3:first-child{margin-top:0}
+  .palette-section{display:grid;gap:8px;margin:3px -5px 0;padding:5px;border:1px solid transparent;border-radius:var(--r-md);transition:border-color .14s,background .14s}
+  .palette-section.active{border-color:var(--accent-line);background:var(--accent-weak)}
   .block-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
   .block-grid button{min-height:31px;display:flex;align-items:center;gap:6px;padding:6px 7px;border:0;border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px;text-align:left}
   .block-grid button:hover{background:var(--raise);color:var(--ink)}.block-grid button b{color:var(--accent-2);font-size:12px}
@@ -1371,6 +1374,10 @@
   .style-options button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:31px;padding:6px 8px;border:0;border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
   .style-options button:hover{background:var(--raise);color:var(--ink)}.style-options button.active{background:var(--accent-weak);color:var(--ink)}
   .style-options small{color:var(--faint);font-size:9px}
+  .metadata-palette .metadata-grid{grid-template-columns:1fr;gap:7px}
+  .metadata-palette label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:9.5px;letter-spacing:.03em}
+  .metadata-palette input{width:100%;min-width:0;padding:7px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font-size:10.5px;outline:0}
+  .metadata-palette input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
   .link-tool{width:100%;display:flex;align-items:center;gap:7px;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
   .link-tool.active{border-color:var(--accent-line);color:var(--accent-2)}
   .document-palette .link-picker{margin:0;padding:7px;border:1px solid var(--accent-line);border-radius:var(--r-sm);background:var(--card)}
@@ -1380,8 +1387,6 @@
   .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:620px}
   .document-inspector{width:100%;margin:0 auto 14px;padding:16px;border:1px solid var(--accent-line);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
   .document-inspector h3{margin:0 0 10px;color:var(--ink);font-size:12px}.document-inspector h3:not(:first-child){margin-top:16px}
-  .document-inspector .style-options{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .document-inspector .typography-options{grid-template-columns:repeat(2,minmax(0,1fr))}
   .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
   .revision-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px}.revision-panel header span{color:var(--faint)}
   .revision-list{display:grid;gap:5px}.revision-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:var(--r-sm);background:var(--raise)}
@@ -1395,9 +1400,6 @@
   .add-any{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:11px;border:1px dashed var(--border);border-radius:var(--r-md);background:transparent;color:var(--faint);font-size:12px}
   .add-any:hover{border-color:var(--accent-line);color:var(--ink)}.add-any b{width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r-sm);background:var(--accent-weak);color:var(--accent-2)}
   .metadata-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  .document-inspector label{display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:10px;letter-spacing:.04em}
-  .document-inspector input{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);color:var(--ink);outline:0}
-  .document-inspector input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
   .document-cover{width:100%;min-height:180px;display:grid;place-items:center;gap:8px;overflow:hidden;border:1px dashed var(--border);border-radius:var(--r-md);background:var(--card);color:var(--muted)}
   .document-cover:hover{border-color:var(--accent-line);color:var(--ink)}.document-cover.ready{border-style:solid}
   .document-cover b{font-size:24px;color:var(--accent-2)}.document-cover span{font-size:12px}
@@ -1415,7 +1417,6 @@
   @media(max-width:1080px){
     .document-workspace{grid-template-columns:1fr;justify-content:stretch}.document-palette{position:static;max-width:980px;width:100%;margin:0 auto}
     .block-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.style-options{grid-template-columns:repeat(3,minmax(0,1fr))}
-    .document-inspector .style-options{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
   @media(max-width:700px){
     .studio-home{padding:24px 14px 50px}.create-grid{grid-template-columns:1fr}.create-card{min-height:124px}

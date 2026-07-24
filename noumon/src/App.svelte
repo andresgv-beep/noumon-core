@@ -8,6 +8,7 @@
   import StudioNavBar from './lib/StudioNavBar.svelte';
   import Sidebar from './lib/Sidebar.svelte';
   import StudioSidebar from './lib/StudioSidebar.svelte';
+  import Studio from './lib/Studio.svelte';
   import Reader from './lib/Reader.svelte';
   import BookmarksBar from './lib/BookmarksBar.svelte';
   import NoteEditor from './lib/NoteEditor.svelte';
@@ -54,8 +55,16 @@
 
   let active = $derived(tabs.find((tb) => tb.id === activeId) || null);
   let studioMode = $derived(active?.kind === 'view' && active?.view === 'studio');
-  let studioShell = $state({ mode: 'home', documents: [] });
-  function updateStudioShell(state) { studioShell = state || { mode: 'home', documents: [] }; }
+  const emptyStudioShell = () => ({ mode: 'home', documents: [] });
+  let studioShell = $derived(active?.studioShell || emptyStudioShell());
+  function prepareStudioTab(tab) {
+    tab.studioShell = emptyStudioShell();
+    if (!tab.onStudioShellChange) {
+      tab.onStudioShellChange = (state) => {
+        tab.studioShell = state || emptyStudioShell();
+      };
+    }
+  }
   // La barra de marcadores (páginas guardadas) vive a nivel de app: visible en
   // TODAS las pestañas mientras haya algún favorito. Al final de la barra vive el
   // menú Favoritos, así que si no hay favoritos, barra y menú desaparecen juntos.
@@ -249,6 +258,7 @@
     return 'menu.' + view;
   };
   function setView(tab, view) {
+    if (view === 'studio') prepareStudioTab(tab);
     tab.kind = 'view'; tab.view = view; tab.titleKey = viewTitleKey(view); tab.title = view; tab.error = null;
   }
   function restore(tab, st) {
@@ -421,12 +431,21 @@
     {/if}
   </div>
   <div class="r-main">
-    {#if active}
+    {#each tabs.filter((tab) => tab.kind === 'view' && tab.view === 'studio') as studioTab (studioTab.id)}
+      <div
+        class="r-reader studio-tab-reader"
+        class:active={activeId === studioTab.id}
+        aria-hidden={activeId !== studioTab.id}
+      >
+        <Studio onOpenItem={openItemById} onShellChange={studioTab.onStudioShellChange} />
+      </div>
+    {/each}
+    {#if active && !studioMode}
       <div class="r-reader">
         <Reader tab={active} {libraries} {favorites} {indexOpen} {notesVersion} {tagsVersion} onNavigate={navigate}
           onOpenItem={openItemById} onOpenView={openView} onToggleHome={toggleHome} onFrameNav={frameNav}
           onRemoveFav={removeFav} onOpenNote={openNoteItem} onDeleteNote={deleteNoteItem}
-          onStudioShellChange={updateStudioShell} />
+        />
       </div>
     {/if}
   </div>
@@ -466,6 +485,8 @@
   .app.side-hidden .r-side{border-right:none}
   .r-main{grid-area:main;min-width:0;overflow:hidden;display:flex;flex-direction:column}
   .r-reader{flex:1;min-height:0;min-width:0}
+  .studio-tab-reader{display:none}
+  .studio-tab-reader.active{display:block}
   @media(max-width:700px){
     .app.studio-mode{grid-template-columns:1fr;grid-template-areas:"top" "nav" "bar" "main"}
     .app.studio-mode.side-hidden{grid-template-columns:1fr}
