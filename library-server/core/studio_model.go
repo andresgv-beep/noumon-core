@@ -62,8 +62,10 @@ type StudioClassification struct {
 }
 
 type StudioPresentation struct {
-	ContentWidth string `json:"contentWidth,omitempty"`
-	FontPreset   string `json:"fontPreset,omitempty"`
+	ContentWidth    string `json:"contentWidth,omitempty"`
+	FontPreset      string `json:"fontPreset,omitempty"`
+	TitleFontSize   int    `json:"titleFontSize,omitempty"`
+	SummaryFontSize int    `json:"summaryFontSize,omitempty"`
 }
 
 type StudioContent struct {
@@ -213,6 +215,12 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	case "", "editorial", "sans":
 	default:
 		return studioValidatedInput{}, fmt.Errorf("presentation.fontPreset: invalid")
+	}
+	if size := content.Presentation.TitleFontSize; size != 0 && (size < 10 || size > 96) {
+		return studioValidatedInput{}, fmt.Errorf("presentation.titleFontSize: invalid")
+	}
+	if size := content.Presentation.SummaryFontSize; size != 0 && (size < 10 || size > 96) {
+		return studioValidatedInput{}, fmt.Errorf("presentation.summaryFontSize: invalid")
 	}
 	classification, facets, err := validateStudioClassification(content.Classification)
 	if err != nil {
@@ -367,6 +375,12 @@ func (s *studioBlockValidation) validate(raw json.RawMessage, depth int) error {
 		var level int
 		if err := json.Unmarshal(obj["level"], &level); err != nil || level < 1 || level > 3 {
 			return fmt.Errorf("heading.level: invalid")
+		}
+	}
+	if field, ok := obj["fontSize"]; ok {
+		var size int
+		if err := json.Unmarshal(field, &size); err != nil || size < 10 || size > 96 {
+			return fmt.Errorf("block.fontSize: invalid")
 		}
 	}
 	for _, key := range []string{"text", "caption", "alt", "sideText", "title", "titleSnapshot"} {

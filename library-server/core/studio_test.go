@@ -257,6 +257,7 @@ func TestStudioValidationAcceptsOnlyKnownImagePresentation(t *testing.T) {
 				"assetId":"asset-local",
 				"imageSize":"poster",
 				"imageAlign":"center",
+				"fontSize":18,
 				"sideText":"Texto que también debe indexarse"
 			}]
 		}`),
@@ -282,6 +283,30 @@ func TestStudioValidationAcceptsOnlyKnownImagePresentation(t *testing.T) {
 	if _, err := validateStudioInput(input); err == nil ||
 		!strings.Contains(err.Error(), "image.imageSize") {
 		t.Fatalf("unknown image size accepted: %v", err)
+	}
+
+	input.Content = json.RawMessage(`{
+		"schemaVersion":1,
+		"blocks":[{
+			"id":"texto-enorme",
+			"type":"paragraph",
+			"text":"No debe aceptarse",
+			"fontSize":500
+		}]
+	}`)
+	if _, err := validateStudioInput(input); err == nil ||
+		!strings.Contains(err.Error(), "block.fontSize") {
+		t.Fatalf("unsafe font size accepted: %v", err)
+	}
+
+	input.Content = json.RawMessage(`{
+		"schemaVersion":1,
+		"presentation":{"titleFontSize":500},
+		"blocks":[]
+	}`)
+	if _, err := validateStudioInput(input); err == nil ||
+		!strings.Contains(err.Error(), "presentation.titleFontSize") {
+		t.Fatalf("unsafe title font size accepted: %v", err)
 	}
 }
 
