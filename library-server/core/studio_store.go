@@ -499,6 +499,42 @@ func (s *Store) archiveStudioDocument(id string, editor *User) (StudioDocument, 
 	return current, nil
 }
 
+func (s *Store) purgeStudioDocument(id string, editor *User) error {
+	current, err := s.getStudioDocument(id, editor)
+	if err != nil {
+		return err
+	}
+	if current.Status != "archived" {
+		return errStudioPurgeRequiresArchive
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, statement := range []string{
+		`DELETE FROM studio_published_fts WHERE document_id=?`,
+		`DELETE FROM studio_published_links WHERE source_document_id=?`,
+		`DELETE FROM studio_links WHERE source_document_id=?`,
+		`DELETE FROM studio_facets WHERE document_id=?`,
+		`DELETE FROM content_origins WHERE document_id=?`,
+		`DELETE FROM studio_revisions WHERE document_id=?`,
+		`DELETE FROM studio_assets WHERE document_id=?`,
+	} {
+		if _, err := tx.Exec(statement, id); err != nil {
+			return err
+		}
+	}
+	result, err := tx.Exec(`DELETE FROM studio_documents WHERE id=? AND status='archived'`, id)
+	if err != nil {
+		return err
+	}
+	if changed, _ := result.RowsAffected(); changed != 1 {
+		return errStudioConflict
+	}
+	return tx.Commit()
+}
+
 type StudioRevision struct {
 	Revision    int    `json:"revision"`
 	EditorLabel string `json:"editorLabel,omitempty"`

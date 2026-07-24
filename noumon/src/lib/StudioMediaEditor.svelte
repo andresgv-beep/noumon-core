@@ -137,6 +137,15 @@
     changed();
   }
 
+  function moveAt(field, index, delta) {
+    const entries = ensureMetadata()[field];
+    const target = index + delta;
+    if (target < 0 || target >= entries.length) return;
+    const [entry] = entries.splice(index, 1);
+    entries.splice(target, 0, entry);
+    changed();
+  }
+
   function setTags(value) {
     document.tags = value.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 50);
     changed();
@@ -174,7 +183,11 @@
           <div class="repeat-row">
             <span class="number">{index + 1}</span>
             <input value={track.title} aria-label={t('studio.trackTitle')} oninput={(event) => { track.title = event.currentTarget.value; changed(); }} />
-            <button class="remove" onclick={() => removeAt('tracks', index)} aria-label={t('studio.removeEntry')}>×</button>
+            <span class="entry-actions">
+              <button onclick={() => moveAt('tracks', index, -1)} disabled={index === 0} aria-label={t('studio.moveUp')}>↑</button>
+              <button onclick={() => moveAt('tracks', index, 1)} disabled={index === metadata().tracks.length - 1} aria-label={t('studio.moveDown')}>↓</button>
+              <button class="remove" onclick={() => removeAt('tracks', index)} aria-label={t('studio.removeEntry')}>×</button>
+            </span>
           </div>
         {/each}
         {#if (metadata().tracks || []).length === 0}<p>{t('studio.noTracks')}</p>{/if}
@@ -218,7 +231,7 @@
       {/if}
     </div>
 
-    {#if surface() === 'moments'}
+    {#if surface() === 'moments' || document.templateKey === 'cabinet.video'}
       <section class="repeat-field" data-studio-section="chapters">
         <header><span><b>{t('studio.section.chapters')}</b><small>{t('studio.chaptersHint')}</small></span>
           <button onclick={addChapter}>＋ {t('studio.addChapter')}</button>
@@ -306,9 +319,11 @@
   .repeat-field header{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .repeat-field header>span{display:flex;flex-direction:column;gap:2px}.repeat-field header b{font-size:11px}.repeat-field header small,.repeat-field>p{color:var(--faint);font-size:9.5px}
   .repeat-field header button{padding:6px 8px;border-radius:var(--r-sm);background:var(--card);color:var(--accent-2);font-size:10px}
-  .repeat-row{display:grid;grid-template-columns:24px minmax(0,1fr) 28px;gap:6px;align-items:center}
+  .repeat-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:6px;align-items:center}
   .repeat-row input{padding:7px 8px}.repeat-row .number{display:grid;place-items:center;color:var(--faint);font:600 10px var(--mono)}
-  .repeat-row .remove{height:28px;border-radius:var(--r-sm);color:var(--faint)}.repeat-row .remove:hover{background:color-mix(in srgb,#df7474 12%,transparent);color:#df7474}
+  .entry-actions{display:flex;align-items:center;gap:2px}.entry-actions button,.repeat-row>.remove{width:26px;height:28px;border-radius:var(--r-sm);color:var(--faint)}
+  .entry-actions button:hover:not(:disabled){background:var(--card);color:var(--ink)}.entry-actions button:disabled{opacity:.28}
+  .repeat-row .remove:hover{background:color-mix(in srgb,#df7474 12%,transparent)!important;color:#df7474!important}
   .chapter-row{grid-template-columns:84px minmax(0,1fr) 28px}.subtitle-row{grid-template-columns:70px minmax(0,1fr) 28px}.subtitle-row span{color:var(--muted);font-size:10px}
   .media-preview{position:sticky;top:0;display:grid;gap:10px}.media-preview>span{color:var(--faint);font-size:9px;letter-spacing:.13em;text-transform:uppercase}
   .image-slots{position:relative}.image-upload{overflow:hidden;border:1px dashed var(--border);background:var(--card);color:var(--faint)}

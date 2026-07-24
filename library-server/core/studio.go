@@ -298,6 +298,19 @@ func (s *Server) handleStudioDocumentSub(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, map[string]any{"document": document})
 		return
 	}
+	if sub == "purge" {
+		if r.Method != http.MethodDelete {
+			writeStudioError(w, http.StatusMethodNotAllowed, "studio.method_not_allowed", nil)
+			return
+		}
+		if err := s.purgeStudioContent(id, user); err != nil {
+			writeStudioStoreError(w, err, 0)
+			return
+		}
+		s.invalidateAccessCache()
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if sub != "" {
 		writeStudioError(w, http.StatusNotFound, "studio.route_not_found", nil)
 		return
@@ -447,6 +460,8 @@ func writeStudioStoreError(w http.ResponseWriter, err error, currentRevision int
 		writeStudioError(w, http.StatusUnprocessableEntity, "studio.asset_invalid", nil)
 	case errors.Is(err, errStudioMediaIncomplete):
 		writeStudioError(w, http.StatusUnprocessableEntity, "studio.media_incomplete", nil)
+	case errors.Is(err, errStudioPurgeRequiresArchive):
+		writeStudioError(w, http.StatusConflict, "studio.purge_requires_archive", nil)
 	default:
 		writeStudioError(w, http.StatusInternalServerError, "studio.internal", nil)
 	}

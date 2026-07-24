@@ -57,6 +57,9 @@
     {#if state.canArchive && state.archive}
       <button class="archive" onclick={() => state.archive?.()}><Icon name="trash" size={14} />{t('studio.archive')}</button>
     {/if}
+    {#if state.canPurge && state.purge}
+      <button class="purge" onclick={() => state.purge?.()}><Icon name="trash" size={14} />{t('studio.purge')}</button>
+    {/if}
   {/if}
 </aside>
 
@@ -77,8 +80,10 @@
   .section-kind{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:9px 10px;border-radius:var(--r-md);background:var(--card)}
   .section-kind .glyph{color:var(--accent-2);font-size:16px}.section-kind span:last-child{display:flex;flex-direction:column}
   .section-kind b{font-size:12px}.section-kind small{color:var(--muted);font-size:10px}
-  .archive{display:flex;align-items:center;gap:8px;margin-top:auto;padding:8px 10px;border-radius:var(--r-md);color:#df7474;font-size:11px}
+  .archive,.purge{display:flex;align-items:center;gap:8px;margin-top:auto;padding:8px 10px;border-radius:var(--r-md);color:#df7474;font-size:11px}
+  .purge{color:#f06f6f}
   .archive:hover{background:color-mix(in srgb,#df7474 9%,var(--raise))}
+  .purge:hover{background:color-mix(in srgb,#df7474 14%,var(--raise))}
   .unpublish{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-md);color:var(--muted);font-size:11px}
   .unpublish:hover{background:var(--raise);color:var(--ink)}
   .empty{padding:10px;color:var(--faint);font-size:11px}

@@ -383,6 +383,63 @@ func TestStudioCapabilitiesAndPrivateDraftLifecycle(t *testing.T) {
 	}
 }
 
+func TestStudioPermanentDeleteRequiresArchiveAndRemovesAssets(t *testing.T) {
+	s := testAuthServer(t, "")
+	s.studioRoot = t.TempDir()
+	h := studioTestMux(s)
+	cookie := sessionFor(t, s, "autora-borrado", 30, false)
+	grantStudio(t, s, "autora-borrado", true)
+
+	created := decodeStudioDocumentResponse(t, studioRequest(
+		h, http.MethodPost, "/api/studio/documents",
+		validStudioDocumentBody("Borrador descartable", 0), cookie))
+	asset := decodeStudioAssetResponse(t, studioUploadRequest(t, h,
+		"/api/studio/documents/"+created.ID+"/assets",
+		"temporal.png", studioTestPNG(t), cookie))
+	assetDir, err := secureStudioAssetDir(s.studioRoot, created.ID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	notArchived := studioRequest(h, http.MethodDelete,
+		"/api/studio/documents/"+created.ID+"/purge", "", cookie)
+	if notArchived.Code != http.StatusConflict ||
+		!strings.Contains(notArchived.Body.String(), "studio.purge_requires_archive") {
+		t.Fatalf("purge without archive: %d %s", notArchived.Code, notArchived.Body.String())
+	}
+	if rec := studioRequest(h, http.MethodDelete,
+		"/api/studio/documents/"+created.ID, "", cookie); rec.Code != http.StatusOK {
+		t.Fatalf("archive: %d %s", rec.Code, rec.Body.String())
+	}
+	purged := studioRequest(h, http.MethodDelete,
+		"/api/studio/documents/"+created.ID+"/purge", "", cookie)
+	if purged.Code != http.StatusNoContent {
+		t.Fatalf("purge: %d %s", purged.Code, purged.Body.String())
+	}
+	if _, err := os.Stat(assetDir); !os.IsNotExist(err) {
+		t.Fatalf("private asset directory remains after purge: %v", err)
+	}
+	if rec := studioRequest(h, http.MethodGet,
+		"/api/studio/documents/"+created.ID, "", cookie); rec.Code != http.StatusNotFound {
+		t.Fatalf("purged document remains visible: %d %s", rec.Code, rec.Body.String())
+	}
+	var assetRows, revisionRows int
+	if err := s.store.db.QueryRow(
+		`SELECT COUNT(*) FROM studio_assets WHERE document_id=?`, created.ID,
+	).Scan(&assetRows); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.store.db.QueryRow(
+		`SELECT COUNT(*) FROM studio_revisions WHERE document_id=?`, created.ID,
+	).Scan(&revisionRows); err != nil {
+		t.Fatal(err)
+	}
+	if assetRows != 0 || revisionRows != 0 {
+		t.Fatalf("purge left database rows: assets=%d revisions=%d asset=%s",
+			assetRows, revisionRows, asset.ID)
+	}
+}
+
 func TestStudioDocumentTemplateCatalogAndPublicationSurface(t *testing.T) {
 	s := testAuthServer(t, "")
 	h := studioTestMux(s)
@@ -1563,6 +1620,36 @@ func TestStudioCabinetNormalizesLegacyPrimaryAudioAsFirstTrack(t *testing.T) {
 	}
 	if len(assets) != 2 {
 		t.Fatalf("unexpected normalized assets: %#v", assets)
+	}
+}
+
+func TestStudioCabinetVideoAcceptsSubtitlesAndChapters(t *testing.T) {
+	videoID := strings.Repeat("c", 32)
+	subtitleID := strings.Repeat("d", 32)
+	raw, err := json.Marshal(map[string]any{
+		"collection":     "Documentales",
+		"primaryAssetId": videoID,
+		"subtitles": []map[string]any{
+			{"lang": "es", "assetId": subtitleID},
+		},
+		"chapters": []map[string]any{
+			{"start": 0, "title": "Introducción"},
+			{"start": 60, "title": "Desarrollo"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, assets, err := validateStudioMediaMetadata("cabinet.video", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metadata.Subtitles) != 1 || len(metadata.Chapters) != 2 ||
+		len(assets) != 2 {
+		t.Fatalf("incomplete Cabinet video metadata: %#v assets=%#v", metadata, assets)
+	}
+	if !studioAssetPurposeAllowed("cabinet.video", "subtitle") {
+		t.Fatal("Cabinet video rejected its subtitle upload purpose")
 	}
 }
 

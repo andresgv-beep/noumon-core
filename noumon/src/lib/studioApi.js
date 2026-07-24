@@ -78,6 +78,20 @@ export async function archiveStudioDocument(id) {
   return body.document;
 }
 
+export async function purgeStudioDocument(id) {
+  const response = await serverFetch(
+    `/api/studio/documents/${encodeURIComponent(id)}/purge`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const error = new Error(body.errorCode || `HTTP ${response.status}`);
+    error.code = body.errorCode || '';
+    error.status = response.status;
+    throw error;
+  }
+}
+
 export async function publishStudioDocument(id) {
   const body = await studioJSON(`/api/studio/documents/${encodeURIComponent(id)}/publish`, {
     method: 'POST',

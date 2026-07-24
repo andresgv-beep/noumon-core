@@ -177,10 +177,11 @@ func validateStudioMediaMetadata(template string, raw json.RawMessage) (StudioMe
 	if template != "cabinet.audio" && len(metadata.Tracks) != 0 {
 		return metadata, nil, fmt.Errorf("metadata.tracks: unsupported for template")
 	}
-	if template != "moments.video" && len(metadata.Subtitles) != 0 {
+	videoProfile := template == "moments.video" || template == "cabinet.video"
+	if !videoProfile && len(metadata.Subtitles) != 0 {
 		return metadata, nil, fmt.Errorf("metadata.subtitles: unsupported for template")
 	}
-	if template != "moments.video" && len(metadata.Chapters) != 0 {
+	if !videoProfile && len(metadata.Chapters) != 0 {
 		return metadata, nil, fmt.Errorf("metadata.chapters: unsupported for template")
 	}
 	out := make([]string, 0, len(assets))

@@ -82,6 +82,7 @@
   const license = $derived(item?.license || '');
   const duration = $derived(item?.duration || 0);
   const chapters = $derived(item?.chapters || []);
+  const subtitles = $derived(item?.subtitles || []);
 
   // ── Audiolibro multi-pista (portada + motor con onda + lista) ──
   const coverURL = $derived(item?.preview?.kind === 'image' ? item.preview.url : '');
@@ -309,7 +310,11 @@
             <section class="viewer" class:media={isVideo || isImage} bind:this={viewerEl}>
               {#if isVideo}
                 <!-- svelte-ignore a11y_media_has_caption -->
-                <video bind:this={videoEl} controls src={url}></video>
+                <video bind:this={videoEl} controls src={url}>
+                  {#each subtitles as subtitle (subtitle.lang)}
+                    <track kind="subtitles" src={subtitle.url} srclang={subtitle.lang} label={subtitle.lang.toUpperCase()} />
+                  {/each}
+                </video>
               {:else if isImage}
                 <div class="paperstage"><img src={url} alt={title} /></div>
               {:else if isAudio}

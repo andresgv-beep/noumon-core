@@ -24,11 +24,12 @@ const (
 )
 
 var (
-	errStudioNotFound         = errors.New("studio document not found")
-	errStudioForbidden        = errors.New("studio document forbidden")
-	errStudioConflict         = errors.New("studio revision conflict")
-	errStudioRevisionNotFound = errors.New("studio revision not found")
-	errStudioAssetInvalid     = errors.New("studio asset invalid")
+	errStudioNotFound             = errors.New("studio document not found")
+	errStudioForbidden            = errors.New("studio document forbidden")
+	errStudioConflict             = errors.New("studio revision conflict")
+	errStudioRevisionNotFound     = errors.New("studio revision not found")
+	errStudioAssetInvalid         = errors.New("studio asset invalid")
+	errStudioPurgeRequiresArchive = errors.New("studio purge requires archived document")
 
 	studioSlugRE = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$`)
 	studioIDRE   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)

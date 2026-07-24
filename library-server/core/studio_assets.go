@@ -295,7 +295,7 @@ func studioAssetPurposeAllowed(template, purpose string) bool {
 	case "track", "waveform":
 		return template == "cabinet.audio"
 	case "subtitle":
-		return template == "moments.video"
+		return template == "moments.video" || template == "cabinet.video"
 	default:
 		return false
 	}

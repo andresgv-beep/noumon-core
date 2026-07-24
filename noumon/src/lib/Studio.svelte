@@ -11,7 +11,7 @@
   import { itemSearch } from './libraryApi.js';
   import {
     listStudioDocuments, getStudioDocument, createStudioDocument,
-    updateStudioDocument, archiveStudioDocument, publishStudioDocument,
+    updateStudioDocument, archiveStudioDocument, purgeStudioDocument, publishStudioDocument,
     unpublishStudioDocument, getStudioCapabilities, uploadStudioAsset,
     listStudioRevisions, restoreStudioRevision,
   } from './studioApi.js';
@@ -726,6 +726,24 @@
     }
   }
 
+  async function purgeSelected() {
+    if (!selected || selected.status !== 'archived') return;
+    if (!confirm(t('studio.purgeConfirm', { title: selected.title }))) return;
+    const id = selected.id;
+    try {
+      await purgeStudioDocument(id);
+      await clearStudioRecovery(id);
+      documents = documents.filter((item) => item.id !== id);
+      selected = null;
+      mode = 'home';
+      selectedBlockID = '';
+      showRevisions = false;
+      closeLinkPicker();
+    } catch (e) {
+      error = e.code || e.message;
+    }
+  }
+
   async function publishSelected() {
     if (!selected || !canPublish) return;
     if (!await flushCurrent()) return;
@@ -908,13 +926,23 @@
   function shellSections() {
     const surface = surfaceOf();
     if (surface === 'cabinet') {
+      if (selected?.templateKey === 'cabinet.audio') {
+        return [
+          { key: 'tracks', icon: 'list', label: t('studio.audioTracks') },
+          { key: 'metadata', icon: 'tag', label: t('studio.section.metadata') },
+          { key: 'cover', icon: 'image', label: t('studio.section.cover') },
+        ];
+      }
       const sections = [
         { key: 'file', icon: 'download', label: t('studio.section.mainFile') },
         { key: 'metadata', icon: 'tag', label: t('studio.section.metadata') },
         { key: 'cover', icon: 'image', label: t('studio.section.cover') },
       ];
-      if (selected?.templateKey === 'cabinet.audio') {
-        sections.splice(1, 0, { key: 'tracks', icon: 'list', label: t('studio.audioTracks') });
+      if (selected?.templateKey === 'cabinet.video') {
+        sections.push(
+          { key: 'chapters', icon: 'list', label: t('studio.section.chapters') },
+          { key: 'subtitles', icon: 'list', label: t('studio.subtitles') },
+        );
       }
       return sections;
     }
@@ -975,6 +1003,7 @@
         : surface === 'moments' ? t('studio.destinationMoments') : t('studio.destinationDocuments'),
       quotaLabel: formatQuota(quotaBytes),
       canArchive: selected?.status !== 'archived',
+      canPurge: selected?.status === 'archived',
       goHome: goStudioHome,
       togglePreview,
       publish: publishSelected,
@@ -986,6 +1015,7 @@
       openSection,
       toggleRevisions,
       archive: archiveSelected,
+      purge: purgeSelected,
     });
   });
 </script>
