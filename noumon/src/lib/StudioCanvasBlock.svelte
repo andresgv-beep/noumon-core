@@ -84,6 +84,11 @@
       : 'center';
   }
 
+  function imageHasSideText() {
+    return ['medium', 'small'].includes(imageSize())
+      && ['left', 'right'].includes(imageAlign());
+  }
+
   function setImageSize(size, event) {
     event.stopPropagation();
     block.imageSize = size;
@@ -260,15 +265,28 @@
           {/each}
         </div>
       </div>
-      <figure class={`image-${imageSize()} align-${imageAlign()}`}>
-      <StudioImage
-        {documentId}
-        assetId={block.assetId}
-        alt={block.alt || ''}
-        display={imageSize()}
-      />
-      <figcaption contenteditable="true" oninput={(event) => setText(event, 'caption')}>{block.caption || t('studio.imageCaption')}</figcaption>
-      </figure>
+      <div
+        class={`image-layout image-${imageSize()} align-${imageAlign()}`}
+        class:with-side-text={imageHasSideText()}
+      >
+        <figure>
+          <StudioImage
+            {documentId}
+            assetId={block.assetId}
+            alt={block.alt || ''}
+            display={imageSize()}
+          />
+          <figcaption contenteditable="true" oninput={(event) => setText(event, 'caption')}>{block.caption || t('studio.imageCaption')}</figcaption>
+        </figure>
+        {#if imageHasSideText()}
+          <div
+            class="image-side-text"
+            contenteditable="true"
+            data-placeholder={t('studio.imageSideTextPlaceholder')}
+            oninput={(event) => setText(event, 'sideText')}
+          >{block.sideText || ''}</div>
+        {/if}
+      </div>
     </div>
   {:else if block.type === 'code'}
     <pre contenteditable="true" oninput={setText}>{block.text || ''}</pre>
@@ -430,9 +448,17 @@
   .image-tools button{min-height:25px;padding:3px 7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:9px}
   .image-tools button:hover:not(:disabled),.image-tools button.active{border-color:var(--accent-line);background:var(--accent-weak);color:var(--ink)}
   .image-tools button:disabled{opacity:.35}
-  .image-medium{width:min(72%,760px)}.image-small{width:min(40%,420px)}
-  .image-poster,.image-original{width:100%}
-  .align-left{margin-right:auto}.align-center{margin-inline:auto}.align-right{margin-left:auto}
+  .image-layout{width:100%}
+  .image-layout.image-medium{width:min(72%,760px)}.image-layout.image-small{width:min(40%,420px)}
+  .image-layout.image-poster,.image-layout.image-original{width:100%}
+  .image-layout.align-left{margin-right:auto}.image-layout.align-center{margin-inline:auto}.image-layout.align-right{margin-left:auto}
+  .image-layout.with-side-text{display:flex;align-items:flex-start;gap:clamp(18px,3vw,38px);width:100%}
+  .image-layout.with-side-text figure{flex:0 0 58%;min-width:0}
+  .image-layout.with-side-text.image-small figure{flex-basis:40%}
+  .image-layout.with-side-text.align-right figure{order:2}
+  .image-side-text{flex:1;min-width:0;min-height:120px;padding:12px 14px;border-left:2px solid var(--accent-line);border-radius:var(--r-sm);color:var(--ink-dim);font:14.5px/1.68 var(--font);white-space:pre-wrap}
+  .image-layout.align-right .image-side-text{border-right:2px solid var(--accent-line);border-left:0}
+  .image-side-text:empty::before{content:attr(data-placeholder);color:var(--faint)}
   .column-layout-tools{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0 0 12px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--raise);font-family:var(--font)}
   .column-layout-tools>span{margin-right:auto;color:var(--ink);font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
   .column-count,.column-ratios{display:flex;gap:3px}
@@ -471,6 +497,9 @@
     .columns,.columns.single,.columns.single.half-left,.columns.single.half-right,.columns.three,.columns.lead-left,.columns.lead-right{grid-template-columns:1fr;justify-content:stretch}
     .handle,.actions{display:none}
     .table-controls{align-items:flex-start;flex-direction:column}
-    .image-medium{width:min(86%,760px)}.image-small{width:min(62%,420px)}
+    .image-layout.image-medium{width:min(86%,760px)}.image-layout.image-small{width:min(62%,420px)}
+    .image-layout.with-side-text{display:grid;width:100%}
+    .image-layout.with-side-text figure{width:min(86%,620px)}
+    .image-layout.with-side-text.align-right figure{order:0;margin-left:auto}
   }
 </style>

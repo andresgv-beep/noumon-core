@@ -32,6 +32,12 @@
       ? block.imageAlign
       : 'center';
   }
+
+  function imageHasSideText() {
+    return ['medium', 'small'].includes(imageSize())
+      && ['left', 'right'].includes(imageAlign())
+      && String(block.sideText || '').trim();
+  }
 </script>
 
 {#if block.type === 'heading'}
@@ -48,15 +54,23 @@
 {:else if block.type === 'table'}
   <div class="table-scroll"><table><tbody>{#each block.rows || [] as row, rowIndex}<tr>{#each row as cell}{#if rowIndex === 0}<th>{@html inline(cell)}</th>{:else}<td>{@html inline(cell)}</td>{/if}{/each}</tr>{/each}</tbody></table></div>
 {:else if block.type === 'image'}
-  <figure class={`image-${imageSize()} align-${imageAlign()}`}>
-    <StudioImage
-      {documentId}
-      assetId={block.assetId}
-      alt={block.alt || ''}
-      display={imageSize()}
-    />
-    {#if block.caption}<figcaption>{@html inline(block.caption)}</figcaption>{/if}
-  </figure>
+  <div
+    class={`image-layout image-${imageSize()} align-${imageAlign()}`}
+    class:with-side-text={imageHasSideText()}
+  >
+    <figure>
+      <StudioImage
+        {documentId}
+        assetId={block.assetId}
+        alt={block.alt || ''}
+        display={imageSize()}
+      />
+      {#if block.caption}<figcaption>{@html inline(block.caption)}</figcaption>{/if}
+    </figure>
+    {#if imageHasSideText()}
+      <div class="image-side-text">{@html inline(block.sideText)}</div>
+    {/if}
+  </div>
 {:else if block.type === 'code'}
   <pre><code>{block.text || ''}</code></pre>
 {:else if block.type === 'callout'}
@@ -99,9 +113,16 @@
   p{white-space:pre-wrap}
   blockquote{margin:28px 0;border-left:3px solid var(--accent);padding:10px 20px;background:var(--raise);color:var(--ink-dim)}
   figure{margin:30px 0}
-  figure.image-medium{width:min(72%,760px)}figure.image-small{width:min(40%,420px)}
-  figure.image-poster,figure.image-original{width:100%}
-  figure.align-left{margin-right:auto}figure.align-center{margin-inline:auto}figure.align-right{margin-left:auto}
+  .image-layout{width:100%}
+  .image-layout.image-medium{width:min(72%,760px)}.image-layout.image-small{width:min(40%,420px)}
+  .image-layout.image-poster,.image-layout.image-original{width:100%}
+  .image-layout.align-left{margin-right:auto}.image-layout.align-center{margin-inline:auto}.image-layout.align-right{margin-left:auto}
+  .image-layout.with-side-text{display:flex;align-items:flex-start;gap:clamp(24px,4vw,52px);width:100%}
+  .image-layout.with-side-text figure{flex:0 0 58%;min-width:0}
+  .image-layout.with-side-text.image-small figure{flex-basis:40%}
+  .image-layout.with-side-text.align-right figure{order:2}
+  .image-layout.with-side-text figure{margin-top:30px;margin-bottom:30px}
+  .image-side-text{flex:1;min-width:0;margin:30px 0;color:var(--ink-dim);line-height:1.75;white-space:pre-wrap}
   figcaption{margin-top:8px;text-align:center;color:var(--muted);font-family:var(--font,system-ui,sans-serif);font-size:12px}
   .table-scroll{overflow:auto;margin:24px 0}
   table{width:100%;border-collapse:collapse;font-family:var(--font,system-ui,sans-serif);font-size:14px}
@@ -121,6 +142,10 @@
   hr{border:0;border-top:1px solid var(--border);margin:32px 0}
   @media(max-width:680px){
     .columns,.columns.single,.columns.single.half-left,.columns.single.half-right,.columns.three,.columns.lead-left,.columns.lead-right{grid-template-columns:1fr;justify-content:stretch}
-    figure.image-medium{width:min(86%,760px)}figure.image-small{width:min(62%,420px)}
+    .image-layout.image-medium{width:min(86%,760px)}.image-layout.image-small{width:min(62%,420px)}
+    .image-layout.with-side-text{display:grid;width:100%}
+    .image-layout.with-side-text figure{width:min(86%,620px);margin-bottom:0}
+    .image-layout.with-side-text.align-right figure{order:0;margin-left:auto}
+    .image-layout.with-side-text .image-side-text{margin-top:10px}
   }
 </style>

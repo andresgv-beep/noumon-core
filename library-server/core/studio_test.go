@@ -256,12 +256,17 @@ func TestStudioValidationAcceptsOnlyKnownImagePresentation(t *testing.T) {
 				"type":"image",
 				"assetId":"asset-local",
 				"imageSize":"poster",
-				"imageAlign":"center"
+				"imageAlign":"center",
+				"sideText":"Texto que también debe indexarse"
 			}]
 		}`),
 	}
-	if _, err := validateStudioInput(input); err != nil {
+	valid, err := validateStudioInput(input)
+	if err != nil {
 		t.Fatalf("valid image presentation rejected: %v", err)
+	}
+	if !strings.Contains(valid.PlainText, "Texto que también debe indexarse") {
+		t.Fatalf("image side text missing from plain text: %q", valid.PlainText)
 	}
 
 	input.Content = json.RawMessage(`{

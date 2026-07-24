@@ -543,7 +543,8 @@
       if (selected?.id !== documentId) return;
       const imageBlock = {
         id: nextBlockId(), type: 'image', assetId: asset.id,
-        caption: '', alt: '', imageSize: 'original', imageAlign: 'center',
+        caption: '', alt: '', sideText: '',
+        imageSize: 'original', imageAlign: 'center',
       };
       const target = targetColumn
         ? findBlockByID(targetColumn.blockID)

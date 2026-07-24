@@ -369,7 +369,7 @@ func (s *studioBlockValidation) validate(raw json.RawMessage, depth int) error {
 			return fmt.Errorf("heading.level: invalid")
 		}
 	}
-	for _, key := range []string{"text", "caption", "alt", "title", "titleSnapshot"} {
+	for _, key := range []string{"text", "caption", "alt", "sideText", "title", "titleSnapshot"} {
 		if field, ok := obj[key]; ok {
 			var text string
 			if err := json.Unmarshal(field, &text); err != nil {
