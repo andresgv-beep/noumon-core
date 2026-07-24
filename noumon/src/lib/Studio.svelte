@@ -17,7 +17,7 @@
     listStudioRevisions, restoreStudioRevision,
   } from './studioApi.js';
 
-  let { onOpenItem, onShellChange } = $props();
+  let { onOpenItem, onShellChange, sidebarOpen = true } = $props();
 
   let documents = $state([]);
   let selected = $state(null);
@@ -1070,7 +1070,7 @@
   });
 </script>
 
-<section class="studio-new">
+<section class="studio-new" class:sidebar-hidden={!sidebarOpen}>
   {#if loading}
     <div class="studio-state">{t('common.loading')}</div>
   {:else if mode === 'home'}
@@ -1120,7 +1120,7 @@
     </main>
   {:else if selected && mode === 'preview'}
     <main class="preview-mode scroll thin">
-      <StudioDocumentView document={selected} {onOpenItem} />
+      <StudioDocumentView document={selected} {onOpenItem} preview expanded={!sidebarOpen} />
     </main>
   {:else if selected && surfaceOf() === 'document'}
     <main class="document-workspace scroll thin">
@@ -1145,10 +1145,10 @@
           <h3>{t('studio.pageDesign')}</h3>
           <div class="style-options">
             {#each [
-              ['reading', t('studio.widthReading'), '760 px'],
+              ['reading', t('studio.widthReading'), '910 px'],
               ['wide', t('studio.widthWide'), '980 px'],
               ['editorial', t('studio.widthEditorial'), '1180 px'],
-              ['compact', t('studio.widthCompact'), '620 px'],
+              ['compact', t('studio.widthCompact'), '740 px'],
             ] as option}
               <button
                 class:active={content().presentation?.contentWidth === option[0]}
@@ -1362,7 +1362,8 @@
   .home-empty{padding:24px;border:1px dashed var(--border);border-radius:var(--r-lg);color:var(--muted);font-size:12px;text-align:center}
   .studio-error{margin:12px 0;padding:9px 11px;border-left:3px solid #df7474;background:color-mix(in srgb,#df7474 9%,var(--panel));color:#df8585;font-size:12px}
 
-  .document-workspace{height:100%;overflow:auto;display:grid;grid-template-columns:196px minmax(0,1180px);align-items:start;justify-content:center;gap:24px;padding:28px clamp(18px,3vw,48px) 70px}
+  .document-workspace{height:100%;overflow:auto;display:grid;grid-template-columns:216px minmax(0,1180px);align-items:start;justify-content:center;gap:18px;padding:22px clamp(10px,1.5vw,24px) 70px}
+  .sidebar-hidden .document-workspace{grid-template-columns:232px minmax(0,1340px);padding-inline:clamp(10px,1.2vw,20px)}
   .document-palette{position:sticky;top:0;display:grid;gap:8px;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
   .document-palette h3{margin:6px 0 1px}.document-palette h3:first-child{margin-top:0}
   .palette-section{display:grid;gap:8px;margin:3px -5px 0;padding:5px;border:1px solid transparent;border-radius:var(--r-md);transition:border-color .14s,background .14s}
@@ -1383,16 +1384,18 @@
   .document-palette .link-picker{margin:0;padding:7px;border:1px solid var(--accent-line);border-radius:var(--r-sm);background:var(--card)}
   .document-palette .link-picker input{padding:7px 8px;font-size:10.5px}.document-palette .link-results{grid-template-columns:1fr;max-height:180px}
   .document-palette .link-results button{padding:7px;background:var(--raise)}
-  .canvas-column{width:100%;max-width:760px;min-width:0;margin:0 auto;transition:max-width .2s}
-  .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:620px}
+  .canvas-column{width:100%;max-width:912px;min-width:0;margin:0 auto;transition:max-width .2s}
+  .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:744px}
+  .sidebar-hidden .canvas-column{max-width:1000px}
+  .sidebar-hidden .canvas-column.wide{max-width:1120px}.sidebar-hidden .canvas-column.editorial{max-width:1340px}.sidebar-hidden .canvas-column.compact{max-width:820px}
   .document-inspector{width:100%;margin:0 auto 14px;padding:16px;border:1px solid var(--accent-line);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
   .document-inspector h3{margin:0 0 10px;color:var(--ink);font-size:12px}.document-inspector h3:not(:first-child){margin-top:16px}
   .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
   .revision-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px}.revision-panel header span{color:var(--faint)}
   .revision-list{display:grid;gap:5px}.revision-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:var(--r-sm);background:var(--raise)}
   .revision-row>span{min-width:0;display:flex;flex-direction:column}.revision-row b{font-size:11px}.revision-row small{color:var(--faint);font-size:9px}.revision-row button{padding:5px 8px;font-size:10px}
-  .document-canvas{width:100%;min-height:470px;margin:0 auto;padding:42px clamp(38px,5vw,68px);border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--shadow-soft);font-family:var(--font-read);transition:padding .2s}
-  .document-canvas.compact{padding-inline:52px}.document-canvas.sans{font-family:var(--font)}
+  .document-canvas{width:100%;min-height:470px;margin:0 auto;padding:36px clamp(28px,4vw,56px);border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--shadow-soft);font-family:var(--font-read);transition:padding .2s}
+  .document-canvas.compact{padding-inline:44px}.document-canvas.sans{font-family:var(--font)}
   .canvas-title,.canvas-summary{margin:2px -9px;padding:7px 9px;border:1px solid transparent;border-radius:var(--r-sm)}
   .canvas-title:hover,.canvas-title:focus-within,.canvas-summary:hover,.canvas-summary:focus-within{border-color:var(--accent-line);background:color-mix(in srgb,var(--accent) 5%,transparent)}
   .canvas-title h1{margin:0;outline:0;color:var(--ink);line-height:1.1;letter-spacing:-.03em}

@@ -3,7 +3,7 @@
   import StudioImage from './StudioImage.svelte';
   import { t, relTime } from './i18n.svelte.js';
 
-  let { document, preview = false, onOpenItem, onToc } = $props();
+  let { document, preview = false, expanded = false, onOpenItem, onToc } = $props();
 
   const content = () => document?.content || {};
   const presentation = () => content().presentation || {};
@@ -50,6 +50,7 @@
   <article
     class="page"
     class:preview
+    class:expanded
     class:compact={presentation().contentWidth === 'compact'}
     class:wide={presentation().contentWidth === 'wide'}
     class:editorial={presentation().contentWidth === 'editorial'}
@@ -90,6 +91,8 @@
   .page.sans{font-family:var(--font,system-ui,sans-serif)}
   .page.compact{max-width:760px}.page.wide{max-width:1320px}.page.editorial{max-width:1500px}
   .page.preview{padding-top:clamp(20px,2.6vw,40px)}
+  .page.preview{max-width:912px}.page.preview.compact{max-width:744px}.page.preview.wide{max-width:980px}.page.preview.editorial{max-width:1180px}
+  .page.preview.expanded{max-width:1000px}.page.preview.expanded.compact{max-width:820px}.page.preview.expanded.wide{max-width:1120px}.page.preview.expanded.editorial{max-width:1340px}
   header{border-bottom:1px solid var(--border);padding-bottom:28px;margin-bottom:34px}
   header>span{font-family:var(--font,system-ui,sans-serif);font-size:10px;color:var(--accent-2);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
   h1{font-size:clamp(30px,5vw,52px);line-height:1.08;margin:8px 0 16px}

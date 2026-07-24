@@ -437,7 +437,7 @@
         class:active={activeId === studioTab.id}
         aria-hidden={activeId !== studioTab.id}
       >
-        <Studio onOpenItem={openItemById} onShellChange={studioTab.onStudioShellChange} />
+        <Studio onOpenItem={openItemById} onShellChange={studioTab.onStudioShellChange} {sidebarOpen} />
       </div>
     {/each}
     {#if active && !studioMode}
