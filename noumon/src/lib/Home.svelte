@@ -129,7 +129,19 @@
   }
   function normalizeResults(results) {
     return (results || []).map((hit) => {
-      const book = hit.pageTitle || hit.subtitle || hit.collectionId || '';
+      // El titulo de pagina solo aporta cuando difiere del titulo del resultado:
+      // por defecto la primera pagina se llama como el documento, y en uno de una
+      // sola pagina siempre coinciden. Sin esta comprobacion la linea repetiria
+      // el titulo y se comeria el autor.
+      const pageName = hit.pageTitle && hit.pageTitle !== hit.title ? hit.pageTitle : '';
+      // Un documento sin autor se quedaba sin nada que mostrar y acababa
+      // enseñando el identificador de la coleccion (col:studio:documents). Se
+      // sustituye por el nombre que esa coleccion tiene en el resto de la
+      // interfaz, para no filtrar identificadores internos a la vista.
+      const collectionName = hit.collectionId === 'col:studio:documents'
+        ? t('documents.knowledgeBase')
+        : hit.collectionId;
+      const book = pageName || hit.subtitle || collectionName || '';
       return {
         ...hit,
         thumb: hit.preview?.kind === 'image' ? hit.preview.url : '',
