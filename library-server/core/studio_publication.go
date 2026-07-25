@@ -484,13 +484,16 @@ func (s *Store) searchPublishedStudioDocuments(query string) ([]FederatedSearchR
 		match = append(match, `"`+token+`"*`)
 	}
 	rows, err := s.db.Query(`
-		SELECT f.document_id, f.title, f.summary, f.author_label,
-		       bm25(studio_published_fts, 0, 10, 5, 1, 2, 3, 3, 4)
+		SELECT f.document_id, f.page_id, f.title, f.page_title,
+		       f.summary, f.author_label,
+		       snippet(studio_published_fts, 5, '', '', ' … ', 28),
+		       bm25(studio_published_fts, 0, 0, 10, 8, 5, 1, 2, 3, 3, 4)
 		FROM studio_published_fts f
 		JOIN studio_documents d ON d.id=f.document_id
 		WHERE studio_published_fts MATCH ?
 		  AND d.published_revision IS NOT NULL AND d.status!='archived'
-		ORDER BY bm25(studio_published_fts, 0, 10, 5, 1, 2, 3, 3, 4)
+		  AND d.publication_kind='documents'
+		ORDER BY bm25(studio_published_fts, 0, 0, 10, 8, 5, 1, 2, 3, 3, 4)
 		LIMIT 50`, strings.Join(match, " AND "))
 	if err != nil {
 		return nil, err
@@ -498,18 +501,27 @@ func (s *Store) searchPublishedStudioDocuments(query string) ([]FederatedSearchR
 	defer rows.Close()
 	out := []FederatedSearchResult{}
 	for rows.Next() {
-		var id, title, summary, author string
+		var id, pageID, title, pageTitle, summary, author, snippet string
 		var rank float64
-		if err := rows.Scan(&id, &title, &summary, &author, &rank); err != nil {
+		if err := rows.Scan(
+			&id, &pageID, &title, &pageTitle, &summary, &author, &snippet, &rank,
+		); err != nil {
 			return nil, err
 		}
-		score := scoreHit(query, title, author, summary) + 140 + int(-rank*100)
+		snippet = strings.TrimSpace(snippet)
+		if snippet == "" {
+			snippet = summary
+		}
+		score := scoreHit(
+			query, title+" "+pageTitle, author, summary+" "+snippet,
+		) + 140 + int(-rank*100)
 		out = append(out, FederatedSearchResult{
-			ItemID: "studio:" + id, CollectionID: studioDocumentsCollectionID,
-			Title: title, Subtitle: author,
-			Snippet: summary, Kind: "document",
+			ItemID: "studio:" + id, PageID: pageID, PageTitle: pageTitle,
+			CollectionID: studioDocumentsCollectionID,
+			Title:        title, Subtitle: author,
+			Snippet: snippet, Kind: "document",
 			Score:   score,
-			Preview: Preview{Kind: "text", Text: summary, Icon: "note"},
+			Preview: Preview{Kind: "text", Text: snippet, Icon: "note"},
 		})
 	}
 	return out, rows.Err()

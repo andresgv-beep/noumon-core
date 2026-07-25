@@ -163,10 +163,17 @@ type studioValidatedInput struct {
 	Content         StudioContent
 	Classification  StudioClassification
 	PlainText       string
+	Pages           []studioValidatedPage
 	Links           []string
 	BrokenPageLinks []string
 	Assets          []string
 	Facets          map[string][]string
+}
+
+type studioValidatedPage struct {
+	ID        string
+	Title     string
+	PlainText string
 }
 
 type StudioPortableSnapshot struct {
@@ -291,6 +298,7 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 		ids: map[string]bool{}, links: map[string]bool{}, assets: map[string]bool{},
 		brokenPageLinks: map[string]bool{},
 	}
+	validatedPages := []studioValidatedPage{}
 	if content.SchemaVersion == studioSchemaVersion {
 		if len(content.Pages) < 1 || len(content.Pages) > studioMaxPages {
 			return studioValidatedInput{}, fmt.Errorf("pages: one to %d pages required", studioMaxPages)
@@ -312,6 +320,7 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 		}
 		for index := range content.Pages {
 			page := &content.Pages[index]
+			pagePlainStart := len(state.plain)
 			state.runes += utf8.RuneCountInString(page.Title)
 			state.plain = append(state.plain, page.Title)
 			for _, raw := range page.Blocks {
@@ -353,6 +362,11 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 					return studioValidatedInput{}, err
 				}
 			}
+			validatedPages = append(validatedPages, studioValidatedPage{
+				ID:        page.ID,
+				Title:     page.Title,
+				PlainText: strings.TrimSpace(strings.Join(state.plain[pagePlainStart:], "\n")),
+			})
 		}
 	} else {
 		for _, raw := range content.Blocks {
@@ -403,7 +417,8 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	in.Content = normalizedContent
 	return studioValidatedInput{
 		Input: in, Content: content, Classification: classification,
-		PlainText: plain, Links: links, BrokenPageLinks: brokenPageLinks,
+		PlainText: plain, Pages: validatedPages,
+		Links: links, BrokenPageLinks: brokenPageLinks,
 		Assets: assets, Facets: facets,
 	}, nil
 }

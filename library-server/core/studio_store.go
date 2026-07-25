@@ -207,19 +207,85 @@ func replaceStudioPublishedLinks(tx *sql.Tx, documentID string, links []string) 
 	return nil
 }
 
+func (s *Store) migrateStudioPublishedFTS() error {
+	rows, err := s.db.Query(`PRAGMA table_info(studio_published_fts)`)
+	if err != nil {
+		return err
+	}
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(
+			&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey,
+		); err != nil {
+			rows.Close()
+			return err
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if columns["page_id"] && columns["page_title"] {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DROP TABLE studio_published_fts`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		CREATE VIRTUAL TABLE studio_published_fts USING fts5(
+			document_id UNINDEXED,
+			page_id UNINDEXED,
+			title,
+			page_title,
+			summary,
+			plain_text,
+			tags,
+			work_type,
+			topics,
+			author_label,
+			tokenize='unicode61 remove_diacritics 2'
+		)`); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func replaceStudioPublishedFTS(tx *sql.Tx, documentID string, valid studioValidatedInput) error {
 	if _, err := tx.Exec(`DELETE FROM studio_published_fts WHERE document_id=?`, documentID); err != nil {
 		return err
 	}
-	_, err := tx.Exec(`
-		INSERT INTO studio_published_fts (
-			document_id, title, summary, plain_text, tags,
-			work_type, topics, author_label
-		) VALUES (?,?,?,?,?,?,?,?)`,
-		documentID, valid.Input.Title, valid.Input.Summary, valid.PlainText,
-		strings.Join(valid.Input.Tags, " "), valid.Classification.WorkType,
-		strings.Join(valid.Classification.Topics, " "), valid.Input.AuthorLabel)
-	return err
+	pages := valid.Pages
+	if len(pages) == 0 {
+		pages = []studioValidatedPage{{PlainText: valid.PlainText}}
+	}
+	for _, page := range pages {
+		if _, err := tx.Exec(`
+			INSERT INTO studio_published_fts (
+				document_id, page_id, title, page_title, summary, plain_text,
+				tags, work_type, topics, author_label
+			) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			documentID, page.ID, valid.Input.Title, page.Title,
+			valid.Input.Summary, page.PlainText,
+			strings.Join(valid.Input.Tags, " "), valid.Classification.WorkType,
+			strings.Join(valid.Classification.Topics, " "), valid.Input.AuthorLabel,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) backfillStudioPublishedDerived() error {
@@ -290,8 +356,11 @@ func (s *Store) backfillStudioPublishedDerived() error {
 		if err := replaceStudioPublishedLinks(tx, item.id, valid.Links); err != nil {
 			return err
 		}
-		if err := replaceStudioPublishedFTS(tx, item.id, valid); err != nil {
-			return err
+		surface, _ := studioSurfaceForTemplate(valid.Input.TemplateKey)
+		if surface == "documents" {
+			if err := replaceStudioPublishedFTS(tx, item.id, valid); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit()

@@ -118,6 +118,8 @@ type OpenTarget struct {
 
 type FederatedSearchResult struct {
 	ItemID       string      `json:"itemId"`
+	PageID       string      `json:"pageId,omitempty"`
+	PageTitle    string      `json:"pageTitle,omitempty"`
 	CollectionID string      `json:"collectionId,omitempty"`
 	Title        string      `json:"title"`
 	Subtitle     string      `json:"subtitle,omitempty"`

@@ -187,7 +187,9 @@ CREATE TABLE IF NOT EXISTS studio_facets (
 CREATE INDEX IF NOT EXISTS idx_studio_facets_lookup ON studio_facets(facet, value, document_id);
 CREATE VIRTUAL TABLE IF NOT EXISTS studio_published_fts USING fts5(
   document_id UNINDEXED,
+  page_id UNINDEXED,
   title,
+  page_title,
   summary,
   plain_text,
   tags,
@@ -252,6 +254,10 @@ func openStore(path string) (*Store, error) {
 		return nil, err
 	}
 	if err := st.ensureColumn("studio_documents", "published_plain_text", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := st.migrateStudioPublishedFTS(); err != nil {
 		db.Close()
 		return nil, err
 	}

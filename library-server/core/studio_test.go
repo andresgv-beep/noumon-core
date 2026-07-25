@@ -1507,7 +1507,9 @@ func TestStudioPublicationUsesImmutableRevisionSnapshot(t *testing.T) {
 	hits, err = s.store.searchPublishedStudioDocuments("Versión pública")
 	if err != nil || len(hits) != 1 ||
 		hits[0].Title != "Versión pública" ||
-		hits[0].Snippet != "Una prueba local" {
+		hits[0].PageID != "p1" ||
+		!strings.Contains(hits[0].Snippet, "Contenido de prueba") ||
+		strings.Contains(hits[0].Snippet, "privado") {
 		t.Fatalf("título o snippet no proceden del snapshot público: hits=%#v err=%v", hits, err)
 	}
 
@@ -1623,6 +1625,164 @@ func TestStudioPublishedFTSBackfillRebuildsFromSnapshots(t *testing.T) {
 		hits[0].ItemID != "studio:"+created.ID ||
 		hits[0].Title != "Energía solar doméstica" {
 		t.Fatalf("backfilled FTS hits=%#v err=%v", hits, err)
+	}
+}
+
+func TestStudioPublishedFTSIndexesPagesAndReturnsDeepLinks(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	cookie := sessionFor(t, s, "autora-fts-paginas", 30, false)
+	grantStudio(t, s, "autora-fts-paginas", true)
+
+	created := decodeStudioDocumentResponse(t, studioRequest(
+		h, http.MethodPost, "/api/studio/documents",
+		validStudioDocumentBody("Manual del bosque", 0), cookie,
+	))
+	var input map[string]any
+	if err := json.Unmarshal(
+		[]byte(validStudioDocumentBody("Manual del bosque", created.Revision)),
+		&input,
+	); err != nil {
+		t.Fatal(err)
+	}
+	input["content"] = map[string]any{
+		"schemaVersion": 2,
+		"classification": map[string]any{
+			"workType": "manual",
+			"topics":   []string{"naturaleza"},
+		},
+		"pages": []any{
+			map[string]any{
+				"id": "inicio", "title": "Introducción",
+				"blocks": []any{
+					map[string]any{
+						"id": "raices", "type": "paragraph",
+						"text": "Las raíces forestales sostienen el terreno.",
+					},
+				},
+			},
+			map[string]any{
+				"id": "hidrologia", "title": "Malla hidrológica",
+				"blocks": []any{
+					map[string]any{
+						"id": "acuifero", "type": "paragraph",
+						"text": "El acuífero profundo conserva agua limpia.",
+					},
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updatedRec := studioRequest(
+		h, http.MethodPut, "/api/studio/documents/"+created.ID,
+		string(body), cookie,
+	)
+	if updatedRec.Code != http.StatusOK {
+		t.Fatalf("guardar multipágina: %d %s", updatedRec.Code, updatedRec.Body.String())
+	}
+	updated := decodeStudioDocumentResponse(t, updatedRec)
+	if rec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/publish", "", cookie,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("publicar multipágina: %d %s", rec.Code, rec.Body.String())
+	}
+
+	hits, err := s.store.searchPublishedStudioDocuments("acuifero profundo")
+	if err != nil || len(hits) != 1 ||
+		hits[0].ItemID != "studio:"+created.ID ||
+		hits[0].PageID != "hidrologia" ||
+		hits[0].PageTitle != "Malla hidrológica" ||
+		!strings.Contains(hits[0].Snippet, "acuífero profundo") {
+		t.Fatalf("deep-link FTS de página: hits=%#v err=%v", hits, err)
+	}
+
+	input["baseRevision"] = updated.Revision
+	pages := input["content"].(map[string]any)["pages"].([]any)
+	secondPage := pages[1].(map[string]any)
+	secondPage["title"] = "Título privado"
+	secondPage["blocks"] = []any{
+		map[string]any{
+			"id": "acuifero", "type": "paragraph",
+			"text": "Borrador secreto todavía no publicado.",
+		},
+	}
+	privateBody, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := studioRequest(
+		h, http.MethodPut, "/api/studio/documents/"+created.ID,
+		string(privateBody), cookie,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("guardar borrador privado: %d %s", rec.Code, rec.Body.String())
+	}
+	if privateHits, err := s.store.searchPublishedStudioDocuments("borrador secreto"); err != nil || len(privateHits) != 0 {
+		t.Fatalf("FTS filtró la página privada: hits=%#v err=%v", privateHits, err)
+	}
+	hits, err = s.store.searchPublishedStudioDocuments("acuifero profundo")
+	if err != nil || len(hits) != 1 || hits[0].PageID != "hidrologia" {
+		t.Fatalf("el borrador alteró el deep-link publicado: hits=%#v err=%v", hits, err)
+	}
+
+	if _, err := s.store.db.Exec(`DELETE FROM studio_published_fts`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.store.backfillStudioPublishedDerived(); err != nil {
+		t.Fatal(err)
+	}
+	hits, err = s.store.searchPublishedStudioDocuments("acuifero profundo")
+	if err != nil || len(hits) != 1 || hits[0].PageID != "hidrologia" {
+		t.Fatalf("backfill perdió el deep-link publicado: hits=%#v err=%v", hits, err)
+	}
+}
+
+func TestStudioPublishedFTSBackfillExcludesMediaSurfaces(t *testing.T) {
+	s := testAuthServer(t, "")
+	owner := User{ID: 902, Username: "autora-media"}
+	mediaInput := StudioDocumentInput{
+		TemplateKey: "moments.video",
+		Title:       "Vídeo fuera de Documentos",
+		Summary:     "No debe entrar en el buscador editorial",
+		Content:     json.RawMessage(`{"schemaVersion":1,"blocks":[]}`),
+		Metadata: json.RawMessage(`{
+			"file":{"assetId":"asset-video","filename":"clip.mp4","mimeType":"video/mp4","size":10}
+		}`),
+	}
+	valid, err := validateStudioInput(mediaInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := s.store.createStudioDocument(&owner, valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.store.db.Exec(`
+		UPDATE studio_documents
+		SET status='published', published_revision=revision,
+		    publication_kind='moments', publication_target='col:media:test'
+		WHERE id=?`, document.ID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.store.backfillStudioPublishedDerived(); err != nil {
+		t.Fatal(err)
+	}
+	var rows int
+	if err := s.store.db.QueryRow(`
+		SELECT COUNT(*) FROM studio_published_fts WHERE document_id=?`,
+		document.ID,
+	).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 0 {
+		t.Fatalf("el backfill mezcló Moments con Documentos: %d filas", rows)
+	}
+	hits, err := s.store.searchPublishedStudioDocuments("buscador editorial")
+	if err != nil || len(hits) != 0 {
+		t.Fatalf("la búsqueda de Documentos devolvió media: hits=%#v err=%v", hits, err)
 	}
 }
 

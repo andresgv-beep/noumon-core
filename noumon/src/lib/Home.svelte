@@ -129,7 +129,7 @@
   }
   function normalizeResults(results) {
     return (results || []).map((hit) => {
-      const book = hit.subtitle || hit.collectionId || '';
+      const book = hit.pageTitle || hit.subtitle || hit.collectionId || '';
       return {
         ...hit,
         thumb: hit.preview?.kind === 'image' ? hit.preview.url : '',
@@ -241,7 +241,11 @@
         <div class="resulthead"><b>{t('home.map.collectionResults')}</b><span>{tn('home.results', pageResults.length, { n: pageResults.length.toLocaleString(i18n.locale) })}</span></div>
         <div class="hits">
           {#each pageResults as hit}
-            <button class="hit" class:hasthumb={hit.thumb} onclick={() => onOpenItem?.(hit.itemId)}>
+            <button
+              class="hit"
+              class:hasthumb={hit.thumb}
+              onclick={() => onOpenItem?.(hit.itemId, { pageId: hit.pageId || '' })}
+            >
               <div class="hbody">
                 <div class="htitle">{hit.title}</div>
                 {#if hit.snippet}<div class="hsnippet">{hit.snippet}</div>{/if}
