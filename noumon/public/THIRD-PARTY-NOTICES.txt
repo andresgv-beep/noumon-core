@@ -17861,7 +17861,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ==============================================================================
-Go standard library and runtime go1.26.4 windows/amd64
+Go standard library and runtime go1.26.5 windows/amd64
 Type: Go toolchain
 Source/module: https://go.dev/
 

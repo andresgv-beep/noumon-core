@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -224,7 +225,7 @@ func TestResolveShellTargetConfigCorruptoNoEsFatal(t *testing.T) {
 		if target != nil || !remote || configured {
 			t.Fatalf("%s: se esperaba sin configurar; target=%v configured=%v", c.name, target, configured)
 		}
-		if notice == "" {
+		if notice == noticeNone {
 			t.Fatalf("%s: falta el aviso para la pantalla de conexion", c.name)
 		}
 	}
@@ -232,13 +233,119 @@ func TestResolveShellTargetConfigCorruptoNoEsFatal(t *testing.T) {
 
 func TestSetupMuestraElAvisoDeConfigCorrupta(t *testing.T) {
 	t.Parallel()
-	s := &shell{remote: true, setupNotice: "La configuracion guardada no era valida. Escribe la direccion de nuevo."}
+	s := &shell{remote: true, setupNotice: noticeInvalidConfig}
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Accept", "text/html")
 	s.ServeHTTP(rec, req)
 	if body := rec.Body.String(); !strings.Contains(body, "no era valida") {
 		t.Fatalf("la pantalla de conexion no muestra el aviso: %.200s", body)
+	}
+
+	// El aviso se guarda como código justo para poder traducirlo al pintar.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("Accept-Language", "en-GB,en;q=0.9")
+	s.ServeHTTP(rec, req)
+	if body := rec.Body.String(); !strings.Contains(body, "was not valid") {
+		t.Fatalf("el aviso no se tradujo: %.200s", body)
+	}
+}
+
+// Las pantallas del shell viven antes de que exista SPA, así que su idioma sale
+// del Accept-Language. Español e inglés van a la par por regla del proyecto.
+func TestPantallasDelShellEnLosDosIdiomas(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name          string
+		page          func(w *httptest.ResponseRecorder, t shellText)
+		marcaES       string
+		marcaEN       string
+		esperadoLangs bool
+	}{
+		{
+			name:    "arranque",
+			page:    func(w *httptest.ResponseRecorder, tx shellText) { serveSplash(w, false, "", tx) },
+			marcaES: "Conectando con el servicio local",
+			marcaEN: "Connecting to the local",
+		},
+		{
+			name:    "conexion",
+			page:    func(w *httptest.ResponseRecorder, tx shellText) { serveSetup(w, noticeNone, tx) },
+			marcaES: "Conectar a Noumon Server",
+			marcaEN: "Connect to Noumon Server",
+		},
+		{
+			name:    "desconexion",
+			page:    func(w *httptest.ResponseRecorder, tx shellText) { serveDisconnected(w, false, "", tx) },
+			marcaES: "Se ha perdido la conexi",
+			marcaEN: "Lost the connection",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c.page(rec, textES)
+			body := rec.Body.String()
+			if !strings.Contains(body, c.marcaES) {
+				t.Errorf("castellano: falta %q", c.marcaES)
+			}
+			if !strings.Contains(body, `<html lang="es"`) {
+				t.Error("castellano: falta lang=\"es\"; un lector de pantalla leeria mal la pagina")
+			}
+
+			rec = httptest.NewRecorder()
+			c.page(rec, textEN)
+			body = rec.Body.String()
+			if !strings.Contains(body, c.marcaEN) {
+				t.Errorf("ingles: falta %q", c.marcaEN)
+			}
+			if !strings.Contains(body, `<html lang="en"`) {
+				t.Error("ingles: falta lang=\"en\"")
+			}
+			if strings.Contains(body, c.marcaES) {
+				t.Errorf("ingles: se colo texto en castellano (%q)", c.marcaES)
+			}
+		})
+	}
+}
+
+// Un diccionario a medias es peor que uno vacío: la pantalla saldría mitad en
+// cada idioma sin que nada falle. Esto lo caza al añadir texto nuevo.
+func TestLosDosDiccionariosEstanCompletos(t *testing.T) {
+	t.Parallel()
+	es, en := reflect.ValueOf(textES), reflect.ValueOf(textEN)
+	for i := 0; i < es.NumField(); i++ {
+		name := es.Type().Field(i).Name
+		if es.Field(i).String() == "" {
+			t.Errorf("textES.%s vacio", name)
+		}
+		if en.Field(i).String() == "" {
+			t.Errorf("textEN.%s vacio", name)
+		}
+		if name != "lang" && es.Field(i).String() == en.Field(i).String() {
+			t.Errorf("textES.%s y textEN.%s son identicos: falta traducir", name, name)
+		}
+	}
+}
+
+func TestPrefersSpanish(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		header string
+		want   bool
+	}{
+		{"", true}, // sin señal: el idioma de casa
+		{"es-ES,es;q=0.9", true},
+		{"en-GB,en;q=0.9", false},
+		{"en-US,es;q=0.8", false}, // gana la primera reconocida, no la de mayor q
+		{"fr-FR,en;q=0.7", false}, // idioma que no tenemos: sigue buscando
+		{"*", true},               // comodín: no dice nada, castellano
+		{"de-DE", true},           // ninguna reconocida: castellano
+	} {
+		if got := prefersSpanish(c.header); got != c.want {
+			t.Errorf("prefersSpanish(%q) = %v; se esperaba %v", c.header, got, c.want)
+		}
 	}
 }
 
@@ -291,6 +398,109 @@ func TestGatewayReescribeRedireccionAbsolutaDelMismoHost(t *testing.T) {
 	response.Body.Close()
 	if got := response.Header.Get("Location"); got != "/content/wiki/A/Portada" {
 		t.Fatalf("Location = %q; esperado /content/wiki/A/Portada", got)
+	}
+}
+
+// navigationBody pide address como lo haría el webview al navegar y devuelve
+// estado y cuerpo. lang viaja en Accept-Language ("" = sin cabecera).
+func navigationBody(t *testing.T, address, lang string) (int, string) {
+	t.Helper()
+	request, _ := http.NewRequest(http.MethodGet, address, nil)
+	request.Header.Set("Accept", "text/html,application/xhtml+xml")
+	if lang != "" {
+		request.Header.Set("Accept-Language", lang)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	return response.StatusCode, string(body)
+}
+
+// shellTo monta un shell listo delante de upstream.
+func shellTo(t *testing.T, upstream *httptest.Server) *httptest.Server {
+	t.Helper()
+	target, _ := url.Parse(upstream.URL)
+	s := &shell{}
+	s.installProxy(target)
+	s.configured.Store(true)
+	s.ready.Store(true)
+	server := httptest.NewServer(s)
+	t.Cleanup(server.Close)
+	return server
+}
+
+func TestGatewayNoDejaAlWebviewPintarSuPantallaDeDepuracion(t *testing.T) {
+	// Wails trata como índice toda ruta acabada en "/": ante un 404 sustituye la
+	// página por su defaultindex.html ("index.html not found"). Le pasó a un
+	// usuario real cuando otro proceso ocupaba el 8090 y el shell hablaba con un
+	// servidor sin www-client: parecía que el instalador estuviera roto.
+	t.Parallel()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r) // 404 en texto plano, como un Core sin cliente al lado
+	}))
+	defer upstream.Close()
+	server := shellTo(t, upstream)
+
+	status, body := navigationBody(t, server.URL+"/", "es-ES,es;q=0.9")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d; con 404 el webview pinta su propia pagina, hace falta 200", status)
+	}
+	if !strings.Contains(body, "no est&aacute; sirviendo la interfaz") {
+		t.Fatalf("no es la pagina del shell: %s", body)
+	}
+
+	// Un fetch de la SPA no es una navegación: conserva el error real. De esto
+	// depende el sondeo de reintento de la propia página.
+	response, err := http.Get(server.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("fetch: status = %d; se esperaba el 404 intacto", response.StatusCode)
+	}
+}
+
+func TestGatewayConservaLaPaginaDeErrorDelServidor(t *testing.T) {
+	// Si el servidor se explica en HTML, dice más que cualquier sustituto
+	// nuestro: solo se normaliza el código para que el webview no la tire.
+	t.Parallel()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`<!doctype html><h1>Coleccion retirada</h1>`))
+	}))
+	defer upstream.Close()
+	server := shellTo(t, upstream)
+
+	status, body := navigationBody(t, server.URL+"/content/wiki/", "")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d; se esperaba 200 para que el webview la respete", status)
+	}
+	if !strings.Contains(body, "Coleccion retirada") {
+		t.Fatalf("se perdio la pagina del servidor: %s", body)
+	}
+}
+
+func TestPaginaDeErrorHablaElIdiomaDelWebview(t *testing.T) {
+	t.Parallel()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "vaya", http.StatusBadGateway)
+	}))
+	defer upstream.Close()
+	server := shellTo(t, upstream)
+
+	// Una ruta de contenido no es la puerta de la SPA: el mensaje es otro.
+	_, spanish := navigationBody(t, server.URL+"/content/wiki/", "es-ES,es;q=0.9")
+	if !strings.Contains(spanish, "no existe en el servidor") || !strings.Contains(spanish, ">Volver<") {
+		t.Fatalf("castellano: %s", spanish)
+	}
+	_, english := navigationBody(t, server.URL+"/content/wiki/", "en-GB,en;q=0.9")
+	if !strings.Contains(english, "doesn&rsquo;t exist on the server") || !strings.Contains(english, ">Back<") {
+		t.Fatalf("ingles: %s", english)
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 // hace funcionar, porque son cosas que se rompen sin que nada falle a la vista.
 func TestBootPageContract(t *testing.T) {
 	rec := httptest.NewRecorder()
-	serveSplash(rec, false, "")
+	serveSplash(rec, false, "", textES)
 	body := rec.Body.String()
 
 	// El <meta refresh> recargaba la página entera cada segundo: la animación
@@ -38,7 +38,7 @@ func TestBootPageContract(t *testing.T) {
 
 func TestBootPageNamesRemoteTarget(t *testing.T) {
 	rec := httptest.NewRecorder()
-	serveSplash(rec, true, "https://nas.casa:8090")
+	serveSplash(rec, true, "https://nas.casa:8090", textES)
 	if body := rec.Body.String(); !strings.Contains(body, "nas.casa") {
 		t.Error("en modo remoto hay que decir CON QUIÉN se está conectando")
 	}
@@ -48,7 +48,7 @@ func TestBootPageNamesRemoteTarget(t *testing.T) {
 // página: tiene que ir escapado o sería una inyección de HTML.
 func TestBootPageEscapesTarget(t *testing.T) {
 	rec := httptest.NewRecorder()
-	serveSplash(rec, true, `<script>alert(1)</script>`)
+	serveSplash(rec, true, `<script>alert(1)</script>`, textES)
 	if strings.Contains(rec.Body.String(), "<script>alert(1)</script>") {
 		t.Fatal("el destino se pintó sin escapar: inyección de HTML")
 	}

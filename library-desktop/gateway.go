@@ -29,36 +29,36 @@ type gatewayConfig struct {
 // se trata como "sin configurar" y el usuario vuelve a escribir la dirección.
 // Solo NOUMON_LIBRARY_SERVER inválida sigue siendo error: es un contrato
 // explícito del operador, no estado guardado que pueda corromperse solo.
-func resolveShellTarget() (target *url.URL, remote, configured bool, notice string, err error) {
+func resolveShellTarget() (target *url.URL, remote, configured bool, notice setupNotice, err error) {
 	remote = distributionMode == "remote"
 	if raw := strings.TrimSpace(os.Getenv("NOUMON_LIBRARY_SERVER")); raw != "" {
 		target, err = normalizeRemoteTarget(raw)
-		return target, true, err == nil, "", err
+		return target, true, err == nil, noticeNone, err
 	}
 	if !remote {
 		target, err = url.Parse(localCoreURL)
-		return target, false, err == nil, "", err
+		return target, false, err == nil, noticeNone, err
 	}
 
 	raw, readErr := os.ReadFile(shellConfigPath())
 	if os.IsNotExist(readErr) {
-		return nil, true, false, "", nil
+		return nil, true, false, noticeNone, nil
 	}
 	if readErr != nil {
 		log.Printf("gateway.json ilegible, se pide la direccion de nuevo: %v", readErr)
-		return nil, true, false, "No se pudo leer la configuracion guardada. Escribe la direccion de nuevo.", nil
+		return nil, true, false, noticeUnreadableConfig, nil
 	}
 	var cfg gatewayConfig
 	if jsonErr := json.Unmarshal(raw, &cfg); jsonErr != nil {
 		log.Printf("gateway.json invalido, se pide la direccion de nuevo: %v", jsonErr)
-		return nil, true, false, "La configuracion guardada no era valida. Escribe la direccion de nuevo.", nil
+		return nil, true, false, noticeInvalidConfig, nil
 	}
 	target, targetErr := normalizeRemoteTarget(cfg.Target)
 	if targetErr != nil {
 		log.Printf("direccion guardada invalida, se pide de nuevo: %v", targetErr)
-		return nil, true, false, "La direccion guardada no era valida. Escribe la direccion de nuevo.", nil
+		return nil, true, false, noticeInvalidTarget, nil
 	}
-	return target, true, true, "", nil
+	return target, true, true, noticeNone, nil
 }
 
 func normalizeRemoteTarget(raw string) (*url.URL, error) {
@@ -127,7 +127,7 @@ func (s *shell) installProxy(target *url.URL) {
 		// la página de desconexión del shell. Las llamadas fetch de la SPA siguen
 		// recibiendo el error plano de siempre.
 		if strings.Contains(r.Header.Get("Accept"), "text/html") {
-			serveDisconnected(w, s.remote, s.targetString())
+			serveDisconnected(w, s.remote, s.targetString(), textsFor(r))
 			return
 		}
 		http.Error(w, "Library Server no disponible", http.StatusServiceUnavailable)
@@ -177,6 +177,16 @@ func (s *shell) installProxy(target *url.URL) {
 			response.Header.Set("Content-Length", strconv.Itoa(len(body)))
 			return nil
 		}
+		// El ErrorHandler de arriba cubre "no se alcanza el servidor". Falta el
+		// caso contrario: el servidor SÍ contesta, pero con error, y entonces es
+		// el webview quien pinta. Para las navegaciones que Wails trata como
+		// índice eso significa su defaultindex.html ("index.html not found") en
+		// un 404, o una ventana en blanco en cualquier otro error. Se adelanta el
+		// shell con una página propia —o con la del servidor, si mandó una— y se
+		// normaliza el código a 200, que es lo que el webview respeta.
+		if response.StatusCode >= 400 && isIndexNavigation(response.Request) {
+			return rewriteNavigationError(response)
+		}
 		if !isClientDocument(response) {
 			return nil
 		}
@@ -203,6 +213,58 @@ func (s *shell) installProxy(target *url.URL) {
 	s.target = target
 	s.proxy = proxy
 	s.mu.Unlock()
+}
+
+// isIndexNavigation aísla exactamente las respuestas que el webview mangonea:
+// una NAVEGACIÓN (no un fetch de la SPA) hacia una ruta que Wails considera
+// índice. La condición de la ruta replica a propósito, palabra por palabra,
+// assetserver.isRuntimeInjectionMatch: si Wails cambiara ese criterio, este
+// sería el sitio donde volver a alinearlo.
+func isIndexNavigation(r *http.Request) bool {
+	if r == nil || !strings.Contains(r.Header.Get("Accept"), "text/html") {
+		return false
+	}
+	path := r.URL.Path
+	if path == "" {
+		path = "/"
+	}
+	return strings.HasSuffix(path, "/") || strings.HasSuffix(path, "/index.html")
+}
+
+// isAppEntry: la puerta de entrada de una de las dos SPA. Un error ahí no es
+// "esta página no existe", es "el servidor no está sirviendo la aplicación", y
+// son dos mensajes muy distintos para el usuario.
+func isAppEntry(path string) bool {
+	switch path {
+	case "", "/", "/index.html", "/panel/", "/panel/index.html":
+		return true
+	}
+	return false
+}
+
+func rewriteNavigationError(response *http.Response) error {
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	response.Body.Close()
+	// Si el servidor mandó su propia página HTML, dice más que cualquier
+	// sustituto nuestro: se conserva tal cual y solo se normaliza el código para
+	// que el webview no la tire. Solo se suplanta lo que no es una página:
+	// un "404 page not found" en texto plano, o un cuerpo vacío.
+	request := response.Request
+	if !strings.Contains(response.Header.Get("Content-Type"), "text/html") || len(bytes.TrimSpace(body)) == 0 {
+		body = noumonErrorPage(response.StatusCode, request.URL.Path,
+			isAppEntry(request.URL.Path), textsFor(request))
+		response.Header.Set("Content-Type", "text/html; charset=utf-8")
+	}
+	response.StatusCode = http.StatusOK
+	response.Status = http.StatusText(http.StatusOK)
+	response.Header.Set("Cache-Control", "no-store")
+	response.Body = io.NopCloser(bytes.NewReader(body))
+	response.ContentLength = int64(len(body))
+	response.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	return nil
 }
 
 func isClientDocument(response *http.Response) bool {

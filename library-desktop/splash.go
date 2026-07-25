@@ -3,7 +3,147 @@ package main
 import (
 	"html/template"
 	"net/http"
+	"strconv"
+	"strings"
 )
+
+// Las pantallas del shell viven ANTES de que exista SPA (arranque, conexión,
+// desconexión, error), así que no pueden usar la i18n del cliente: su
+// diccionario es este struct y su única señal de idioma, el Accept-Language del
+// webview. Español e inglés se mantienen a la par, como en el resto del
+// producto; añadir texto aquí obliga a rellenar los dos.
+type shellText struct {
+	lang string
+
+	// Arranque
+	connectingLocal string
+	connectingTo    string // lleva el destino al final, ya escapado
+	searchHint      string
+
+	// Conectar / reconectar
+	setupTitle    string
+	setupHeading  string
+	setupIntro    string
+	connectButton string
+	checking      string
+	saveFailed    string
+	otherServer   string
+
+	// Desconexión
+	lostHeading string
+	lostLocal   string
+	lostRemote  string // idem: destino al final
+	retrying    string
+
+	// Avisos de configuración guardada ilegible o inválida
+	noticeUnreadable string
+	noticeInvalid    string
+	noticeBadTarget  string
+
+	// Error de navegación (el servidor responde, pero con error)
+	noInterfaceHeading string
+	noInterfaceDetail  string // el código de estado va en medio
+	noInterfaceDetail2 string
+	missingHeading     string
+	missingDetail      string // "<código> en <ruta>"
+	missingDetail2     string
+	backButton         string
+}
+
+var textES = shellText{
+	lang:               "es",
+	connectingLocal:    "Conectando con el servicio local de Noumon Server...",
+	connectingTo:       "Conectando con ",
+	searchHint:         "Busca en todas tus colecciones&hellip;",
+	setupTitle:         "Conectar Noumon",
+	setupHeading:       "Conectar a Noumon Server",
+	setupIntro:         "Escribe la direcci&oacute;n del equipo o NAS que guarda tu biblioteca.",
+	connectButton:      "Conectar",
+	checking:           "Comprobando...",
+	saveFailed:         "No se pudo guardar",
+	otherServer:        "Conectar a otro servidor",
+	lostHeading:        "Se ha perdido la conexi&oacute;n con el servidor",
+	lostLocal:          "El servicio local de Noumon Server no responde.",
+	lostRemote:         "No se pudo contactar con ",
+	retrying:           "Reintentando autom&aacute;ticamente&hellip;",
+	noticeUnreadable:   "No se pudo leer la configuracion guardada. Escribe la direccion de nuevo.",
+	noticeInvalid:      "La configuracion guardada no era valida. Escribe la direccion de nuevo.",
+	noticeBadTarget:    "La direccion guardada no era valida. Escribe la direccion de nuevo.",
+	noInterfaceHeading: "El servidor no est&aacute; sirviendo la interfaz",
+	noInterfaceDetail:  "Noumon Server responde, pero devuelve un error ",
+	noInterfaceDetail2: " al pedirle la aplicaci&oacute;n. Casi siempre es que otro programa ocupa su puerto, o que el servicio se est&aacute; reiniciando.",
+	missingHeading:     "Esta p&aacute;gina no existe en el servidor",
+	missingDetail:      "El servidor respondi&oacute; ",
+	missingDetail2:     " en ",
+	backButton:         "Volver",
+}
+
+var textEN = shellText{
+	lang:               "en",
+	connectingLocal:    "Connecting to the local Noumon Server service...",
+	connectingTo:       "Connecting to ",
+	searchHint:         "Search across all your collections&hellip;",
+	setupTitle:         "Connect Noumon",
+	setupHeading:       "Connect to Noumon Server",
+	setupIntro:         "Enter the address of the computer or NAS that holds your library.",
+	connectButton:      "Connect",
+	checking:           "Checking...",
+	saveFailed:         "Could not save",
+	otherServer:        "Connect to another server",
+	lostHeading:        "Lost the connection to the server",
+	lostLocal:          "The local Noumon Server service is not responding.",
+	lostRemote:         "Could not reach ",
+	retrying:           "Retrying automatically&hellip;",
+	noticeUnreadable:   "The saved configuration could not be read. Enter the address again.",
+	noticeInvalid:      "The saved configuration was not valid. Enter the address again.",
+	noticeBadTarget:    "The saved address was not valid. Enter the address again.",
+	noInterfaceHeading: "The server isn&rsquo;t serving the interface",
+	noInterfaceDetail:  "Noumon Server is responding, but returns error ",
+	noInterfaceDetail2: " when asked for the application. Almost always another program holds its port, or the service is restarting.",
+	missingHeading:     "This page doesn&rsquo;t exist on the server",
+	missingDetail:      "The server answered ",
+	missingDetail2:     " for ",
+	backButton:         "Back",
+}
+
+func texts(spanish bool) shellText {
+	if spanish {
+		return textES
+	}
+	return textEN
+}
+
+// textsFor elige idioma con la única señal disponible en estas pantallas.
+func textsFor(r *http.Request) shellText {
+	if r == nil {
+		return textES
+	}
+	return texts(prefersSpanish(r.Header.Get("Accept-Language")))
+}
+
+// setupNotice: por qué la pantalla de conexión vuelve a pedir la dirección. Se
+// guarda como código, no como frase, porque se decide en el arranque —antes de
+// saber en qué idioma habla el webview— y el texto se elige al pintar.
+type setupNotice int
+
+const (
+	noticeNone setupNotice = iota
+	noticeUnreadableConfig
+	noticeInvalidConfig
+	noticeInvalidTarget
+)
+
+func (n setupNotice) text(t shellText) string {
+	switch n {
+	case noticeUnreadableConfig:
+		return t.noticeUnreadable
+	case noticeInvalidConfig:
+		return t.noticeInvalid
+	case noticeInvalidTarget:
+		return t.noticeBadTarget
+	}
+	return ""
+}
 
 // serveSplash pinta el ARRANQUE de Noumon: el logo rueda desde el lateral hasta
 // el centro, gira mientras se espera al servidor, y al conectar destella, saca
@@ -20,31 +160,31 @@ import (
 //     recorrido del lateral al centro es la firma del arranque, no un relleno.
 //   - Ya no hay <meta refresh>: recargar cada segundo reiniciaba la animación.
 //     Se sondea /api/health con fetch y solo se navega al estar listo.
-func serveSplash(w http.ResponseWriter, remote bool, target string) {
-	message := "Conectando con el servicio local de Noumon Server..."
+func serveSplash(w http.ResponseWriter, remote bool, target string, t shellText) {
+	message := t.connectingLocal
 	if remote {
-		message = "Conectando con " + target + "..."
+		message = t.connectingTo + target + "..."
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(pageStart + `<title>Noumon</title>` + bootStyle + `</head><body class="bootbody">` + chromeBar + `
+	_, _ = w.Write([]byte(pageStart(t) + `<title>Noumon</title>` + bootStyle + `</head><body class="bootbody">` + chromeBar + `
 <div class="stage" id="stage">
   <div class="mark" id="mark"><span class="spin" id="spin"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""></span></div>
   <div class="flash"></div>
   <div class="wordmark">Noumon</div>
-  <div class="shell" id="shell"><span class="ico">&#9906;</span><em>Busca en todas tus colecciones&hellip;</em><svg class="tracer" id="tracer"><g><path class="halo" pathLength="100"/><path class="halo" pathLength="100"/><path class="line" pathLength="100"/><path class="line" pathLength="100"/></g></svg></div>
+  <div class="shell" id="shell"><span class="ico">&#9906;</span><em>` + t.searchHint + `</em><svg class="tracer" id="tracer"><g><path class="halo" pathLength="100"/><path class="halo" pathLength="100"/><path class="line" pathLength="100"/><path class="line" pathLength="100"/></g></svg></div>
   <p class="status" id="status">` + template.HTMLEscapeString(message) + `</p>
 </div>
 ` + bootScript + chromeScript + `</body></html>`))
 }
 
-func serveSetup(w http.ResponseWriter, message string) {
+func serveSetup(w http.ResponseWriter, notice setupNotice, t shellText) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(pageStart + `<title>Conectar Noumon</title>` + pageStyle + `</head><body>` + chromeBar + `<main class="setup"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>Conectar a Noumon Server</h1><p>Escribe la direccion del equipo o NAS que guarda tu biblioteca.</p><form id="setup"><input id="target" type="url" required autofocus placeholder="https://library.ejemplo.local"><button>Conectar</button><small id="error">` + template.HTMLEscapeString(message) + `</small></form></main><script>
+	_, _ = w.Write([]byte(pageStart(t) + `<title>` + t.setupTitle + `</title>` + pageStyle + `</head><body>` + chromeBar + `<main class="setup"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>` + t.setupHeading + `</h1><p>` + t.setupIntro + `</p><form id="setup"><input id="target" type="url" required autofocus placeholder="https://library.ejemplo.local"><button>` + t.connectButton + `</button><small id="error">` + template.HTMLEscapeString(notice.text(t)) + `</small></form></main><script>
 document.getElementById('setup').addEventListener('submit',async function(event){
- event.preventDefault();var button=this.querySelector('button'),error=document.getElementById('error');button.disabled=true;error.textContent='Comprobando...';
- try{var response=await fetch('/__noumon/gateway',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:document.getElementById('target').value})});var body=await response.json();if(!response.ok)throw new Error(body.error||'No se pudo guardar');location.reload();}
+ event.preventDefault();var button=this.querySelector('button'),error=document.getElementById('error');button.disabled=true;error.textContent=` + strconv.Quote(t.checking) + `;
+ try{var response=await fetch('/__noumon/gateway',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:document.getElementById('target').value})});var body=await response.json();if(!response.ok)throw new Error(body.error||` + strconv.Quote(t.saveFailed) + `);location.reload();}
  catch(e){error.textContent=e.message;button.disabled=false;}
 });
 </script>` + chromeScript + `</body></html>`))
@@ -53,18 +193,18 @@ document.getElementById('setup').addEventListener('submit',async function(event)
 // serveDisconnected sustituye la página de error interna del WebView cuando el
 // proxy no puede alcanzar el servidor: mensaje claro, reintento automático y,
 // en modo remoto, la opción de conectar con otro servidor.
-func serveDisconnected(w http.ResponseWriter, remote bool, target string) {
-	message := "El servicio local de Noumon Server no responde."
+func serveDisconnected(w http.ResponseWriter, remote bool, target string, t shellText) {
+	message := t.lostLocal
 	if remote && target != "" {
-		message = "No se pudo contactar con " + target + "."
+		message = t.lostRemote + target + "."
 	}
 	other := ""
 	if remote {
-		other = `<button type="button" class="ghost" id="showother">Conectar a otro servidor</button><form id="setup" hidden><input id="target" type="url" required placeholder="https://library.ejemplo.local"><button>Conectar</button><small id="error"></small></form>`
+		other = `<button type="button" class="ghost" id="showother">` + t.otherServer + `</button><form id="setup" hidden><input id="target" type="url" required placeholder="https://library.ejemplo.local"><button>` + t.connectButton + `</button><small id="error"></small></form>`
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(pageStart + `<title>Noumon</title>` + pageStyle + `</head><body>` + chromeBar + `<main class="setup"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>Se ha perdido la conexi&oacute;n con el servidor</h1><p>` + template.HTMLEscapeString(message) + `</p><p class="retry" id="retry">Reintentando autom&aacute;ticamente&hellip;</p>` + other + `</main><script>
+	_, _ = w.Write([]byte(pageStart(t) + `<title>Noumon</title>` + pageStyle + `</head><body>` + chromeBar + `<main class="setup"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>` + t.lostHeading + `</h1><p>` + template.HTMLEscapeString(message) + `</p><p class="retry" id="retry">` + t.retrying + `</p>` + other + `</main><script>
 var retrying=true;
 async function ping(){if(!retrying)return;try{var r=await fetch('/api/health',{cache:'no-store'});if(r.ok)location.replace('/');}catch(e){}}
 setInterval(ping,2000);
@@ -72,14 +212,80 @@ var show=document.getElementById('showother');
 if(show)show.addEventListener('click',function(){retrying=false;document.getElementById('retry').hidden=true;this.hidden=true;var f=document.getElementById('setup');f.hidden=false;document.getElementById('target').focus();});
 var form=document.getElementById('setup');
 if(form)form.addEventListener('submit',async function(event){
- event.preventDefault();var button=this.querySelector('button'),error=document.getElementById('error');button.disabled=true;error.textContent='Comprobando...';
- try{var response=await fetch('/__noumon/gateway',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:document.getElementById('target').value})});var body=await response.json();if(!response.ok)throw new Error(body.error||'No se pudo guardar');location.replace('/');}
+ event.preventDefault();var button=this.querySelector('button'),error=document.getElementById('error');button.disabled=true;error.textContent=` + strconv.Quote(t.checking) + `;
+ try{var response=await fetch('/__noumon/gateway',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:document.getElementById('target').value})});var body=await response.json();if(!response.ok)throw new Error(body.error||` + strconv.Quote(t.saveFailed) + `);location.replace('/');}
  catch(e){error.textContent=e.message;button.disabled=false;}
 });
 </script>` + chromeScript + `</body></html>`))
 }
 
-const pageStart = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+// noumonErrorPage sustituye la pantalla INTERNA del motor cuando el servidor
+// responde con error a una navegación. Wails considera "índice" toda ruta
+// acabada en "/" o "/index.html" (assetserver.isRuntimeInjectionMatch): ante un
+// 404 pinta su propia defaultindex.html —la pantalla de depuración que dice
+// "index.html not found"— y ante cualquier otro error, una ventana en blanco.
+// Las dos parecen un paquete roto aunque la compilación sea perfecta, y ninguna
+// dice qué hacer.
+//
+// Dos mensajes, porque son dos averías distintas:
+//
+//   - entry: la puerta de una de las SPA. El servidor contesta pero no sirve la
+//     aplicación. El caso real que lo destapó fue otro proceso ocupando el 8090,
+//     así que el shell hablaba con un servidor ajeno sin `www-client`. Reintenta
+//     solo: en cuanto el servidor bueno coge el puerto, la ventana entra sola.
+//   - resto: una ruta de contenido que no existe. Ahí no hay nada que reintentar;
+//     lo útil es volver.
+func noumonErrorPage(status int, path string, entry bool, t shellText) []byte {
+	code := strconv.Itoa(status)
+	var heading, detail, action, script string
+	if entry {
+		// Destino fijo (no la ruta recibida): así el sondeo nunca interpola en el
+		// script nada que venga de la URL.
+		retry := "/"
+		if strings.HasPrefix(path, "/panel") {
+			retry = "/panel/"
+		}
+		heading = t.noInterfaceHeading
+		detail = t.noInterfaceDetail + code + t.noInterfaceDetail2
+		action = `<p class="retry">` + t.retrying + `</p>`
+		// El sondeo va sin Accept: text/html, así que NO es una navegación y
+		// recibe el estado real del servidor — si rescribiéramos también esta
+		// respuesta, la página se recargaría a sí misma para siempre.
+		script = `<script>setInterval(async function(){try{var r=await fetch('` + retry + `',{cache:'no-store'});if(r.ok)location.replace('` + retry + `');}catch(e){}},2000);</script>`
+	} else {
+		heading = t.missingHeading
+		detail = t.missingDetail + code + t.missingDetail2 + template.HTMLEscapeString(path) + "."
+		action = `<button type="button" class="ghost" id="back">` + t.backButton + `</button>`
+		script = `<script>document.getElementById('back').onclick=function(){history.back();};</script>`
+	}
+	return []byte(pageStart(t) + `<title>Noumon</title>` + pageStyle + `</head><body>` + chromeBar +
+		`<main class="setup"><img src="data:image/svg+xml,` + escapedLogo + `" alt=""><h1>` + heading +
+		`</h1><p>` + detail + `</p>` + action + `</main>` + script + chromeScript + `</body></html>`)
+}
+
+// prefersSpanish elige idioma con la única señal disponible aquí: el
+// Accept-Language del webview. Gana la primera etiqueta reconocida; sin ninguna,
+// español, que es el idioma del resto de pantallas del shell.
+func prefersSpanish(header string) bool {
+	for _, part := range strings.Split(header, ",") {
+		tag := strings.ToLower(strings.TrimSpace(strings.SplitN(part, ";", 2)[0]))
+		switch {
+		case tag == "" || tag == "*":
+			continue
+		case strings.HasPrefix(tag, "es"):
+			return true
+		case strings.HasPrefix(tag, "en"):
+			return false
+		}
+	}
+	return true
+}
+
+// pageStart lleva el lang correcto: sin él el lector de pantalla leería en
+// español una página en inglés.
+func pageStart(t shellText) string {
+	return `<!doctype html><html lang="` + t.lang + `"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+}
 
 const pageStyle = `<style>
 html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#0e0e14;color:#e9e9f0;font:15px/1.45 system-ui,Segoe UI,sans-serif}main{width:min(440px,calc(100% - 48px));display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px}img{width:82px;height:82px}h1{font-size:22px;margin:0}p{color:#9393a0;margin:0}form{width:100%;display:flex;flex-direction:column;gap:11px;margin-top:12px}input,button{box-sizing:border-box;width:100%;height:46px;border-radius:11px;font:inherit}input{border:1px solid #353543;background:#181820;color:#fff;padding:0 14px;outline:none}input:focus{border-color:#8b5cf6}button{border:0;background:linear-gradient(135deg,#6f5ee8,#9b4fe1);color:#fff;font-weight:650;cursor:pointer}button:disabled{opacity:.55;cursor:wait}button.ghost{width:auto;height:38px;padding:0 18px;background:transparent;border:1px solid #353543;color:#b9b9c6;font-weight:500;margin-top:8px}button.ghost:hover{border-color:#8b5cf6;color:#fff}small{min-height:20px;color:#f08094}.retry{animation:pulse 1.6s ease-in-out infinite}@keyframes pulse{50%{opacity:.4}}

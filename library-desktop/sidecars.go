@@ -38,7 +38,9 @@ type shell struct {
 	// setupNotice explica en la pantalla de conexión por qué se pide la
 	// dirección otra vez (p. ej. gateway.json corrupto). Se fija una vez en
 	// el arranque y deja de mostrarse en cuanto hay configuración válida.
-	setupNotice string
+	// Es un código, no una frase: se decide antes de saber en qué idioma habla
+	// el webview, así que la traducción ocurre al pintar la página.
+	setupNotice setupNotice
 
 	configured atomic.Bool
 	ready      atomic.Bool
@@ -74,7 +76,7 @@ func (s *shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.remote && !s.configured.Load() {
-		serveSetup(w, s.setupNotice)
+		serveSetup(w, s.setupNotice, textsFor(r))
 		return
 	}
 	if !s.ready.Load() {
@@ -87,10 +89,10 @@ func (s *shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if started := s.bootStarted.Load(); started != 0 && time.Since(time.UnixMilli(started)) > connectGrace {
-			serveDisconnected(w, s.remote, s.targetString())
+			serveDisconnected(w, s.remote, s.targetString(), textsFor(r))
 			return
 		}
-		serveSplash(w, s.remote, s.targetString())
+		serveSplash(w, s.remote, s.targetString(), textsFor(r))
 		return
 	}
 	if s.startPath != "" && r.URL.Path == "/" {
