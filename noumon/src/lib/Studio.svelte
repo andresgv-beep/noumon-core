@@ -1488,7 +1488,9 @@
   .sidebar-hidden .canvas-column.wide{max-width:1120px}.sidebar-hidden .canvas-column.editorial{max-width:1340px}.sidebar-hidden .canvas-column.compact{max-width:820px}
   .sidebar-hidden .canvas-column.has-info-card{max-width:1280px}.sidebar-hidden .canvas-column.has-info-card.wide{max-width:1400px}.sidebar-hidden .canvas-column.has-info-card.editorial{max-width:1640px}.sidebar-hidden .canvas-column.has-info-card.compact{max-width:1100px}
   .canvas-layout{min-width:0}
-  .canvas-layout.has-info-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,260px);align-items:start;gap:16px}
+  /* Misma banda compacta que la página publicada: el lienzo no se estira y la
+     ficha va a su derecha, para que editar y publicar se vean igual. */
+  .canvas-layout.has-info-card{display:grid;grid-template-columns:minmax(0,760px) minmax(280px,320px);justify-content:center;align-items:start;gap:clamp(14px,1.6vw,24px)}
   .canvas-info-card{position:sticky;top:0;min-width:0}
   .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
   .revision-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px}.revision-panel header span{color:var(--faint)}

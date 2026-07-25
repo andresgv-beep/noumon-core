@@ -107,10 +107,15 @@
 
 <style>
   .document-layout{width:100%}
-  .document-layout.has-info-card{max-width:1450px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,300px);align-items:start;gap:24px}
-  .document-layout.has-info-card.compact{max-width:1084px}.document-layout.has-info-card.wide{max-width:1644px}.document-layout.has-info-card.editorial{max-width:1824px}
-  .document-layout.has-info-card .page{max-width:none}
-  .info-slot{position:sticky;top:24px;padding-top:clamp(24px,3.2vw,52px)}
+  /* Artículo + ficha forman UNA banda compacta centrada, como una página de
+     enciclopedia: la columna de texto conserva una medida legible (no se estira
+     con la ventana) y la ficha va pegada a su derecha, no desterrada al borde. */
+  .document-layout.has-info-card{display:grid;grid-template-columns:minmax(0,760px) minmax(300px,352px);justify-content:center;align-items:start;gap:clamp(20px,2.4vw,40px);width:100%}
+  .document-layout.has-info-card.compact{grid-template-columns:minmax(0,640px) minmax(280px,320px)}
+  .document-layout.has-info-card.wide{grid-template-columns:minmax(0,900px) minmax(300px,368px)}
+  .document-layout.has-info-card.editorial{grid-template-columns:minmax(0,1040px) minmax(320px,392px)}
+  .document-layout.has-info-card .page{max-width:none;padding-inline:clamp(16px,1.6vw,26px)}
+  .info-slot{position:sticky;top:24px;padding-top:clamp(20px,2.6vw,40px)}
   /* Página a ras, como cualquier página del navegador: sin marco de tarjeta
      (borde/sombra/fondo propio) y llenando el ancho de lectura. */
   .page{width:100%;max-width:1120px;box-sizing:border-box;margin:0 auto;padding:clamp(24px,3.2vw,52px) clamp(20px,3.2vw,60px) 64px;color:var(--ink);font-family:var(--font-read,Georgia,serif);line-height:1.75}
@@ -119,9 +124,10 @@
   .page.preview{padding-top:clamp(20px,2.6vw,40px)}
   .page.preview{max-width:912px}.page.preview.compact{max-width:744px}.page.preview.wide{max-width:980px}.page.preview.editorial{max-width:1180px}
   .page.preview.expanded{max-width:1000px}.page.preview.expanded.compact{max-width:820px}.page.preview.expanded.wide{max-width:1120px}.page.preview.expanded.editorial{max-width:1340px}
-  header{border-bottom:1px solid var(--border);padding-bottom:28px;margin-bottom:34px}
+  header{border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:24px}
   header>span{font-family:var(--font,system-ui,sans-serif);font-size:10px;color:var(--accent-2);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
-  h1{font-size:clamp(30px,5vw,52px);line-height:1.08;margin:8px 0 16px}
+  /* Título de artículo, no de portada: prominente pero proporcionado al texto. */
+  h1{font-size:clamp(28px,3.2vw,40px);line-height:1.12;margin:6px 0 12px}
   .lead{font-size:18px;color:var(--muted);line-height:1.55}
   .meta{font-family:var(--font,system-ui,sans-serif);font-size:12px;color:var(--faint)}
   .cover{margin:0 0 38px}.cover :global(img),.cover :global(.placeholder){width:100%;max-height:560px;object-fit:cover;border-radius:var(--r-md)}.cover figcaption{margin-top:8px;color:var(--muted);font:12px var(--font,system-ui,sans-serif);text-align:center}
