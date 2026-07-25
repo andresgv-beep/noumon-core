@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  createStudioPage,
+  moveStudioPage,
   normalizeStudioContent,
   normalizeStudioDocument,
+  removeStudioPage,
+  renameStudioPage,
   studioDocumentBlocks,
   studioPage,
 } from './studioContent.js';
@@ -90,4 +94,79 @@ test('applies the same V1 normalization to a recovered document envelope', () =>
   assert.equal(recovered.content.schemaVersion, 2);
   assert.equal(recovered.content.pages[0].id, 'p1');
   assert.equal(recovered.content.pages[0].blocks[0].text, 'Sin guardar');
+});
+
+test('creates, renames, and reorders pages without changing their identities', () => {
+  const document = normalizeStudioDocument({
+    templateKey: 'document',
+    title: 'Manual',
+    metadata: {},
+    content: {
+      schemaVersion: 2,
+      pages: [
+        { id: 'p1', title: 'Inicio', blocks: [] },
+        { id: 'p2', title: 'Apéndice', blocks: [] },
+      ],
+    },
+  });
+
+  const page = createStudioPage(document, 'Referencias', 'p3');
+  assert.equal(page.id, 'p3');
+  assert.equal(renameStudioPage(document, 'p3', 'Fuentes'), true);
+  assert.equal(renameStudioPage(document, 'p3', '  '), false);
+  assert.equal(moveStudioPage(document, 'p3', -1), true);
+  assert.deepEqual(document.content.pages.map(({ id, title }) => [id, title]), [
+    ['p1', 'Inicio'],
+    ['p3', 'Fuentes'],
+    ['p2', 'Apéndice'],
+  ]);
+});
+
+test('deletes a page with deterministic neighbour selection but preserves the final page', () => {
+  const document = normalizeStudioDocument({
+    templateKey: 'document',
+    title: 'Manual',
+    metadata: {},
+    content: {
+      schemaVersion: 2,
+      pages: [
+        { id: 'p1', title: 'Primera', blocks: [] },
+        { id: 'p2', title: 'Segunda', blocks: [{ id: 'private', type: 'paragraph', text: 'Borrador' }] },
+        { id: 'p3', title: 'Tercera', blocks: [] },
+      ],
+    },
+  });
+
+  const middle = removeStudioPage(document, 'p2');
+  assert.equal(middle.removed.id, 'p2');
+  assert.equal(middle.nextPage.id, 'p3');
+  const last = removeStudioPage(document, 'p3');
+  assert.equal(last.nextPage.id, 'p1');
+  assert.equal(removeStudioPage(document, 'p1'), null);
+  assert.deepEqual(document.content.pages.map((page) => page.id), ['p1']);
+});
+
+test('keeps edits from multiple pages across an in-flight save snapshot and recovery round trip', () => {
+  const document = normalizeStudioDocument({
+    id: 'doc-pages',
+    templateKey: 'document',
+    title: 'Cuaderno',
+    metadata: {},
+    content: {
+      schemaVersion: 2,
+      pages: [
+        { id: 'p1', title: 'Uno', blocks: [{ id: 'a', type: 'paragraph', text: 'Antes' }] },
+        { id: 'p2', title: 'Dos', blocks: [{ id: 'b', type: 'paragraph', text: '' }] },
+      ],
+    },
+  });
+
+  studioDocumentBlocks(document, 'p1')[0].text = 'Guardado en vuelo';
+  const inFlight = JSON.parse(JSON.stringify(document));
+  studioDocumentBlocks(document, 'p2')[0].text = 'Escrito mientras guardaba';
+
+  assert.equal(studioDocumentBlocks(inFlight, 'p2')[0].text, '');
+  const recovered = normalizeStudioDocument(JSON.parse(JSON.stringify(document)));
+  assert.equal(studioDocumentBlocks(recovered, 'p1')[0].text, 'Guardado en vuelo');
+  assert.equal(studioDocumentBlocks(recovered, 'p2')[0].text, 'Escrito mientras guardaba');
 });

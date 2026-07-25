@@ -5,12 +5,14 @@
   import StudioDocumentView from './StudioDocumentView.svelte';
   import StudioImage from './StudioImage.svelte';
   import StudioMediaEditor from './StudioMediaEditor.svelte';
+  import StudioPageManager from './StudioPageManager.svelte';
   import { t, relTime } from './i18n.svelte.js';
   import {
     saveStudioRecovery, loadStudioRecovery, clearStudioRecovery,
   } from './studioRecovery.js';
   import {
-    normalizeStudioDocument, studioDocumentBlocks, studioPage,
+    normalizeStudioDocument, studioDocumentBlocks, studioPage, studioPages,
+    createStudioPage, renameStudioPage, moveStudioPage, removeStudioPage,
   } from './studioContent.js';
   import { itemSearch } from './libraryApi.js';
   import {
@@ -79,12 +81,59 @@
     return 'structure';
   }
 
-  function firstEditableBlockID(document) {
-    return studioDocumentBlocks(document).find((block) => block?.role !== 'cover')?.id || '';
+  function firstEditableBlockID(document, pageId = '') {
+    return studioDocumentBlocks(document, pageId).find((block) => block?.role !== 'cover')?.id || '';
   }
 
   function selectInitialPage(document) {
     activePageID = studioPage(document)?.id || '';
+  }
+
+  function selectPage(pageId) {
+    const page = studioPage(selected, pageId);
+    if (!page || page.id === activePageID) return;
+    activePageID = page.id;
+    selectedBlockID = firstEditableBlockID(selected, page.id);
+    closeLinkPicker();
+  }
+
+  function addPage() {
+    if (!selected || selected.status === 'archived' || studioPages(selected).length >= 100) return;
+    const number = studioPages(selected).length + 1;
+    const page = createStudioPage(selected, t('studio.newPageTitle', { number }));
+    activePageID = page.id;
+    selectedBlockID = '';
+    closeLinkPicker();
+    touch();
+  }
+
+  function renamePage(pageId, title) {
+    if (!selected || selected.status === 'archived') return;
+    if (renameStudioPage(selected, pageId, title)) touch();
+  }
+
+  function reorderPage(pageId, delta) {
+    if (!selected || selected.status === 'archived') return;
+    if (moveStudioPage(selected, pageId, delta)) touch();
+  }
+
+  function deletePage(pageId) {
+    if (!selected || selected.status === 'archived') return;
+    const page = studioPage(selected, pageId);
+    const pages = studioPages(selected);
+    if (!page || pages.length <= 1) return;
+    if (!confirm(t('studio.removePageConfirm', {
+      title: page.title,
+      count: page.blocks?.length || 0,
+    }))) return;
+    const result = removeStudioPage(selected, pageId);
+    if (!result) return;
+    if (activePageID === pageId) {
+      activePageID = result.nextPage.id;
+      selectedBlockID = firstEditableBlockID(selected, activePageID);
+    }
+    closeLinkPicker();
+    touch();
   }
 
   function pageTextSize(field, fallback) {
@@ -1105,11 +1154,20 @@
     </main>
   {:else if selected && mode === 'preview'}
     <main class="preview-mode scroll thin">
-      <StudioDocumentView document={selected} {onOpenItem} preview expanded={!sidebarOpen} />
+      <StudioDocumentView document={selected} pageId={activePageID} {onOpenItem} preview expanded={!sidebarOpen} />
     </main>
   {:else if selected && surfaceOf() === 'document'}
     <main class="document-workspace scroll thin">
       <aside class="document-palette" aria-label={t('studio.documentPalette')}>
+        <StudioPageManager
+          document={selected}
+          {activePageID}
+          onSelect={selectPage}
+          onCreate={addPage}
+          onRename={renamePage}
+          onMove={reorderPage}
+          onRemove={deletePage}
+        />
         <h3>{t('studio.insertBlock')}</h3>
         <div class="block-grid">
           <button onclick={() => addBlock('paragraph')}><b>¶</b>{t('studio.block.paragraph')}</button>
@@ -1360,8 +1418,8 @@
   .home-empty{padding:24px;border:1px dashed var(--border);border-radius:var(--r-lg);color:var(--muted);font-size:12px;text-align:center}
   .studio-error{margin:12px 0;padding:9px 11px;border-left:3px solid #df7474;background:color-mix(in srgb,#df7474 9%,var(--panel));color:#df8585;font-size:12px}
 
-  .document-workspace{height:100%;overflow:auto;display:grid;grid-template-columns:216px minmax(0,1180px);align-items:start;justify-content:center;gap:18px;padding:22px clamp(10px,1.5vw,24px) 70px}
-  .sidebar-hidden .document-workspace{grid-template-columns:232px minmax(0,1340px);padding-inline:clamp(10px,1.2vw,20px)}
+  .document-workspace{height:100%;overflow:auto;display:grid;grid-template-columns:244px minmax(0,1180px);align-items:start;justify-content:center;gap:18px;padding:22px clamp(10px,1.5vw,24px) 70px}
+  .sidebar-hidden .document-workspace{grid-template-columns:260px minmax(0,1340px);padding-inline:clamp(10px,1.2vw,20px)}
   .document-palette{position:sticky;top:0;display:grid;gap:8px;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
   .document-palette h3{margin:6px 0 1px}.document-palette h3:first-child{margin-top:0}
   .palette-section{display:grid;gap:8px;margin:3px -5px 0;padding:5px;border:1px solid transparent;border-radius:var(--r-md);transition:border-color .14s,background .14s}

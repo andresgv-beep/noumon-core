@@ -792,6 +792,17 @@ func TestStudioLegacyDocumentNormalizesAndRoundTripsAsMultipage(t *testing.T) {
 		len(studioContentOf(t, updated).Pages) != 2 {
 		t.Fatalf("guardar V2 tras abrir V1: %d %#v", updatedRec.Code, updated)
 	}
+	// Una respuesta de autoguardado iniciada en una página no puede aceptar
+	// después la misma base obsoleta si el usuario ya cambió a otra página.
+	stalePageSave := studioRequest(
+		h, http.MethodPut, "/api/studio/documents/"+created.ID,
+		string(updateBody), cookie,
+	)
+	if stalePageSave.Code != http.StatusConflict ||
+		!strings.Contains(stalePageSave.Body.String(), `"currentRevision":2`) {
+		t.Fatalf("guardado multipágina obsoleto no dio 409: %d %s",
+			stalePageSave.Code, stalePageSave.Body.String())
+	}
 	publicLegacy, err = s.store.publishedStudioDocument(created.ID)
 	if err != nil || publicLegacy.Revision != 1 ||
 		len(studioContentOf(t, publicLegacy).Pages) != 1 {
