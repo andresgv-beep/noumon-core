@@ -155,11 +155,15 @@
   // (onToc={(x)=>toc=x}), se recrearía en cada render y el $effect que lo invoca
   // en StudioDocumentView se realimentaría sin fin ("Maximum call stack size").
   function handleDocToc(items) { toc = items || []; }
+  // Asigna SIN leer el estado que escribe. La versión con guarda
+  // (if documentPages !== nextPages) leía documentPages dentro del $effect de
+  // DocumentPage que la invoca, con lo que ese efecto pasaba a depender de este
+  // estado y, al escribirlo, se auto-invalidaba sin fin (effect_update_depth_
+  // exceeded → la app se congelaba al abrir un documento multipágina). Igual que
+  // handleDocToc: solo escribe, nunca lee.
   function handleDocPages(items, activePageID) {
-    const nextPages = items || [];
-    const nextActivePageID = activePageID || '';
-    if (documentPages !== nextPages) documentPages = nextPages;
-    if (activeDocumentPageID !== nextActivePageID) activeDocumentPageID = nextActivePageID;
+    documentPages = items || [];
+    activeDocumentPageID = activePageID || '';
   }
 
   // Documentos propios: el índice se entrega desde el documento (onToc) y los

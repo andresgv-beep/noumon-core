@@ -59,11 +59,15 @@
     };
   });
 
+  // Solo LEE: entrega páginas + página activa resuelta al lector (menú/URL). NO
+  // escribe tab.pageId aquí: hacerlo desde un efecto que además lee tab.pageId
+  // realimenta el ciclo reactivo (effect_update_depth_exceeded → la app se
+  // congela al abrir un documento multipagina). El render ya cae en la primera
+  // pagina de forma segura via studioPage(), sin mutar estado.
   $effect(() => {
     const pages = studioPages(document);
     const page = studioPage(document, tab.pageId);
     onPages?.(pages, page?.id || '');
-    if (page && tab.pageId !== page.id) onPageResolved?.(page.id);
   });
 </script>
 
