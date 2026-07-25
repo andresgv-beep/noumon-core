@@ -2,8 +2,9 @@
   import { t } from './i18n.svelte.js';
   import { getPublishedDocument, getPublishedDocumentRelations } from './studioApi.js';
   import StudioDocumentView from './StudioDocumentView.svelte';
+  import { studioPage, studioPages } from './studioContent.js';
 
-  let { tab, onOpenItem, onToc } = $props();
+  let { tab, onOpenItem, onToc, onPages, onPageResolved } = $props();
   let document = $state(null);
   let loading = $state(true);
   let error = $state(false);
@@ -47,6 +48,7 @@
     error = false;
     loading = true;
     onToc?.([]);
+    onPages?.([], '');
     if (id) void loadDocument(id, sequence);
     else {
       error = true;
@@ -56,6 +58,13 @@
       if (loadSequence === sequence) loadSequence++;
     };
   });
+
+  $effect(() => {
+    const pages = studioPages(document);
+    const page = studioPage(document, tab.pageId);
+    onPages?.(pages, page?.id || '');
+    if (page && tab.pageId !== page.id) onPageResolved?.(page.id);
+  });
 </script>
 
 <div class="surface scroll thin">
@@ -64,7 +73,7 @@
   {:else if error || !document}
     <div class="state">{t('documents.loadError')}</div>
   {:else}
-    <StudioDocumentView {document} {onOpenItem} {onToc} />
+    <StudioDocumentView {document} pageId={tab.pageId} {onOpenItem} {onToc} />
     {#if backlinks.length}
       <section class="backlinks">
         <span>{t('documents.linksHere')}</span>

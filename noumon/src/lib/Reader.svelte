@@ -8,6 +8,7 @@
   import Moments from './Moments.svelte';
   import Documents from './Documents.svelte';
   import DocumentPage from './DocumentPage.svelte';
+  import DocumentContentsMenu from './DocumentContentsMenu.svelte';
   import ItemPage from './ItemPage.svelte';
   import MomentsWatch from './MomentsWatch.svelte';
   import Icon from './Icon.svelte';
@@ -20,11 +21,14 @@
   import { serverUrl } from './connection.js';
 
   let { tab, libraries = [], favorites = [], indexOpen = false, notesVersion = 0, tagsVersion = 0,
-        onNavigate, onOpenItem, onOpenView, onToggleHome, onFrameNav, onRemoveFav, onOpenNote, onDeleteNote
+        onNavigate, onOpenItem, onOpenView, onToggleHome, onFrameNav, onRemoveFav, onOpenNote, onDeleteNote,
+        onOpenDocumentPage, onResolveDocumentPage
       } = $props();
 
   let frameEl = $state(null);
   let toc = $state([]);
+  let documentPages = $state([]);
+  let activeDocumentPageID = $state('');
 
   // ── Traducción in situ (TRANSLATE.md §6) ─────────────────────────────────────
   // El artículo se carga SIEMPRE original; la traducción cae encima cuando está
@@ -151,6 +155,12 @@
   // (onToc={(x)=>toc=x}), se recrearía en cada render y el $effect que lo invoca
   // en StudioDocumentView se realimentaría sin fin ("Maximum call stack size").
   function handleDocToc(items) { toc = items || []; }
+  function handleDocPages(items, activePageID) {
+    const nextPages = items || [];
+    const nextActivePageID = activePageID || '';
+    if (documentPages !== nextPages) documentPages = nextPages;
+    if (activeDocumentPageID !== nextActivePageID) activeDocumentPageID = nextActivePageID;
+  }
 
   // Documentos propios: el índice se entrega desde el documento (onToc) y los
   // encabezados están en el DOM real, así que aquí sí cabe el scroll suave.
@@ -235,7 +245,20 @@
     {#if tab.open?.provider === 'moments'}
       <MomentsWatch {tab} {onOpenItem} {onOpenView} />
     {:else if tab.open?.provider === 'studio'}
-      <DocumentPage {tab} {onOpenItem} onToc={handleDocToc} />
+      {#if documentPages.length > 1}
+        <DocumentContentsMenu
+          pages={documentPages}
+          activePageID={activeDocumentPageID}
+          onSelect={onOpenDocumentPage}
+        />
+      {/if}
+      <DocumentPage
+        {tab}
+        {onOpenItem}
+        onToc={handleDocToc}
+        onPages={handleDocPages}
+        onPageResolved={onResolveDocumentPage}
+      />
       {#if indexOpen && toc.length}
         <aside class="toc-col scroll thin">
           <div class="toc-h">{t('reader.index')}</div>
@@ -278,7 +301,7 @@
 </div>
 
 <style>
-  .main{min-height:0;overflow:hidden;background:var(--ground);height:100%;display:flex}
+  .main{min-height:0;overflow:hidden;background:var(--ground);height:100%;display:flex;position:relative}
   .reader{flex:1;overflow-y:auto;min-width:0}
   .pluginframe{flex:1;width:100%;height:100%;border:0;display:block;background:var(--ground)}
   .framebox{--content-zoom:1.08;position:relative;flex:1;min-width:0;height:100%;overflow:hidden;background:#fff}

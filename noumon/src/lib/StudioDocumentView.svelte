@@ -1,13 +1,15 @@
 <script>
   import StudioBlockView from './StudioBlockView.svelte';
   import StudioImage from './StudioImage.svelte';
-  import { studioDocumentBlocks } from './studioContent.js';
+  import { studioDocumentBlocks, studioPage } from './studioContent.js';
   import { t, relTime } from './i18n.svelte.js';
 
   let { document, pageId = '', preview = false, expanded = false, onOpenItem, onToc } = $props();
 
   const content = () => document?.content || {};
   const presentation = () => content().presentation || {};
+  const activePage = () => studioPage(document, pageId);
+  const pageTitle = () => activePage()?.title || document.title;
   const pageBlocks = () => studioDocumentBlocks(document, pageId);
   const cover = () => pageBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
   const bodyBlocks = () => pageBlocks().filter((block) => block?.role !== 'cover');
@@ -60,7 +62,7 @@
   >
     <header>
       <span>{document.classification?.workType || content().classification?.workType || t('documents.article')}</span>
-      <h1 style:font-size={pageTextSize('titleFontSize')} style:text-align={pageTextAlign('titleTextAlign')}>{document.title}</h1>
+      <h1 style:font-size={pageTextSize('titleFontSize')} style:text-align={pageTextAlign('titleTextAlign')}>{pageTitle()}</h1>
       {#if document.summary}<p class="lead" style:font-size={pageTextSize('summaryFontSize')} style:text-align={pageTextAlign('summaryTextAlign')}>{document.summary}</p>{/if}
       <div class="meta">
         {document.authorLabel || t('documents.localAuthor')}
@@ -70,7 +72,7 @@
 
     {#if cover()}
       <figure class="cover">
-        <StudioImage documentId={document.id} assetId={cover().assetId} alt={cover().alt || document.title} display="poster" />
+        <StudioImage documentId={document.id} assetId={cover().assetId} alt={cover().alt || pageTitle()} display="poster" />
         {#if cover().caption}<figcaption>{cover().caption}</figcaption>{/if}
       </figure>
     {/if}

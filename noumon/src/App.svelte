@@ -215,7 +215,7 @@
     };
   }
   function makeHome() {
-    return { id: uid++, kind: 'home', lib: null, path: null, titleKey: 'tab.home', title: 'Inicio', article: null, toc: [], loading: false, error: null, back: [], fwd: [], search: emptySearch() };
+    return { id: uid++, kind: 'home', lib: null, path: null, itemId: '', pageId: '', titleKey: 'tab.home', title: 'Inicio', article: null, toc: [], loading: false, error: null, back: [], fwd: [], search: emptySearch() };
   }
   function newTab() {
     const tab = makeHome();
@@ -237,6 +237,7 @@
     tab.lib = lib;
     tab.path = path;
     tab.itemId = itemId || '';
+    tab.pageId = '';
     tab.error = null;
     tab.titleKey = null; // título literal (viene del iframe); no se re-traduce
     const seg = decodeURIComponent((path || '').split('/').pop() || '');
@@ -245,10 +246,10 @@
   }
 
   // ── Historial por pestaña (back/fwd), incluye el inicio y las vistas ─────────
-  const snapshot = (tb) => ({ kind: tb.kind, view: tb.view, lib: tb.lib, path: tb.path, itemId: tb.itemId, open: tb.open, source: tb.source, title: tb.title });
+  const snapshot = (tb) => ({ kind: tb.kind, view: tb.view, lib: tb.lib, path: tb.path, itemId: tb.itemId, pageId: tb.pageId, open: tb.open, source: tb.source, title: tb.title });
   function pushHistory(tab) { tab.back.push(snapshot(tab)); tab.fwd = []; }
   function setHome(tab) {
-    tab.kind = 'home'; tab.titleKey = 'tab.home'; tab.title = 'Inicio'; tab.article = null; tab.error = null; tab.toc = [];
+    tab.kind = 'home'; tab.titleKey = 'tab.home'; tab.title = 'Inicio'; tab.article = null; tab.error = null; tab.toc = []; tab.pageId = '';
     if (!tab.search) tab.search = emptySearch();
   }
   // titleKey → la pestaña se re-traduce sola al cambiar de idioma (Tabs resuelve con t()).
@@ -259,12 +260,12 @@
   };
   function setView(tab, view) {
     if (view === 'studio') prepareStudioTab(tab);
-    tab.kind = 'view'; tab.view = view; tab.titleKey = viewTitleKey(view); tab.title = view; tab.error = null;
+    tab.kind = 'view'; tab.view = view; tab.titleKey = viewTitleKey(view); tab.title = view; tab.error = null; tab.pageId = '';
   }
   function restore(tab, st) {
     if (st.kind === 'home') setHome(tab);
     else if (st.kind === 'view') setView(tab, st.view);
-    else if (st.kind === 'item') setItem(tab, st.itemId, st.open, st.title, st.source);
+    else if (st.kind === 'item') setItem(tab, st.itemId, st.open, st.title, st.source, st.pageId);
     else { tab.kind = 'article'; load(tab, st.lib, st.path, st.itemId); }
   }
 
@@ -291,9 +292,10 @@
       load(active, lib, path, itemId);
     }
   }
-  function setItem(tab, itemId, open, title, source = null) {
+  function setItem(tab, itemId, open, title, source = null, pageId = '') {
     tab.kind = 'item';
     tab.itemId = itemId;
+    tab.pageId = open?.provider === 'studio' ? (pageId || '') : '';
     tab.open = open;
     tab.source = source;
     tab.lib = null;
@@ -302,8 +304,13 @@
     tab.title = title || open?.title || t('tab.article');
     tab.error = null;
   }
-  async function openItemById(itemId) {
+  async function openItemById(itemId, { pageId = '' } = {}) {
     if (!itemId) return;
+    if (pageId && active?.kind === 'item' && active.itemId === itemId &&
+        active.open?.provider === 'studio') {
+      openDocumentPage(pageId);
+      return;
+    }
     let item;
     try {
       item = await getItem(itemId);
@@ -326,7 +333,7 @@
     if (!active) newTab();
     const tb = active;
     pushHistory(tb);
-    setItem(tb, itemId, open, item.title || open?.title, item.source);
+    setItem(tb, itemId, open, item.title || open?.title, item.source, pageId);
     readerState.addHistory({ itemId, title: open?.title || itemId, book: open?.title || 'Library' });
   }
 
@@ -335,7 +342,10 @@
     if (addr.kind === 'home') { goHome(); return; }
     if (addr.kind === 'view') { openView(addr.view); return; }
     if (addr.kind === 'article' && addr.lib) { openArticle(addr.lib, addr.path); return; }
-    if (addr.kind === 'item' && addr.itemId) { await openItemById(addr.itemId); return; }
+    if (addr.kind === 'item' && addr.itemId) {
+      await openItemById(addr.itemId, { pageId: addr.pageId });
+      return;
+    }
     if (addr.kind === 'provider' && addr.sourceId) {
       try {
         const item = await resolveProviderItem(addr.provider, addr.sourceId);
@@ -362,6 +372,16 @@
   }
   function navigate(lib, path) { openArticle(lib, path); }        // click en link interno
   function openLibrary(lib) { openArticle(lib.id, ''); }          // página principal de la colección
+  function openDocumentPage(pageId, { replace = false } = {}) {
+    const id = String(pageId || '');
+    if (!id || !active || active.kind !== 'item' ||
+        active.open?.provider !== 'studio' || active.pageId === id) return;
+    if (!replace) pushHistory(active);
+    active.pageId = id;
+  }
+  function resolveDocumentPage(pageId) {
+    openDocumentPage(pageId, { replace: true });
+  }
   function back() {
     const tb = active; if (!tb || !tb.back.length) return;
     tb.fwd.push(snapshot(tb));
@@ -444,6 +464,7 @@
       <div class="r-reader">
         <Reader tab={active} {libraries} {favorites} {indexOpen} {notesVersion} {tagsVersion} onNavigate={navigate}
           onOpenItem={openItemById} onOpenView={openView} onToggleHome={toggleHome} onFrameNav={frameNav}
+          onOpenDocumentPage={openDocumentPage} onResolveDocumentPage={resolveDocumentPage}
           onRemoveFav={removeFav} onOpenNote={openNoteItem} onDeleteNote={deleteNoteItem}
         />
       </div>

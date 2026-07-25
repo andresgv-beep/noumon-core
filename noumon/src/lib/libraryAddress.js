@@ -11,7 +11,11 @@ export function formatLibraryAddress(tab) {
     if (provider === 'moments' || provider === 'cabinet') {
       return `library://${provider}/${encodeURIComponent(sourceId)}`;
     }
-    return `library://item/${encodeURIComponent(tab.itemId || sourceId)}`;
+    const itemAddress = `library://item/${encodeURIComponent(tab.itemId || sourceId)}`;
+    if (provider === 'studio' && tab.pageId) {
+      return `${itemAddress}/${encodeURIComponent(tab.pageId)}`;
+    }
+    return itemAddress;
   }
   return 'library://home';
 }
@@ -28,6 +32,12 @@ export function parseLibraryAddress(raw) {
   if (head === 'moments' || head === 'cabinet') {
     return { kind: 'provider', provider: head, sourceId: decodeURIComponent(parts.join('/')) };
   }
-  if (head === 'item') return { kind: 'item', itemId: decodeURIComponent(parts.join('/')) };
+  if (head === 'item') {
+    return {
+      kind: 'item',
+      itemId: decodeURIComponent(parts.shift() || ''),
+      pageId: decodeURIComponent(parts.shift() || ''),
+    };
+  }
   return { kind: 'invalid' };
 }

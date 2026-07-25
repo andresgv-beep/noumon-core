@@ -364,6 +364,10 @@ export const messages = {
     'documents.allTopics': 'Todos',
     'documents.recent': 'Publicaciones recientes',
     'documents.allPages': 'Todas las páginas',
+    'documents.contentsMenu': 'Menú de contenidos',
+    'documents.contentsCount': 'Páginas: {count}',
+    'documents.hideContents': 'Ocultar menú de contenidos',
+    'documents.showContents': 'Mostrar menú de contenidos',
 
     // biblioteca local publicada
     'cabinet.heroTitle': 'Tu archivo, offline',
@@ -1028,6 +1032,10 @@ export const messages = {
     'documents.allTopics': 'All',
     'documents.recent': 'Recent publications',
     'documents.allPages': 'All pages',
+    'documents.contentsMenu': 'Contents menu',
+    'documents.contentsCount': 'Pages: {count}',
+    'documents.hideContents': 'Hide contents menu',
+    'documents.showContents': 'Show contents menu',
 
     // published local library
     'cabinet.heroTitle': 'Your archive, offline',
