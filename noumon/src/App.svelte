@@ -421,7 +421,7 @@
   }
 </script>
 
-<div class="app" class:side-hidden={!sidebarOpen} class:bookmarks-open={barOn && !studioMode} class:studio-mode={studioMode}>
+<div class="app" class:side-hidden={!sidebarOpen} class:bookmarks-open={barOn && !studioMode} class:studio-mode={studioMode} class:studio-document={studioMode && !!studioShell.sections?.length}>
   <div class="r-top"><Tabs {tabs} {activeId} onActivate={activate} onClose={closeTab} onNew={newTab} /></div>
   <div class="r-nav">
     {#if studioMode}
@@ -495,6 +495,7 @@
     grid-template-areas:"top top" "nav nav" "bar bar" "side main";
     transition:grid-template-columns .2s ease;
   }
+  .app.studio-document{grid-template-columns:clamp(300px,20vw,340px) 1fr}
   .app.side-hidden{grid-template-columns:0 1fr}
   /* Con la barra de marcadores del inicio abierta, el navbar pierde su borde
      inferior para que barra y navbar se lean como un solo bloque superior. */
@@ -511,7 +512,7 @@
   @media(max-width:700px){
     .app.studio-mode{grid-template-columns:1fr;grid-template-areas:"top" "nav" "bar" "main"}
     .app.studio-mode.side-hidden{grid-template-columns:1fr}
-    .app.studio-mode .r-side{position:fixed;z-index:20;left:0;top:98px;bottom:0;width:min(262px,84vw);display:block;box-shadow:8px 0 24px color-mix(in srgb,#000 28%,transparent);transition:transform .18s ease}
+    .app.studio-mode .r-side{position:fixed;z-index:20;left:0;top:98px;bottom:0;width:min(330px,90vw);display:block;box-shadow:8px 0 24px color-mix(in srgb,#000 28%,transparent);transition:transform .18s ease}
     .app.studio-mode.side-hidden .r-side{transform:translateX(-105%);pointer-events:none}
   }
 </style>

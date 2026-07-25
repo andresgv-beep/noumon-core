@@ -10,7 +10,9 @@
   let {
     documentId,
     cards = [],
+    selectedCardID = '',
     uploading = false,
+    onSelect,
     onAdd,
     onRemoveCard,
     onMoveCard,
@@ -68,9 +70,18 @@
 
   {#if !cards.length}
     <p class="no-cards">{t('studio.infoCardsEmpty')}</p>
-  {/if}
-
-  {#each cards as card, cardIndex (card.id)}
+  {:else}
+    <div class="card-tabs" aria-label={t('studio.infoCards')}>
+      {#each cards as item, index (item.id)}
+        <button
+          type="button"
+          class:active={item.id === selectedCardID || (!selectedCardID && index === 0)}
+          onclick={() => onSelect?.(item.id, true)}
+        >{index + 1}<small>{t(`studio.infoCardSide.${item.side || 'right'}`)}</small></button>
+      {/each}
+    </div>
+    {@const card = cards.find((item) => item.id === selectedCardID) || cards[0]}
+    {@const cardIndex = cards.indexOf(card)}
     {@const ratio = studioInfoRatioValue(card.imageRatio)}
     <article class="card">
       <div class="card-head">
@@ -210,7 +221,7 @@
         {/if}
       </div>
     </article>
-  {/each}
+  {/if}
 </section>
 
 <style>
@@ -220,6 +231,11 @@
   header b,.rows-heading b,.card-head b{color:var(--ink);font-size:10.5px}
   header small,.rows-heading small{color:var(--faint);font-size:8.5px;line-height:1.35}
   .no-cards{margin:0;padding:9px;border:1px dashed var(--border);border-radius:var(--r-sm);color:var(--faint);font-size:9px;text-align:center}
+  .card-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+  .card-tabs button{min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 3px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10px}
+  .card-tabs button small{max-width:100%;overflow:hidden;color:var(--faint);font-size:7.5px;text-overflow:ellipsis;white-space:nowrap}
+  .card-tabs button:hover,.card-tabs button.active{border-color:var(--accent-line);color:var(--ink)}
+  .card-tabs button.active{background:var(--accent-weak)}
   .card{display:grid;gap:7px;padding:8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--panel-2,var(--card))}
   .card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .card-actions{display:flex;gap:2px}

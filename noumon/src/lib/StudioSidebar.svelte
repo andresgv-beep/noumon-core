@@ -1,5 +1,6 @@
 <script>
   import Icon from './Icon.svelte';
+  import StudioDocumentInspector from './StudioDocumentInspector.svelte';
   import { t, relTime } from './i18n.svelte.js';
 
   let { state = {} } = $props();
@@ -39,29 +40,39 @@
       <span><b>{state.kindLabel || t('studio.createDocument')}</b><small>{state.kindHint || t('studio.blockEditor')}</small></span>
     </div>
     {#if state.sections?.length}
-      <span class="side-title">{t('studio.editing')}</span>
-      {#each state.sections as section (section.key)}
-        <button class="side-item nav-item" class:active={state.activeSection === section.key} onclick={() => state.openSection?.(section.key)}>
-          <Icon name={section.icon || 'list'} size={15} />{section.label}
-        </button>
-      {/each}
+      <nav class="editor-nav" aria-label={t('studio.editing')}>
+        {#each state.sections as section (section.key)}
+          <button class:active={state.activeSection === section.key} onclick={() => state.openSection?.(section.key)}>
+            <Icon name={section.icon || 'list'} size={14} /><span>{section.label}</span>
+          </button>
+        {/each}
+      </nav>
+      <div class="inspector-scroll scroll thin">
+        <StudioDocumentInspector {state} />
+      </div>
+    {:else}
+      <div class="side-spacer"></div>
     {/if}
-    <span class="side-title">{t('studio.history')}</span>
-    <button class="side-item nav-item" class:active={state.revisionsOpen} onclick={() => state.toggleRevisions?.()}>
-      <Icon name="history" size={15} />{t('studio.revisions')}<span class="badge">{state.revisionCount || 0}</span>
-    </button>
-    <span class="side-title">{t('studio.publication')}</span>
-    <span class="side-item info-item"><Icon name="storage" size={15} />{state.destination || t('studio.destinationDocuments')}</span>
-    <span class="side-item info-item"><Icon name="download" size={15} />{state.quotaLabel || t('studio.quotaUnknown')}</span>
-    {#if state.unpublish}
-      <button class="unpublish" onclick={() => state.unpublish?.()}><Icon name="close" size={14} />{t('studio.unpublish')}</button>
-    {/if}
-    {#if state.canArchive && state.archive}
-      <button class="archive" onclick={() => state.archive?.()}><Icon name="trash" size={14} />{t('studio.archive')}</button>
-    {/if}
-    {#if state.canPurge && state.purge}
-      <button class="purge" onclick={() => state.purge?.()}><Icon name="trash" size={14} />{t('studio.purge')}</button>
-    {/if}
+    <footer class="side-footer">
+      <button class="side-item nav-item" class:active={state.revisionsOpen} onclick={() => state.toggleRevisions?.()}>
+        <Icon name="history" size={15} />{t('studio.revisions')}<span class="badge">{state.revisionCount || 0}</span>
+      </button>
+      <div class="publication-summary">
+        <span><Icon name="storage" size={14} />{state.destination || t('studio.destinationDocuments')}</span>
+        <span><Icon name="download" size={14} />{state.quotaLabel || t('studio.quotaUnknown')}</span>
+      </div>
+      <div class="document-actions">
+        {#if state.unpublish}
+          <button class="unpublish" onclick={() => state.unpublish?.()}><Icon name="close" size={14} />{t('studio.unpublish')}</button>
+        {/if}
+        {#if state.canArchive && state.archive}
+          <button class="archive" onclick={() => state.archive?.()}><Icon name="trash" size={14} />{t('studio.archive')}</button>
+        {/if}
+        {#if state.canPurge && state.purge}
+          <button class="purge" onclick={() => state.purge?.()}><Icon name="trash" size={14} />{t('studio.purge')}</button>
+        {/if}
+      </div>
+    </footer>
   {/if}
 </aside>
 
@@ -78,12 +89,22 @@
   .side-item i{width:7px;height:7px;border-radius:var(--r-round)}.side-item i.private{background:var(--accent)}.side-item i.published{background:#6fd39a}
   button.side-item{width:100%}button.side-item:hover,button.side-item.active{background:var(--raise);color:var(--ink)}
   button.side-item.active{box-shadow:inset 0 0 0 1px var(--accent-line);background:var(--accent-weak)}
-  .info-item{min-height:28px;padding-block:4px;color:var(--faint);font-size:10.5px}
   .badge{margin-left:auto;color:var(--faint);font-size:10px}
   .section-kind{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:9px 10px;border-radius:var(--r-md);background:var(--card)}
   .section-kind .glyph{color:var(--accent-2);font-size:16px}.section-kind span:last-child{display:flex;flex-direction:column}
   .section-kind b{font-size:12px}.section-kind small{color:var(--muted);font-size:10px}
-  .archive,.purge{display:flex;align-items:center;gap:8px;margin-top:auto;padding:8px 10px;border-radius:var(--r-md);color:#df7474;font-size:11px}
+  .editor-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .editor-nav button{min-width:0;display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:var(--r-sm);color:var(--muted);font-size:10px;text-align:left}
+  .editor-nav button span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .editor-nav button:hover{background:var(--raise);color:var(--ink)}
+  .editor-nav button.active{background:var(--accent-weak);color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent-line)}
+  .inspector-scroll{min-height:0;flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 2px 12px 0}
+  .side-spacer{min-height:0;flex:1}
+  .side-footer{flex:none;display:grid;gap:4px;padding-top:8px;border-top:1px solid var(--border)}
+  .publication-summary{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+  .publication-summary span{min-width:0;display:flex;align-items:center;gap:5px;padding:4px 6px;color:var(--faint);font-size:8.5px}
+  .document-actions{display:flex;align-items:center;gap:3px;flex-wrap:wrap}
+  .archive,.purge{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-md);color:#df7474;font-size:11px}
   .purge{color:#f06f6f}
   .archive:hover{background:color-mix(in srgb,#df7474 9%,var(--raise))}
   .purge:hover{background:color-mix(in srgb,#df7474 14%,var(--raise))}

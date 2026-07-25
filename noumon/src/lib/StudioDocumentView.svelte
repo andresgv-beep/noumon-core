@@ -122,14 +122,8 @@
 
 <style>
   .document-layout{width:100%}
-  /* La ficha es un elemento del artículo, no un vecino: flota a la derecha
-     dentro de la página y el texto la envuelve. Por eso la página se estrecha
-     cuando hay ficha (así el texto que corre por debajo de ella mantiene una
-     medida legible en vez de estirarse a lo ancho de la ventana). */
-  .document-layout.has-info-card .page{max-width:940px}
-  .document-layout.has-info-card .page.compact{max-width:820px}
-  .document-layout.has-info-card .page.wide{max-width:1100px}
-  .document-layout.has-info-card .page.editorial{max-width:1280px}
+  /* La ficha pertenece al flujo del artículo y envuelve el texto, pero nunca
+     cambia el ancho de página elegido por el autor. */
   .info-slot{position:relative;z-index:1;float:right;width:clamp(260px,32%,340px);margin:4px 0 22px clamp(20px,2.4vw,34px)}
   .info-slot.left{float:left;margin:4px clamp(20px,2.4vw,34px) 22px 0}
   /* Los bloques con cuerpo propio (figuras, tablas, citas, avisos) se estrechan
@@ -142,12 +136,10 @@
      agente de usuario sobre contenteditable), la página publicada no. Sin él una
      cadena larga sin espacios no se puede partir, se desborda a lo ancho y el
      navegador la empuja por debajo de la ficha. */
-  .page{width:100%;max-width:1120px;box-sizing:border-box;margin:0 auto;padding:clamp(24px,3.2vw,52px) clamp(20px,3.2vw,60px) 64px;color:var(--ink);font-family:var(--font-read,Georgia,serif);line-height:1.75;overflow-wrap:break-word}
+  .page{width:100%;max-width:760px;box-sizing:border-box;margin:0 auto;padding:clamp(24px,3.2vw,52px) clamp(20px,3.2vw,60px) 64px;color:var(--ink);font-family:var(--font-read,Georgia,serif);line-height:1.75;overflow-wrap:break-word}
   .page.sans{font-family:var(--font,system-ui,sans-serif)}
-  .page.compact{max-width:760px}.page.wide{max-width:1320px}.page.editorial{max-width:1500px}
+  .page.compact{max-width:620px}.page.wide{max-width:980px}.page.editorial{max-width:1180px}
   .page.preview{padding-top:clamp(20px,2.6vw,40px)}
-  .page.preview{max-width:912px}.page.preview.compact{max-width:744px}.page.preview.wide{max-width:980px}.page.preview.editorial{max-width:1180px}
-  .page.preview.expanded{max-width:1000px}.page.preview.expanded.compact{max-width:820px}.page.preview.expanded.wide{max-width:1120px}.page.preview.expanded.editorial{max-width:1340px}
   header{border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:24px}
   header>span{font-family:var(--font,system-ui,sans-serif);font-size:10px;color:var(--accent-2);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
   /* Título de artículo, no de portada: prominente pero proporcionado al texto. */

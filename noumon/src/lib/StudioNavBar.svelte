@@ -12,6 +12,16 @@
   } = $props();
 
   const editing = () => state.mode === 'editor' || state.mode === 'preview';
+
+  function chooseInfoCard(event, cardId) {
+    state.selectInfoCard?.(cardId, true);
+    event.currentTarget.closest('details')?.removeAttribute('open');
+  }
+
+  function createInfoCard(event) {
+    state.addInfoCard?.();
+    event.currentTarget.closest('details')?.removeAttribute('open');
+  }
 </script>
 
 <div class="studio-nav">
@@ -38,6 +48,41 @@
       </span>
     {/if}
   </div>
+
+  {#if state.mode === 'editor' && state.sections?.some((section) => section.key === 'cards')}
+    <details class="card-jump">
+      <summary title={t('studio.infoCards')}>
+        <Icon name="list" size={14} />
+        <span>{t('studio.infoCards')}</span>
+        <b>{state.infoCards?.length || 0}</b>
+        <Icon name="chevron" size={12} />
+      </summary>
+      <div class="card-menu">
+        <header>
+          <b>{t('studio.infoCards')}</b>
+          <small>{t('studio.infoCardsDesc')}</small>
+        </header>
+        {#each state.infoCards || [] as card, index (card.id)}
+          <button
+            class:active={state.selectedInfoCardID === card.id}
+            onclick={(event) => chooseInfoCard(event, card.id)}
+          >
+            <span>{index + 1}</span>
+            <b>{t('studio.infoCardNumber', { number: index + 1 })}</b>
+            <small>{t(`studio.infoCardSide.${card.side || 'right'}`)}</small>
+          </button>
+        {/each}
+        {#if !state.infoCards?.length}
+          <p>{t('studio.infoCardsEmpty')}</p>
+        {/if}
+        {#if (state.infoCards?.length || 0) < 4}
+          <button class="new-card" onclick={createInfoCard}>
+            <Icon name="plus" size={13} />{t('studio.infoCardAdd')}
+          </button>
+        {/if}
+      </div>
+    </details>
+  {/if}
 
   {#if state.mode === 'editor' && state.textControl}
     <div class="text-context" aria-label={t('studio.textFormatting')}>
@@ -123,6 +168,19 @@
   .save-state i{width:7px;height:7px;border-radius:var(--r-round);background:#6fd39a}
   .save-state[data-state="saving"] i,.save-state[data-state="changes"] i,.save-state[data-state="publication"] i{background:#e9b86b}
   .save-state[data-state="error"]{color:#e77d88}.save-state[data-state="error"] i{background:#e77d88}
+  .card-jump{position:relative;flex:none}
+  .card-jump summary{height:34px;display:flex;align-items:center;gap:6px;padding:0 9px;border:1px solid var(--ui-edge);border-radius:var(--r-md);background:var(--ui-face);color:var(--muted);font-size:10.5px;cursor:pointer;list-style:none}
+  .card-jump summary::-webkit-details-marker{display:none}
+  .card-jump summary:hover,.card-jump[open] summary{background:var(--raise);color:var(--ink)}
+  .card-jump summary>b{min-width:18px;height:18px;display:grid;place-items:center;border-radius:var(--r-pill);background:var(--accent-weak);color:var(--accent-2);font-size:9px}
+  .card-menu{position:absolute;z-index:30;right:0;top:40px;width:230px;display:grid;gap:4px;padding:8px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--panel);box-shadow:var(--shadow)}
+  .card-menu header{display:flex;flex-direction:column;padding:3px 5px 6px}.card-menu header b{font-size:10.5px}.card-menu header small{color:var(--faint);font-size:8.5px}
+  .card-menu button{min-width:0;display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:6px;padding:7px;border-radius:var(--r-sm);color:var(--muted);font-size:9.5px;text-align:left}
+  .card-menu button:hover,.card-menu button.active{background:var(--raise);color:var(--ink)}
+  .card-menu button>span{width:20px;height:20px;display:grid;place-items:center;border-radius:var(--r-sm);background:var(--accent-weak);color:var(--accent-2)}
+  .card-menu button>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9.5px}.card-menu button>small{color:var(--faint);font-size:8px}
+  .card-menu p{margin:0;padding:8px;color:var(--faint);font-size:9px;text-align:center}
+  .card-menu .new-card{grid-template-columns:18px 1fr;margin-top:3px;border-top:1px solid var(--border);border-radius:0;color:var(--accent-2)}
   .context-tools{display:flex;align-items:center;gap:2px;padding:4px;border-radius:var(--r-md);background:var(--ui-face);border:1px solid var(--ui-edge)}
   .context-tools button{min-width:27px;height:26px;padding:0 6px;border-radius:var(--r-sm);color:var(--muted);font-size:11px}
   .context-tools button:hover{background:var(--raise);color:var(--ink)}
@@ -145,7 +203,7 @@
   .account:hover{background:var(--panel)}
   .account span{width:28px;height:28px;display:grid;place-items:center;border-radius:var(--r-round);color:#fff;font-size:11px;font-weight:650;border:1px solid rgba(255,255,255,.14)}
   @media(max-width:700px){
-    .back span,.context-tools,.text-context{display:none}
+    .back span,.context-tools,.text-context,.card-jump summary>span{display:none}
     .studio-nav{gap:6px;padding-inline:8px}.back{width:32px;padding:0;justify-content:center}
     .identity strong{font-size:12.5px}.save-state>span{display:none}
     .action{padding-inline:9px}.account{display:none}

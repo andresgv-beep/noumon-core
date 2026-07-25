@@ -1,13 +1,9 @@
 <script>
   import { onMount } from 'svelte';
-  import Icon from './Icon.svelte';
   import StudioCanvasBlock from './StudioCanvasBlock.svelte';
   import StudioDocumentView from './StudioDocumentView.svelte';
-  import StudioImage from './StudioImage.svelte';
   import StudioInfoCard from './StudioInfoCard.svelte';
-  import StudioInfoCardEditor from './StudioInfoCardEditor.svelte';
   import StudioMediaEditor from './StudioMediaEditor.svelte';
-  import StudioPageManager from './StudioPageManager.svelte';
   import { t, relTime } from './i18n.svelte.js';
   import {
     saveStudioRecovery, loadStudioRecovery, clearStudioRecovery,
@@ -32,7 +28,7 @@
   let documents = $state([]);
   let selected = $state(null);
   let mode = $state('home');
-  let activeSection = $state('structure');
+  let activeSection = $state('pages');
   let selectedBlockID = $state('');
   let draggingBlockID = $state('');
   let draggingCardID = $state('');
@@ -89,7 +85,7 @@
     if (document?.templateKey === 'cabinet.audio') return 'tracks';
     if (document?.templateKey?.startsWith('cabinet.')) return 'file';
     if (document?.templateKey?.startsWith('moments.')) return 'video';
-    return 'structure';
+    return 'pages';
   }
 
   function firstEditableBlockID(document, pageId = '') {
@@ -105,6 +101,7 @@
     if (!page || page.id === activePageID) return;
     activePageID = page.id;
     selectedBlockID = firstEditableBlockID(selected, page.id);
+    activeSection = 'pages';
     closeLinkPicker();
   }
 
@@ -114,6 +111,7 @@
     const page = createStudioPage(selected, t('studio.newPageTitle', { number }));
     activePageID = page.id;
     selectedBlockID = '';
+    activeSection = 'pages';
     closeLinkPicker();
     touch();
   }
@@ -726,18 +724,24 @@
 
   function addInfoCard() {
     if (!selected || selected.status === 'archived') return;
-    if (!createStudioInfoCard(activePage())) return;
+    const card = createStudioInfoCard(activePage());
+    if (!card) return;
+    selectedBlockID = card.id;
+    activeSection = 'cards';
     touch();
+    requestAnimationFrame(() => revealInfoCard(card.id));
   }
 
   function removeInfoCard(cardId) {
     if (!removeStudioInfoCard(activePage(), cardId)) return;
+    if (selectedBlockID === cardId) selectedBlockID = infoCards()[0]?.id || '';
     touch();
   }
 
   function moveInfoCard(cardId, delta) {
     if (!moveStudioInfoCard(activePage(), cardId, delta, documentBlocks().length)) return;
     selectedBlockID = cardId;
+    activeSection = 'cards';
     touch();
   }
 
@@ -746,13 +750,30 @@
     if (!card) return;
     card.side = card.side === 'left' ? 'right' : 'left';
     selectedBlockID = cardId;
+    activeSection = 'cards';
     touch();
+  }
+
+  function revealInfoCard(cardId) {
+    globalThis.document
+      ?.querySelector(`[data-studio-info-card="${cardId}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function selectInfoCard(cardId, reveal = false) {
+    if (!findInfoCard(cardId)) return;
+    selectedBlockID = cardId;
+    activeSection = 'cards';
+    showRevisions = false;
+    mode = 'editor';
+    if (reveal) requestAnimationFrame(() => revealInfoCard(cardId));
   }
 
   function startInfoCardDrag(cardId, event) {
     draggingCardID = cardId;
     draggingBlockID = '';
     selectedBlockID = cardId;
+    activeSection = 'cards';
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', cardId);
   }
@@ -892,10 +913,6 @@
     if (blockContainsID(location.block, selectedBlockID)) selectedBlockID = '';
     location.container.splice(location.index, 1);
     touch();
-  }
-
-  function tagsText() {
-    return (selected?.tags || []).join(', ');
   }
 
   function setTags(value) {
@@ -1136,10 +1153,6 @@
     activeSection = key;
     mode = 'editor';
     showRevisions = false;
-    requestAnimationFrame(() => {
-      globalThis.document?.querySelector(`[data-studio-section="${key}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
   }
 
   function formatQuota(bytes) {
@@ -1149,7 +1162,15 @@
   }
 
   function shellSections() {
-    return [];
+    if (surfaceOf() !== 'document') return [];
+    return [
+      { key: 'pages', icon: 'book', label: t('studio.pages') },
+      { key: 'insert', icon: 'plus', label: t('studio.insertBlock') },
+      { key: 'design', icon: 'edit', label: t('studio.section.design') },
+      { key: 'metadata', icon: 'tag', label: t('studio.section.metadata') },
+      { key: 'cover', icon: 'image', label: t('studio.section.cover') },
+      { key: 'cards', icon: 'list', label: t('studio.infoCards') },
+    ];
   }
 
   function shellTools() {
@@ -1184,8 +1205,17 @@
       publishLabel: selected?.publishedRevision ? t('studio.updatePublication') : t('studio.publish'),
       documents,
       selected,
+      activePageID,
       activeSection,
       sections: shellSections(),
+      infoCards: infoCards(),
+      selectedInfoCardID: infoCards().some((card) => card.id === selectedBlockID) ? selectedBlockID : '',
+      uploadingImage,
+      documentCover: documentCover(),
+      linkPicker,
+      linkQuery,
+      linkResults,
+      linkLoading,
       revisionsOpen: showRevisions,
       revisionCount: revisions.length || selected?.revision || 0,
       kindGlyph: surface === 'cabinet' ? '▣' : surface === 'moments' ? '▶' : '✎',
@@ -1205,6 +1235,26 @@
       setTextAlign: setSelectedTextAlign,
       openDocument,
       openSection,
+      selectPage,
+      addPage,
+      renamePage,
+      reorderPage,
+      deletePage,
+      addBlock,
+      chooseImage,
+      addInfoCard,
+      removeInfoCard,
+      moveInfoCard,
+      selectInfoCard,
+      chooseInfoCardImage,
+      removeInfoCardImage,
+      chooseDocumentCover,
+      removeDocumentCover,
+      toggleLinkPicker,
+      searchLinkTargets,
+      insertItemReference,
+      setTags,
+      changeDocument: touch,
       toggleRevisions,
       archive: archiveSelected,
       purge: purgeSelected,
@@ -1266,123 +1316,6 @@
     </main>
   {:else if selected && surfaceOf() === 'document'}
     <main class="document-workspace scroll thin">
-      <aside class="document-palette" aria-label={t('studio.documentPalette')}>
-        <StudioPageManager
-          document={selected}
-          {activePageID}
-          onSelect={selectPage}
-          onCreate={addPage}
-          onRename={renamePage}
-          onMove={reorderPage}
-          onRemove={deletePage}
-        />
-        <StudioInfoCardEditor
-          documentId={selected.id}
-          cards={infoCards()}
-          uploading={uploadingImage}
-          onAdd={addInfoCard}
-          onRemoveCard={removeInfoCard}
-          onMoveCard={moveInfoCard}
-          onChooseImage={chooseInfoCardImage}
-          onRemoveImage={removeInfoCardImage}
-          onChange={touch}
-        />
-        <h3>{t('studio.insertBlock')}</h3>
-        <div class="block-grid">
-          <button onclick={() => addBlock('paragraph')}><b>¶</b>{t('studio.block.paragraph')}</button>
-          <button onclick={() => addBlock('heading')}><b>H</b>{t('studio.block.heading')}</button>
-          <button onclick={chooseImage} disabled={uploadingImage}><b>▧</b>{t('studio.block.image')}</button>
-          <button onclick={() => addBlock('columns', { columnCount: 1 })}><b>▯</b>{t('studio.block.oneColumn')}</button>
-          <button onclick={() => addBlock('columns', { columnCount: 2 })}><b>▥</b>{t('studio.block.twoColumns')}</button>
-          <button onclick={() => addBlock('columns', { columnCount: 3 })}><b>▥</b>{t('studio.block.threeColumns')}</button>
-          <button onclick={() => addBlock('table')}><b>⊞</b>{t('studio.block.table')}</button>
-          <button onclick={() => addBlock('quote')}><b>❝</b>{t('studio.block.quote')}</button>
-          <button onclick={() => addBlock('callout')}><b>!</b>{t('studio.block.callout')}</button>
-          <button onclick={() => addBlock('code')}><b>&lt;/&gt;</b>{t('studio.block.code')}</button>
-          <button onclick={() => addBlock('bulletList')}><b>≔</b>{t('studio.block.bulletList')}</button>
-          <button onclick={() => addBlock('divider')}><b>—</b>{t('studio.block.divider')}</button>
-        </div>
-
-        <div class="palette-section" class:active={activeSection === 'design'} data-studio-section="design">
-          <h3>{t('studio.pageDesign')}</h3>
-          <div class="style-options">
-            {#each [
-              ['reading', t('studio.widthReading'), '910 px'],
-              ['wide', t('studio.widthWide'), '980 px'],
-              ['editorial', t('studio.widthEditorial'), '1180 px'],
-              ['compact', t('studio.widthCompact'), '740 px'],
-            ] as option}
-              <button
-                class:active={content().presentation?.contentWidth === option[0]}
-                onclick={() => { selected.content.presentation.contentWidth = option[0]; touch(); }}
-              ><span>{option[1]}</span><small>{option[2]}</small></button>
-            {/each}
-          </div>
-
-          <h3>{t('studio.typography')}</h3>
-          <div class="style-options">
-            <button class:active={content().presentation?.fontPreset !== 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'editorial'; touch(); }}>
-              <span>{t('studio.fontEditorial')}</span><small>Serif</small>
-            </button>
-            <button class:active={content().presentation?.fontPreset === 'sans'} onclick={() => { selected.content.presentation.fontPreset = 'sans'; touch(); }}>
-              <span>{t('studio.fontSans')}</span><small>Sans</small>
-            </button>
-          </div>
-        </div>
-
-        <div class="palette-section metadata-palette" class:active={activeSection === 'metadata'} data-studio-section="metadata">
-          <h3>{t('studio.metadata')}</h3>
-          <div class="metadata-grid">
-            <label>{t('studio.author')}<input value={selected.authorLabel || ''} oninput={(event) => { selected.authorLabel = event.currentTarget.value; touch(); }} /></label>
-            <label>{t('studio.language')}<input value={selected.language || ''} placeholder="es" oninput={(event) => { selected.language = event.currentTarget.value; touch(); }} /></label>
-            <label>{t('studio.tags')}<input value={tagsText()} placeholder={t('studio.tagsPlaceholder')} oninput={(event) => setTags(event.currentTarget.value)} /></label>
-            <label>{t('studio.workType')}<input value={content().classification?.workType || ''} placeholder="article" oninput={(event) => { selected.content.classification.workType = event.currentTarget.value; touch(); }} /></label>
-          </div>
-        </div>
-
-        <div class="palette-section cover-palette" data-studio-section="cover">
-          <h3>{t('studio.section.cover')}</h3>
-          <button class="document-cover" class:ready={!!documentCover()} onclick={chooseDocumentCover} disabled={uploadingImage}>
-            {#if documentCover()}
-              <StudioImage documentId={selected.id} assetId={documentCover().assetId} alt={t('studio.section.cover')} compact />
-            {:else}
-              <b>＋</b><span>{uploadingImage ? t('studio.uploadingImage') : t('studio.addCover')}</span>
-            {/if}
-          </button>
-          {#if documentCover()}
-            <div class="cover-actions">
-              <button onclick={chooseDocumentCover} disabled={uploadingImage}>{t('studio.replaceCover')}</button>
-              <button class="remove" onclick={removeDocumentCover}>{t('studio.removeCover')}</button>
-            </div>
-          {/if}
-        </div>
-
-        <button class="link-tool" class:active={linkPicker} onclick={toggleLinkPicker}>
-          <Icon name="book" size={14} />{t('studio.internalLink')}
-        </button>
-        {#if linkPicker}
-          <div class="link-picker">
-            <input
-              value={linkQuery}
-              placeholder={t('studio.internalLinkSearch')}
-              aria-label={t('studio.internalLinkSearch')}
-              oninput={(event) => searchLinkTargets(event.currentTarget.value)}
-            />
-            {#if linkLoading}
-              <small>{t('common.loading')}</small>
-            {:else if linkResults.length}
-              <div class="link-results">
-                {#each linkResults as item (item.itemId)}
-                  <button onclick={() => insertItemReference(item)}><b>{item.title}</b><small>{item.kind}</small></button>
-                {/each}
-              </div>
-            {:else}
-              <small>{t('studio.internalLinkHint')}</small>
-            {/if}
-          </div>
-        {/if}
-      </aside>
-
       <div
         class="canvas-column"
         class:has-info-card={infoCardVisible()}
@@ -1459,7 +1392,8 @@
               class="canvas-info-card"
               class:left={card.side === 'left'}
               class:selected={selectedBlockID === card.id}
-              onclick={() => (selectedBlockID = card.id)}
+              data-studio-info-card={card.id}
+              onclick={() => selectInfoCard(card.id)}
             >
               <div class="card-tools">
                 <button
@@ -1558,7 +1492,7 @@
   .studio-new{flex:1 1 auto;height:100%;min-height:0;min-width:0;background:var(--ground);color:var(--ink);overflow:hidden}
   .studio-state{height:100%;display:grid;place-items:center;color:var(--muted);font-size:13px}
   .studio-home{height:100%;overflow:auto;padding:clamp(28px,5vw,64px) clamp(20px,6vw,80px) 70px}
-  .studio-home>h2,.document-palette h3{margin:0 0 12px;color:var(--faint);font-size:9px;font-weight:650;letter-spacing:.14em;text-transform:uppercase}
+  .studio-home>h2{margin:0 0 12px;color:var(--faint);font-size:9px;font-weight:650;letter-spacing:.14em;text-transform:uppercase}
   .studio-home>h2:not(:first-child){margin-top:32px}
   .create-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;max-width:780px}
   .create-card{min-height:150px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:20px 17px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);color:var(--ink);text-align:left;box-shadow:var(--shadow-soft);transition:border-color .14s,transform .14s}
@@ -1577,36 +1511,9 @@
   .home-empty{padding:24px;border:1px dashed var(--border);border-radius:var(--r-lg);color:var(--muted);font-size:12px;text-align:center}
   .studio-error{margin:12px 0;padding:9px 11px;border-left:3px solid #df7474;background:color-mix(in srgb,#df7474 9%,var(--panel));color:#df8585;font-size:12px}
 
-  .document-workspace{height:100%;overflow:auto;display:grid;grid-template-columns:244px minmax(0,1500px);align-items:start;justify-content:center;gap:18px;padding:22px clamp(10px,1.5vw,24px) 70px}
-  .sidebar-hidden .document-workspace{grid-template-columns:260px minmax(0,1640px);padding-inline:clamp(10px,1.2vw,20px)}
-  .document-palette{position:sticky;top:0;display:grid;gap:8px;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
-  .document-palette h3{margin:6px 0 1px}.document-palette h3:first-child{margin-top:0}
-  .palette-section{display:grid;gap:8px;margin:3px -5px 0;padding:5px;border:1px solid transparent;border-radius:var(--r-md);transition:border-color .14s,background .14s}
-  .palette-section.active{border-color:var(--accent-line);background:var(--accent-weak)}
-  .block-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
-  .block-grid button{min-height:31px;display:flex;align-items:center;gap:6px;padding:6px 7px;border:0;border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px;text-align:left}
-  .block-grid button:hover{background:var(--raise);color:var(--ink)}.block-grid button b{color:var(--accent-2);font-size:12px}
-  .style-options{display:grid;gap:5px}
-  .style-options button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:31px;padding:6px 8px;border:0;border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
-  .style-options button:hover{background:var(--raise);color:var(--ink)}.style-options button.active{background:var(--accent-weak);color:var(--ink)}
-  .style-options small{color:var(--faint);font-size:9px}
-  .metadata-palette .metadata-grid{grid-template-columns:1fr;gap:7px}
-  .metadata-palette label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:9.5px;letter-spacing:.03em}
-  .metadata-palette input{width:100%;min-width:0;padding:7px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font-size:10.5px;outline:0}
-  .metadata-palette input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
-  .link-tool{width:100%;display:flex;align-items:center;gap:7px;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
-  .link-tool.active{border-color:var(--accent-line);color:var(--accent-2)}
-  .document-palette .link-picker{margin:0;padding:7px;border:1px solid var(--accent-line);border-radius:var(--r-sm);background:var(--card)}
-  .document-palette .link-picker input{padding:7px 8px;font-size:10.5px}.document-palette .link-results{grid-template-columns:1fr;max-height:180px}
-  .document-palette .link-results button{padding:7px;background:var(--raise)}
-  .canvas-column{width:100%;max-width:912px;min-width:0;margin:0 auto;transition:max-width .2s}
-  .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:744px}
-  /* Con ficha el lienzo sólo crece lo que ocupa la ficha; el texto conserva su
-     medida de lectura (ancho publicado + el relleno del lienzo). */
-  .canvas-column.has-info-card{max-width:1052px}.canvas-column.has-info-card.wide{max-width:1212px}.canvas-column.has-info-card.editorial{max-width:1392px}.canvas-column.has-info-card.compact{max-width:932px}
-  .sidebar-hidden .canvas-column{max-width:1000px}
-  .sidebar-hidden .canvas-column.wide{max-width:1120px}.sidebar-hidden .canvas-column.editorial{max-width:1340px}.sidebar-hidden .canvas-column.compact{max-width:820px}
-  .sidebar-hidden .canvas-column.has-info-card{max-width:1052px}.sidebar-hidden .canvas-column.has-info-card.wide{max-width:1212px}.sidebar-hidden .canvas-column.has-info-card.editorial{max-width:1392px}.sidebar-hidden .canvas-column.has-info-card.compact{max-width:932px}
+  .document-workspace{height:100%;overflow:auto;display:block;padding:22px clamp(12px,2.5vw,40px) 70px}
+  .canvas-column{width:100%;max-width:760px;min-width:0;margin:0 auto;transition:max-width .2s}
+  .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:620px}
   .canvas-layout{min-width:0}
   /* La ficha flota dentro del lienzo, igual que en la página publicada: no es
      una columna hermana, así que el lienzo vuelve a ser una sola caja. */
@@ -1637,36 +1544,20 @@
   .canvas-summary p{min-height:28px;margin:0;outline:0;color:var(--muted);line-height:1.5}
   .add-any{clear:both;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:11px;border:1px dashed var(--border);border-radius:var(--r-md);background:transparent;color:var(--faint);font-size:12px}
   .add-any:hover{border-color:var(--accent-line);color:var(--ink)}.add-any b{width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r-sm);background:var(--accent-weak);color:var(--accent-2)}
-  .metadata-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  .document-cover{width:100%;min-height:180px;display:grid;place-items:center;gap:8px;overflow:hidden;border:1px dashed var(--border);border-radius:var(--r-md);background:var(--card);color:var(--muted)}
-  .document-cover:hover{border-color:var(--accent-line);color:var(--ink)}.document-cover.ready{border-style:solid}
-  .document-cover b{font-size:24px;color:var(--accent-2)}.document-cover span{font-size:12px}
-  .document-cover :global(img),.document-cover :global(.placeholder){width:100%;height:clamp(180px,28vw,360px);object-fit:cover;border-radius:0}
-  .cover-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:9px}.cover-actions button{padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
-  .cover-actions button:hover{border-color:var(--accent-line);color:var(--ink)}.cover-actions .remove{color:#df7474}
-  .cover-palette .document-cover{min-height:92px}
-  .cover-palette .document-cover :global(img),.cover-palette .document-cover :global(.placeholder){height:110px;min-height:0}
-  .cover-palette .cover-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:0}
-  .cover-palette .cover-actions button{min-width:0;padding-inline:5px;font-size:9.5px}
-
   .preview-mode{height:100%;overflow:auto;padding:28px clamp(18px,5vw,70px) 70px;background:var(--panel-2)}
   .publication-workspace{height:100%;overflow:auto;padding:34px clamp(22px,6vw,80px) 70px}
   .media-revisions{max-width:1320px;margin-bottom:16px}
   .file-input{display:none}
 
   :global(:root[data-skin="retro"]) .create-card:hover{transform:none}
-  :global(:root[data-skin="retro"]) :is(.create-card,.document-canvas,.document-palette){box-shadow:var(--shadow)}
-  @media(max-width:1080px){
-    .document-workspace{grid-template-columns:1fr;justify-content:stretch}.document-palette{position:static;max-width:980px;width:100%;margin:0 auto}
-    .block-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.style-options{grid-template-columns:repeat(3,minmax(0,1fr))}
-  }
+  :global(:root[data-skin="retro"]) :is(.create-card,.document-canvas){box-shadow:var(--shadow)}
   @media(max-width:900px){
     .canvas-info-card,.canvas-info-card.left{float:none;width:100%;margin:0 0 20px}
   }
   @media(max-width:700px){
     .studio-home{padding:24px 14px 50px}.create-grid{grid-template-columns:1fr}.create-card{min-height:124px}
-    .document-workspace,.publication-workspace{padding:18px 14px 50px}.block-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.style-options{grid-template-columns:1fr}
-    .document-canvas,.document-canvas.compact{padding:26px 20px}.metadata-grid{grid-template-columns:1fr}
+    .document-workspace,.publication-workspace{padding:18px 14px 50px}
+    .document-canvas,.document-canvas.compact{padding:26px 20px}
     .recent-state{display:none}
   }
 
