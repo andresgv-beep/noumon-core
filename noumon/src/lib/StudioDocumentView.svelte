@@ -1,14 +1,16 @@
 <script>
   import StudioBlockView from './StudioBlockView.svelte';
   import StudioImage from './StudioImage.svelte';
+  import { studioDocumentBlocks } from './studioContent.js';
   import { t, relTime } from './i18n.svelte.js';
 
-  let { document, preview = false, expanded = false, onOpenItem, onToc } = $props();
+  let { document, pageId = '', preview = false, expanded = false, onOpenItem, onToc } = $props();
 
   const content = () => document?.content || {};
   const presentation = () => content().presentation || {};
-  const cover = () => (content().blocks || []).find((block) => block?.type === 'image' && block.role === 'cover') || null;
-  const bodyBlocks = () => (content().blocks || []).filter((block) => block?.role !== 'cover');
+  const pageBlocks = () => studioDocumentBlocks(document, pageId);
+  const cover = () => pageBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
+  const bodyBlocks = () => pageBlocks().filter((block) => block?.role !== 'cover');
 
   function pageTextSize(field) {
     const value = Number(presentation()[field]);
@@ -42,7 +44,7 @@
   // muestra en su barra lateral derecha (el mismo mecanismo que el resto de
   // contenidos). Así la página se ve como una página real, sin cajas flotantes.
   $effect(() => {
-    onToc?.(collectHeadings(content().blocks));
+    onToc?.(collectHeadings(pageBlocks()));
   });
 </script>
 

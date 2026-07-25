@@ -9,6 +9,9 @@
   import {
     saveStudioRecovery, loadStudioRecovery, clearStudioRecovery,
   } from './studioRecovery.js';
+  import {
+    normalizeStudioDocument, studioDocumentBlocks, studioPage,
+  } from './studioContent.js';
   import { itemSearch } from './libraryApi.js';
   import {
     listStudioDocuments, getStudioDocument, createStudioDocument,
@@ -57,10 +60,17 @@
   let linkSearchTimer;
   let linkAbort;
   let blockSequence = 1;
+  let activePageID = $state('');
 
-  const content = () => selected?.content || { schemaVersion: 1, presentation: {}, classification: {}, blocks: [] };
-  const documentCover = () => (content().blocks || []).find((block) => block?.type === 'image' && block.role === 'cover') || null;
-  const documentBlocks = () => (content().blocks || []).filter((block) => block?.role !== 'cover');
+  const content = () => selected?.content || {
+    schemaVersion: 2,
+    presentation: {},
+    classification: {},
+    pages: [{ id: 'p1', title: '', blocks: [] }],
+  };
+  const activeBlocks = () => studioDocumentBlocks(selected, activePageID);
+  const documentCover = () => activeBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
+  const documentBlocks = () => activeBlocks().filter((block) => block?.role !== 'cover');
 
   function defaultSection(document = selected) {
     if (document?.templateKey === 'cabinet.audio') return 'tracks';
@@ -70,7 +80,11 @@
   }
 
   function firstEditableBlockID(document) {
-    return document?.content?.blocks?.find((block) => block?.role !== 'cover')?.id || '';
+    return studioDocumentBlocks(document).find((block) => block?.role !== 'cover')?.id || '';
+  }
+
+  function selectInitialPage(document) {
+    activePageID = studioPage(document)?.id || '';
   }
 
   function pageTextSize(field, fallback) {
@@ -194,10 +208,7 @@
   });
 
   function normalizeDocument(doc) {
-    doc.content = typeof doc.content === 'string' ? JSON.parse(doc.content) : doc.content;
-    doc.metadata = typeof doc.metadata === 'string' ? JSON.parse(doc.metadata) : doc.metadata;
-    if (!doc.metadata || Array.isArray(doc.metadata)) doc.metadata = {};
-    return doc;
+    return normalizeStudioDocument(doc);
   }
 
   async function load() {
@@ -214,15 +225,15 @@
     loading = false;
   }
 
-  function templateContent(templateKey) {
+  function templateContent(templateKey, documentTitle) {
     const base = {
-      schemaVersion: 1,
       classification: { workType: 'article', topics: [], audience: [] },
       presentation: { contentWidth: 'reading', fontPreset: 'editorial' },
     };
     if (templateKey.startsWith('cabinet.') || templateKey.startsWith('moments.')) {
       return {
         ...base,
+        schemaVersion: 1,
         classification: {
           ...base.classification,
           workType: templateKey.replace('.', '-'),
@@ -231,37 +242,34 @@
         blocks: [],
       };
     }
+    let blocks;
     if (templateKey === 'technical') {
-      return {
-        ...base,
-        classification: { ...base.classification, workType: 'manual' },
-        presentation: { contentWidth: 'wide', fontPreset: 'sans' },
-        blocks: [
-          { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.objective') },
-          { id: nextBlockId(), type: 'paragraph', text: '' },
-          { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.procedure') },
-          { id: nextBlockId(), type: 'orderedList', items: [t('studio.template.firstStep')] },
-          { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.references') },
-          { id: nextBlockId(), type: 'paragraph', text: '' },
-        ],
-      };
-    }
-    if (templateKey === 'story') {
-      return {
-        ...base,
-        classification: { ...base.classification, workType: 'story' },
-        blocks: [
-          { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.chapterOne') },
-          { id: nextBlockId(), type: 'paragraph', text: '' },
-        ],
-      };
+      base.classification = { ...base.classification, workType: 'manual' };
+      base.presentation = { contentWidth: 'wide', fontPreset: 'sans' };
+      blocks = [
+        { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.objective') },
+        { id: nextBlockId(), type: 'paragraph', text: '' },
+        { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.procedure') },
+        { id: nextBlockId(), type: 'orderedList', items: [t('studio.template.firstStep')] },
+        { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.references') },
+        { id: nextBlockId(), type: 'paragraph', text: '' },
+      ];
+    } else if (templateKey === 'story') {
+      base.classification = { ...base.classification, workType: 'story' };
+      blocks = [
+        { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.chapterOne') },
+        { id: nextBlockId(), type: 'paragraph', text: '' },
+      ];
+    } else {
+      blocks = [
+        { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.introduction') },
+        { id: nextBlockId(), type: 'paragraph', text: '' },
+      ];
     }
     return {
       ...base,
-      blocks: [
-        { id: nextBlockId(), type: 'heading', level: 2, text: t('studio.template.introduction') },
-        { id: nextBlockId(), type: 'paragraph', text: '' },
-      ],
+      schemaVersion: 2,
+      pages: [{ id: 'p1', title: documentTitle, blocks }],
     };
   }
 
@@ -275,21 +283,23 @@
     creatingTemplate = template.key;
     error = '';
     try {
+      const title = template.key.startsWith('cabinet.')
+        ? t('studio.template.cabinetUntitled')
+        : template.key.startsWith('moments.')
+          ? t('studio.template.momentsUntitled')
+          : t(`studio.template.${template.key}Untitled`);
       const doc = normalizeDocument(await createStudioDocument({
         templateKey: template.key,
-        title: template.key.startsWith('cabinet.')
-          ? t('studio.template.cabinetUntitled')
-          : template.key.startsWith('moments.')
-            ? t('studio.template.momentsUntitled')
-            : t(`studio.template.${template.key}Untitled`),
+        title,
         language: '',
         tags: [],
         metadata: {},
-        content: templateContent(template.key),
+        content: templateContent(template.key, title),
       }));
       openingSequence++;
       documents = [{ ...doc }, ...documents];
       selected = doc;
+      selectInitialPage(doc);
       mode = 'editor';
       activeSection = defaultSection(doc);
       selectedBlockID = firstEditableBlockID(doc);
@@ -315,6 +325,7 @@
       const doc = normalizeDocument(await getStudioDocument(id));
       if (requestSequence !== openingSequence) return;
       selected = doc;
+      selectInitialPage(doc);
       mode = 'editor';
       activeSection = defaultSection(doc);
       selectedBlockID = firstEditableBlockID(doc);
@@ -328,6 +339,7 @@
       if (recovery?.document && recovery.baseRevision === doc.revision) {
         selected = normalizeDocument(recovery.document);
         selected.revision = doc.revision;
+        selectInitialPage(selected);
         dirty = true;
         changeVersion++;
         error = 'studio.recovered';
@@ -526,6 +538,7 @@
       ));
       if (selected?.id !== documentId) return;
       selected = restored;
+      selectInitialPage(restored);
       documents = documents.map((item) =>
         item.id === restored.id ? { ...item, ...restored } : item);
       dirty = false;
@@ -567,7 +580,7 @@
 
   function addBlock(type, options = {}) {
     const block = createBlock(type, options);
-    selected.content.blocks.push(block);
+    activeBlocks().push(block);
     touch();
   }
 
@@ -615,7 +628,7 @@
 
   function insertItemReference(item) {
     if (!selected || !item?.itemId) return;
-    selected.content.blocks.push({
+    activeBlocks().push({
       id: nextBlockId(),
       type: 'itemRef',
       itemId: item.itemId,
@@ -639,8 +652,9 @@
   function removeDocumentCover() {
     const cover = documentCover();
     if (!cover) return;
-    const index = content().blocks.indexOf(cover);
-    if (index >= 0) content().blocks.splice(index, 1);
+    const blocks = activeBlocks();
+    const index = blocks.indexOf(cover);
+    if (index >= 0) blocks.splice(index, 1);
     touch();
   }
 
@@ -673,7 +687,7 @@
         } else {
           imageBlock.role = 'cover';
           imageBlock.imageSize = 'poster';
-          selected.content.blocks.unshift(imageBlock);
+          activeBlocks().unshift(imageBlock);
         }
         selectedBlockID = '';
         touch();
@@ -685,7 +699,7 @@
       if (target?.type === 'columns' && target.columns?.[targetColumn.columnIndex]) {
         target.columns[targetColumn.columnIndex].push(imageBlock);
       } else {
-        selected.content.blocks.push(imageBlock);
+        activeBlocks().push(imageBlock);
       }
       selectedBlockID = imageBlock.id;
       touch();
@@ -726,7 +740,7 @@
   }
 
   function findBlockLocation(blockID) {
-    return findBlockLocationIn(blockID, selected?.content?.blocks || []);
+    return findBlockLocationIn(blockID, activeBlocks());
   }
 
   function findBlockByID(blockID) {
@@ -904,7 +918,7 @@
     if (!block) return;
     const destination = findBlockByID(columnsBlockID);
     if (!destination?.columns?.[columnIndex]) {
-      selected.content.blocks.push(block);
+      activeBlocks().push(block);
       return;
     }
     destination.columns[columnIndex].push(block);
@@ -916,7 +930,7 @@
   function dropAtRootEnd() {
     const block = takeDraggedBlock();
     if (!block) return;
-    selected.content.blocks.push(block);
+    activeBlocks().push(block);
     draggingBlockID = '';
     selectedBlockID = block.id;
     touch();
@@ -933,9 +947,10 @@
 
   function moveBlockToRoot(blockID) {
     const location = findBlockLocation(blockID);
-    if (!location || location.container === selected.content.blocks) return;
+    const blocks = activeBlocks();
+    if (!location || location.container === blocks) return;
     const [block] = location.container.splice(location.index, 1);
-    selected.content.blocks.push(block);
+    blocks.push(block);
     selectedBlockID = block.id;
     touch();
   }

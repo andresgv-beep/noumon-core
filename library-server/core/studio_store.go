@@ -89,6 +89,9 @@ func scanStudioDocument(row studioScanner) (StudioDocument, error) {
 	}
 	doc.Metadata = json.RawMessage(metadataJSON)
 	doc.Content = json.RawMessage(contentJSON)
+	if err := normalizeStudioDocumentContent(&doc); err != nil {
+		return doc, fmt.Errorf("studio content: %w", err)
+	}
 	return doc, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -198,6 +199,12 @@ func studioDocumentHasCover(t *testing.T, document StudioDocument) bool {
 			Type string `json:"type"`
 			Role string `json:"role"`
 		} `json:"blocks"`
+		Pages []struct {
+			Blocks []struct {
+				Type string `json:"type"`
+				Role string `json:"role"`
+			} `json:"blocks"`
+		} `json:"pages"`
 	}
 	if err := json.Unmarshal(document.Content, &content); err != nil {
 		t.Fatal(err)
@@ -207,7 +214,23 @@ func studioDocumentHasCover(t *testing.T, document StudioDocument) bool {
 			return true
 		}
 	}
+	for _, page := range content.Pages {
+		for _, block := range page.Blocks {
+			if block.Type == "image" && block.Role == "cover" {
+				return true
+			}
+		}
+	}
 	return false
+}
+
+func studioContentOf(t *testing.T, document StudioDocument) StudioContent {
+	t.Helper()
+	var content StudioContent
+	if err := json.Unmarshal(document.Content, &content); err != nil {
+		t.Fatal(err)
+	}
+	return content
 }
 
 func studioDocumentBodyWithLink(
@@ -635,6 +658,233 @@ func TestStudioColumnsValidateAndIndexNestedContent(t *testing.T) {
 	if _, err := validateStudioInput(input); err == nil ||
 		!strings.Contains(err.Error(), "one to three columns") {
 		t.Fatalf("zero-column layout accepted: %v", err)
+	}
+}
+
+func TestStudioLegacyDocumentNormalizesAndRoundTripsAsMultipage(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	cookie := sessionFor(t, s, "autora-multipagina", 30, false)
+	grantStudio(t, s, "autora-multipagina", true)
+
+	legacyBody := validStudioDocumentBody("Documento legado", 0)
+	var legacyInput map[string]any
+	if err := json.Unmarshal([]byte(legacyBody), &legacyInput); err != nil {
+		t.Fatal(err)
+	}
+	legacyContent, err := json.Marshal(legacyInput["content"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdRec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents", legacyBody, cookie,
+	)
+	created := decodeStudioDocumentResponse(t, createdRec)
+	createdContent := studioContentOf(t, created)
+	if createdRec.Code != http.StatusCreated ||
+		createdContent.SchemaVersion != studioSchemaVersion ||
+		len(createdContent.Pages) != 1 ||
+		createdContent.Pages[0].ID != "p1" ||
+		createdContent.Pages[0].Title != "Documento legado" ||
+		len(createdContent.Pages[0].Blocks) != 3 ||
+		len(createdContent.Blocks) != 0 {
+		t.Fatalf("normalización inicial inesperada: %d %#v", createdRec.Code, createdContent)
+	}
+
+	// Simula una instalación anterior: tanto la fila viva como la revisión 1
+	// conservan el JSON V1 que existía antes de introducir páginas.
+	var snapshotJSON string
+	if err := s.store.db.QueryRow(`
+		SELECT snapshot_json FROM studio_revisions
+		WHERE document_id=? AND revision=1`, created.ID).Scan(&snapshotJSON); err != nil {
+		t.Fatal(err)
+	}
+	var legacySnapshot StudioDocument
+	if err := json.Unmarshal([]byte(snapshotJSON), &legacySnapshot); err != nil {
+		t.Fatal(err)
+	}
+	legacySnapshot.Content = legacyContent
+	encodedSnapshot, err := json.Marshal(legacySnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.store.db.Exec(`
+		UPDATE studio_documents SET content_json=? WHERE id=?`,
+		string(legacyContent), created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.store.db.Exec(`
+		UPDATE studio_revisions SET snapshot_json=?
+		WHERE document_id=? AND revision=1`,
+		string(encodedSnapshot), created.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	loadedRec := studioRequest(
+		h, http.MethodGet, "/api/studio/documents/"+created.ID, "", cookie,
+	)
+	loaded := decodeStudioDocumentResponse(t, loadedRec)
+	loadedContent := studioContentOf(t, loaded)
+	if loadedRec.Code != http.StatusOK ||
+		loadedContent.SchemaVersion != studioSchemaVersion ||
+		len(loadedContent.Pages) != 1 ||
+		len(loadedContent.Pages[0].Blocks) != 3 {
+		t.Fatalf("lectura de V1 no normalizada: %d %#v", loadedRec.Code, loadedContent)
+	}
+	if rec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/publish", "", cookie,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("publicar snapshot V1: %d %s", rec.Code, rec.Body.String())
+	}
+	publicLegacy, err := s.store.publishedStudioDocument(created.ID)
+	if err != nil ||
+		publicLegacy.Revision != 1 ||
+		studioContentOf(t, publicLegacy).SchemaVersion != studioSchemaVersion {
+		t.Fatalf("lectura pública del snapshot V1: %#v err=%v", publicLegacy, err)
+	}
+	if err := s.store.backfillStudioPublishedDerived(); err != nil {
+		t.Fatalf("backfill con snapshot V1: %v", err)
+	}
+	legacyHits, err := s.store.searchPublishedStudioDocuments("Contenido de prueba")
+	if err != nil || len(legacyHits) != 1 || legacyHits[0].ItemID != "studio:"+created.ID {
+		t.Fatalf("FTS reconstruido desde V1: %#v err=%v", legacyHits, err)
+	}
+
+	multipageContent := map[string]any{
+		"schemaVersion": 2,
+		"classification": map[string]any{
+			"workType": "manual",
+			"topics":   []string{"historia"},
+		},
+		"presentation": map[string]any{
+			"contentWidth": "wide",
+			"fontPreset":   "sans",
+		},
+		"pages": []any{
+			map[string]any{
+				"id": "inicio", "title": "Inicio",
+				"blocks": []any{
+					map[string]any{"id": "bloque-inicio", "type": "paragraph", "text": "Texto inicial"},
+				},
+			},
+			map[string]any{
+				"id": "anexo", "title": "Anexo",
+				"blocks": []any{
+					map[string]any{"id": "bloque-anexo", "type": "paragraph", "text": "Texto del anexo"},
+				},
+			},
+		},
+	}
+	legacyInput["title"] = "Documento multipágina"
+	legacyInput["baseRevision"] = 1
+	legacyInput["content"] = multipageContent
+	updateBody, err := json.Marshal(legacyInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updatedRec := studioRequest(
+		h, http.MethodPut, "/api/studio/documents/"+created.ID,
+		string(updateBody), cookie,
+	)
+	updated := decodeStudioDocumentResponse(t, updatedRec)
+	if updatedRec.Code != http.StatusOK ||
+		updated.Revision != 2 ||
+		len(studioContentOf(t, updated).Pages) != 2 {
+		t.Fatalf("guardar V2 tras abrir V1: %d %#v", updatedRec.Code, updated)
+	}
+	publicLegacy, err = s.store.publishedStudioDocument(created.ID)
+	if err != nil || publicLegacy.Revision != 1 ||
+		len(studioContentOf(t, publicLegacy).Pages) != 1 {
+		t.Fatalf("el borrador V2 alteró el snapshot V1 publicado: %#v err=%v", publicLegacy, err)
+	}
+	if rec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/publish", "", cookie,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("publicar V2: %d %s", rec.Code, rec.Body.String())
+	}
+
+	restoredRec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/restore/1",
+		`{"baseRevision":2}`, cookie,
+	)
+	restored := decodeStudioDocumentResponse(t, restoredRec)
+	restoredContent := studioContentOf(t, restored)
+	if restoredRec.Code != http.StatusOK ||
+		restored.Revision != 3 ||
+		restoredContent.SchemaVersion != studioSchemaVersion ||
+		len(restoredContent.Pages) != 1 ||
+		len(restoredContent.Pages[0].Blocks) != 3 {
+		t.Fatalf("restaurar snapshot V1: %d %#v", restoredRec.Code, restoredContent)
+	}
+	public, err := s.store.publishedStudioDocument(created.ID)
+	if err != nil || public.Revision != 2 || len(studioContentOf(t, public).Pages) != 2 {
+		t.Fatalf("restore contaminó snapshot publicado: %#v err=%v", public, err)
+	}
+	if rec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/publish", "", cookie,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("republicar revisión restaurada: %d %s", rec.Code, rec.Body.String())
+	}
+	public, err = s.store.publishedStudioDocument(created.ID)
+	if err != nil || public.Revision != 3 || len(studioContentOf(t, public).Pages) != 1 {
+		t.Fatalf("republicación del legado restaurado: %#v err=%v", public, err)
+	}
+}
+
+func TestStudioMultipageValidationUsesDocumentWideIdentityAndLimits(t *testing.T) {
+	content := StudioContent{
+		SchemaVersion: studioSchemaVersion,
+		Pages: []StudioPage{
+			{
+				ID: "inicio", Title: "Inicio",
+				Blocks: []json.RawMessage{
+					json.RawMessage(`{"id":"repetido","type":"paragraph","text":"Uno"}`),
+				},
+			},
+			{
+				ID: "detalle", Title: "Detalle",
+				Blocks: []json.RawMessage{
+					json.RawMessage(`{"id":"repetido","type":"paragraph","text":"Dos"}`),
+				},
+			},
+		},
+	}
+	encoded, err := json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := StudioDocumentInput{
+		TemplateKey: "document",
+		Title:       "Identidad global",
+		Content:     encoded,
+	}
+	if _, err := validateStudioInput(input); err == nil ||
+		!strings.Contains(err.Error(), "block.id") {
+		t.Fatalf("ID de bloque duplicado entre páginas aceptado: %v", err)
+	}
+
+	content.Pages[1].Blocks[0] =
+		json.RawMessage(`{"id":"unico","type":"paragraph","text":"Dos"}`)
+	content.Pages[1].ID = content.Pages[0].ID
+	encoded, _ = json.Marshal(content)
+	input.Content = encoded
+	if _, err := validateStudioInput(input); err == nil ||
+		!strings.Contains(err.Error(), "page.id") {
+		t.Fatalf("ID de página duplicado aceptado: %v", err)
+	}
+
+	content.Pages = make([]StudioPage, studioMaxPages+1)
+	for index := range content.Pages {
+		content.Pages[index] = StudioPage{
+			ID: fmt.Sprintf("p%d", index+1), Title: fmt.Sprintf("Página %d", index+1),
+			Blocks: []json.RawMessage{},
+		}
+	}
+	encoded, _ = json.Marshal(content)
+	input.Content = encoded
+	if _, err := validateStudioInput(input); err == nil ||
+		!strings.Contains(err.Error(), "pages:") {
+		t.Fatalf("límite global de páginas no aplicado: %v", err)
 	}
 }
 

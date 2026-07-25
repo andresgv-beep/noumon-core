@@ -177,6 +177,9 @@ func (s *Store) publishedStudioSnapshot(id string) (StudioDocument, error) {
 	if err := json.Unmarshal([]byte(snapshot), &doc); err != nil {
 		return StudioDocument{}, err
 	}
+	if err := normalizeStudioDocumentContent(&doc); err != nil {
+		return StudioDocument{}, err
+	}
 	doc.Status = "published"
 	doc.PublishedRevision = &revision
 	doc.PublicationKind = publicationKind.String

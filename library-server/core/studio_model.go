@@ -14,13 +14,15 @@ import (
 )
 
 const (
-	studioSchemaVersion  = 1
+	studioSchemaVersion  = 2
+	studioLegacySchema   = 1
 	studioMaxRequest     = 2 << 20
 	studioMaxBlocks      = 1000
 	studioMaxBlockDepth  = 4
 	studioMaxTextRunes   = 1 << 20
 	studioMaxTags        = 50
 	studioMaxFacetValues = 32
+	studioMaxPages       = 100
 )
 
 var (
@@ -75,7 +77,14 @@ type StudioContent struct {
 	SchemaVersion  int                  `json:"schemaVersion"`
 	Classification StudioClassification `json:"classification,omitempty"`
 	Presentation   StudioPresentation   `json:"presentation,omitempty"`
-	Blocks         []json.RawMessage    `json:"blocks"`
+	Blocks         []json.RawMessage    `json:"blocks,omitempty"`
+	Pages          []StudioPage         `json:"pages,omitempty"`
+}
+
+type StudioPage struct {
+	ID     string            `json:"id"`
+	Title  string            `json:"title"`
+	Blocks []json.RawMessage `json:"blocks"`
 }
 
 type StudioDocumentInput struct {
@@ -155,7 +164,8 @@ func studioSurfaceForTemplate(template string) (string, bool) {
 
 func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	in.TemplateKey = strings.TrimSpace(in.TemplateKey)
-	if _, ok := studioSurfaceForTemplate(in.TemplateKey); !ok {
+	surface, ok := studioSurfaceForTemplate(in.TemplateKey)
+	if !ok {
 		return studioValidatedInput{}, fmt.Errorf("templateKey: unsupported")
 	}
 	in.Title = strings.TrimSpace(in.Title)
@@ -203,11 +213,9 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	if err := json.Unmarshal(in.Content, &content); err != nil {
 		return studioValidatedInput{}, fmt.Errorf("content: %w", err)
 	}
-	if content.SchemaVersion != studioSchemaVersion {
-		return studioValidatedInput{}, fmt.Errorf("schemaVersion: unsupported")
-	}
-	if len(content.Blocks) > studioMaxBlocks {
-		return studioValidatedInput{}, fmt.Errorf("blocks: too many")
+	content, err = normalizeStudioContentVersion(surface, in.Title, content)
+	if err != nil {
+		return studioValidatedInput{}, err
 	}
 	switch content.Presentation.ContentWidth {
 	case "", "reading", "wide", "compact", "editorial":
@@ -245,9 +253,35 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	state := studioBlockValidation{
 		ids: map[string]bool{}, links: map[string]bool{}, assets: map[string]bool{},
 	}
-	for _, raw := range content.Blocks {
-		if err := state.validate(raw, 0); err != nil {
-			return studioValidatedInput{}, err
+	if content.SchemaVersion == studioSchemaVersion {
+		if len(content.Pages) < 1 || len(content.Pages) > studioMaxPages {
+			return studioValidatedInput{}, fmt.Errorf("pages: one to %d pages required", studioMaxPages)
+		}
+		pageIDs := map[string]bool{}
+		for index := range content.Pages {
+			page := &content.Pages[index]
+			page.ID = strings.TrimSpace(page.ID)
+			page.Title = strings.TrimSpace(page.Title)
+			if !studioIDRE.MatchString(page.ID) || pageIDs[page.ID] {
+				return studioValidatedInput{}, fmt.Errorf("page.id: invalid or duplicate")
+			}
+			if page.Title == "" || utf8.RuneCountInString(page.Title) > 240 {
+				return studioValidatedInput{}, fmt.Errorf("page.title: required or too long")
+			}
+			pageIDs[page.ID] = true
+			state.runes += utf8.RuneCountInString(page.Title)
+			state.plain = append(state.plain, page.Title)
+			for _, raw := range page.Blocks {
+				if err := state.validate(raw, 0); err != nil {
+					return studioValidatedInput{}, err
+				}
+			}
+		}
+	} else {
+		for _, raw := range content.Blocks {
+			if err := state.validate(raw, 0); err != nil {
+				return studioValidatedInput{}, err
+			}
 		}
 	}
 	if state.count > studioMaxBlocks || state.runes > studioMaxTextRunes {
@@ -273,11 +307,81 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	if err != nil {
 		return studioValidatedInput{}, err
 	}
+	if len(normalizedContent) > studioMaxRequest {
+		return studioValidatedInput{}, fmt.Errorf("content: normalized content too large")
+	}
 	in.Content = normalizedContent
 	return studioValidatedInput{
 		Input: in, Content: content, Classification: classification,
 		PlainText: plain, Links: links, Assets: assets, Facets: facets,
 	}, nil
+}
+
+func normalizeStudioContentVersion(
+	surface string,
+	documentTitle string,
+	content StudioContent,
+) (StudioContent, error) {
+	switch content.SchemaVersion {
+	case studioLegacySchema:
+		if surface != "documents" {
+			if content.Blocks == nil {
+				content.Blocks = []json.RawMessage{}
+			}
+			return content, nil
+		}
+		blocks := content.Blocks
+		if blocks == nil {
+			blocks = []json.RawMessage{}
+		}
+		content.SchemaVersion = studioSchemaVersion
+		content.Blocks = nil
+		content.Pages = []StudioPage{{
+			ID:     "p1",
+			Title:  strings.TrimSpace(documentTitle),
+			Blocks: blocks,
+		}}
+		return content, nil
+	case studioSchemaVersion:
+		if surface != "documents" {
+			return StudioContent{}, fmt.Errorf("schemaVersion: unsupported for surface")
+		}
+		if len(content.Blocks) != 0 {
+			return StudioContent{}, fmt.Errorf("blocks: root blocks unsupported in schemaVersion 2")
+		}
+		for index := range content.Pages {
+			if content.Pages[index].Blocks == nil {
+				content.Pages[index].Blocks = []json.RawMessage{}
+			}
+		}
+		return content, nil
+	default:
+		return StudioContent{}, fmt.Errorf("schemaVersion: unsupported")
+	}
+}
+
+func normalizeStudioDocumentContent(document *StudioDocument) error {
+	if document == nil || len(document.Content) == 0 {
+		return nil
+	}
+	var content StudioContent
+	if err := json.Unmarshal(document.Content, &content); err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
+	surface, ok := studioSurfaceForTemplate(document.TemplateKey)
+	if !ok {
+		return fmt.Errorf("templateKey: unsupported")
+	}
+	content, err := normalizeStudioContentVersion(surface, document.Title, content)
+	if err != nil {
+		return err
+	}
+	normalized, err := json.Marshal(content)
+	if err != nil {
+		return err
+	}
+	document.Content = normalized
+	return nil
 }
 
 func validateStudioClassification(c StudioClassification) (StudioClassification, map[string][]string, error) {
