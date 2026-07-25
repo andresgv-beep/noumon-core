@@ -2,15 +2,100 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  createStudioInfoCard,
   createStudioPage,
+  moveStudioInfoCard,
   moveStudioPage,
   normalizeStudioContent,
   normalizeStudioDocument,
   removeStudioPage,
   renameStudioPage,
   studioDocumentBlocks,
+  studioInfoCardsByAnchor,
   studioPage,
+  studioPageInfoCards,
 } from './studioContent.js';
+
+test('keeps side cards on their own page and creates new pages clean', () => {
+  const document = normalizeStudioDocument({
+    templateKey: 'document',
+    title: 'Archivo local',
+    metadata: {},
+    content: { schemaVersion: 2, pages: [{ id: 'p1', title: 'Inicio', blocks: [] }] },
+  });
+
+  const right = createStudioInfoCard(studioPage(document, 'p1'));
+  const left = createStudioInfoCard(studioPage(document, 'p1'), 'left');
+  right.caption = 'Ficha derecha';
+  left.caption = 'Ficha izquierda';
+
+  const second = createStudioPage(document, 'Anexo');
+  assert.deepEqual(second.infoCards, []);
+  assert.deepEqual(second.blocks, []);
+  assert.deepEqual(studioPageInfoCards(document, second.id), []);
+
+  const first = studioPageInfoCards(document, 'p1');
+  assert.deepEqual(first.map((card) => card.side), ['right', 'left']);
+  assert.notEqual(right.id, left.id);
+});
+
+test('anchors side cards to a block so they can move down the page', () => {
+  const document = normalizeStudioDocument({
+    templateKey: 'document',
+    title: 'Archivo local',
+    metadata: {},
+    content: {
+      schemaVersion: 2,
+      pages: [{
+        id: 'p1',
+        title: 'Inicio',
+        blocks: [{ id: 'a', type: 'paragraph' }, { id: 'b', type: 'paragraph' }, { id: 'c', type: 'paragraph' }],
+      }],
+    },
+  });
+  const page = studioPage(document, 'p1');
+  const card = createStudioInfoCard(page);
+  assert.equal(card.anchor, 0);
+
+  assert.equal(moveStudioInfoCard(page, card.id, 1, 3), true);
+  assert.equal(card.anchor, 1);
+  assert.equal(studioInfoCardsByAnchor([card], 3).get(1)[0].id, card.id);
+
+  // No baja más allá del último bloque ni sube por encima del primero.
+  moveStudioInfoCard(page, card.id, 1, 3);
+  assert.equal(moveStudioInfoCard(page, card.id, 1, 3), false);
+  assert.equal(card.anchor, 2);
+  moveStudioInfoCard(page, card.id, -1, 3);
+  moveStudioInfoCard(page, card.id, -1, 3);
+  assert.equal(moveStudioInfoCard(page, card.id, -1, 3), false);
+  assert.equal(card.anchor, 0);
+
+  // Un anclaje que apunta más allá del final acompaña al último bloque en vez
+  // de desaparecer de la página.
+  card.anchor = 99;
+  assert.equal(studioInfoCardsByAnchor([card], 3).get(2)[0].id, card.id);
+});
+
+test('shows a pre-migration info card on the first page without normalizing', () => {
+  // El lector publicado no normaliza el contenido: tiene que resolver por su
+  // cuenta los documentos guardados antes de las fichas por página.
+  const document = {
+    id: 'doc-1',
+    templateKey: 'document',
+    content: {
+      schemaVersion: 2,
+      infoCard: { assetId: 'asset-card', caption: 'Retrato', rows: [] },
+      pages: [
+        { id: 'p1', title: 'Inicio', blocks: [] },
+        { id: 'p2', title: 'Anexo', blocks: [] },
+      ],
+    },
+  };
+
+  assert.equal(studioPageInfoCards(document, 'p1').length, 1);
+  assert.equal(studioPageInfoCards(document, 'p1')[0].caption, 'Retrato');
+  assert.deepEqual(studioPageInfoCards(document, 'p2'), []);
+});
 
 test('normalizes a legacy document into one stable page without losing blocks', () => {
   const legacy = {
@@ -53,7 +138,7 @@ test('keeps pages and resolves the requested active page', () => {
   assert.equal(studioDocumentBlocks(document, 'inexistente')[0].id, 'a');
 });
 
-test('normalizes the document info card without changing page content', () => {
+test('adopts the legacy document info card as the first card of the first page', () => {
   const document = normalizeStudioDocument({
     templateKey: 'document',
     title: 'Archivo local',
@@ -65,15 +150,28 @@ test('normalizes the document info card without changing page content', () => {
         caption: 'Retrato',
         rows: [{ label: 'Autor', value: 'Equipo local' }],
       },
-      pages: [{ id: 'p1', title: 'Inicio', blocks: [] }],
+      pages: [
+        { id: 'p1', title: 'Inicio', blocks: [] },
+        { id: 'p2', title: 'Anexo', blocks: [] },
+      ],
     },
   });
 
-  assert.deepEqual(document.content.infoCard, {
+  assert.equal(document.content.infoCard, undefined);
+  assert.deepEqual(document.content.pages[0].infoCards, [{
+    id: 'card-1',
+    side: 'right',
+    anchor: 0,
     assetId: 'asset-card',
     caption: 'Retrato',
+    imageRatio: 'natural',
+    imageFocusX: 50,
+    imageFocusY: 50,
     rows: [{ label: 'Autor', value: 'Equipo local' }],
-  });
+  }]);
+  // La ficha antigua era común a todas las páginas; ahora sólo acompaña a la
+  // primera y el resto nace limpio.
+  assert.deepEqual(document.content.pages[1].infoCards, []);
   assert.equal(document.content.pages[0].id, 'p1');
 });
 

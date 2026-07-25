@@ -956,6 +956,73 @@ func TestStudioInfoCardUsesValidatedAssetsAndSearchText(t *testing.T) {
 	}
 }
 
+func TestStudioPageInfoCardsStayPerPage(t *testing.T) {
+	content := StudioContent{
+		SchemaVersion: studioSchemaVersion,
+		Pages: []StudioPage{
+			{
+				ID: "inicio", Title: "Inicio", Blocks: []json.RawMessage{},
+				InfoCards: []StudioInfoCard{
+					{ID: "card-1", Side: "right", AssetID: "asset-uno", Caption: "Retrato"},
+					{ID: "card-2", Side: "left", Caption: "Cronología"},
+				},
+			},
+			{ID: "anexo", Title: "Anexo", Blocks: []json.RawMessage{}},
+		},
+	}
+	encoded, err := json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validated, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey: "document", Title: "Fichas por página", Content: encoded,
+	})
+	if err != nil {
+		t.Fatalf("fichas por página rechazadas: %v", err)
+	}
+	var stored StudioContent
+	if err := json.Unmarshal(validated.Input.Content, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Pages[0].InfoCards) != 2 || len(stored.Pages[1].InfoCards) != 0 {
+		t.Fatalf("las fichas no se quedaron en su página: %+v", stored.Pages)
+	}
+	if len(validated.Assets) != 1 || validated.Assets[0] != "asset-uno" {
+		t.Fatalf("el asset de la ficha no se registró: %#v", validated.Assets)
+	}
+	if !strings.Contains(validated.PlainText, "Cronología") {
+		t.Fatalf("el texto de la ficha no llegó al índice: %q", validated.PlainText)
+	}
+
+	// Un lado inventado se rechaza; las fichas duplicadas de id también.
+	content.Pages[0].InfoCards[1].Side = "arriba"
+	encoded, _ = json.Marshal(content)
+	if _, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey: "document", Title: "Lado inválido", Content: encoded,
+	}); err == nil || !strings.Contains(err.Error(), "infoCard.side") {
+		t.Fatalf("lado inválido aceptado: %v", err)
+	}
+	content.Pages[0].InfoCards[1].Side = "left"
+	content.Pages[0].InfoCards[1].ID = "card-1"
+	encoded, _ = json.Marshal(content)
+	if _, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey: "document", Title: "Ficha duplicada", Content: encoded,
+	}); err == nil || !strings.Contains(err.Error(), "infoCard.id") {
+		t.Fatalf("id de ficha duplicado aceptado: %v", err)
+	}
+
+	content.Pages[0].InfoCards = make([]StudioInfoCard, studioMaxInfoCards+1)
+	for index := range content.Pages[0].InfoCards {
+		content.Pages[0].InfoCards[index] = StudioInfoCard{ID: fmt.Sprintf("card-%d", index+1), Side: "right"}
+	}
+	encoded, _ = json.Marshal(content)
+	if _, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey: "document", Title: "Demasiadas fichas", Content: encoded,
+	}); err == nil || !strings.Contains(err.Error(), "page.infoCards") {
+		t.Fatalf("límite de fichas por página no aplicado: %v", err)
+	}
+}
+
 func TestStudioFeaturedAndRelatedUsePublishedSnapshots(t *testing.T) {
 	s := testAuthServer(t, "")
 	h := studioTestMux(s)

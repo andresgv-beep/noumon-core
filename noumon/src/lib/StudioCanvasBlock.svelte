@@ -2,6 +2,7 @@
   import StudioCanvasBlock from './StudioCanvasBlock.svelte';
   import StudioImage from './StudioImage.svelte';
   import StudioItemReference from './StudioItemReference.svelte';
+  import { inlineText, plainText, richText } from './studioEditable.js';
   import { t } from './i18n.svelte.js';
 
   let {
@@ -23,28 +24,6 @@
     onMoveToRoot,
     onOpenItem,
   } = $props();
-
-  function escapeHTML(value) {
-    return String(value || '').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    })[character]);
-  }
-
-  function inline(value) {
-    return escapeHTML(value)
-      .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-  }
-
-  function inlineText(node) {
-    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || '';
-    if (node.nodeType !== Node.ELEMENT_NODE) return '';
-    const content = [...node.childNodes].map(inlineText).join('');
-    if (node.tagName === 'STRONG' || node.tagName === 'B') return `**${content}**`;
-    if (node.tagName === 'EM' || node.tagName === 'I') return `*${content}*`;
-    if (node.tagName === 'BR') return '\n';
-    return content;
-  }
 
   function setText(event, field = 'text') {
     block[field] = inlineText(event.currentTarget);
@@ -188,6 +167,7 @@
   class="canvas-block"
   class:selected={selected || activeBlockID === block.id}
   class:nested
+  data-type={block.type}
   role="group"
   aria-label={t(`studio.block.${block.type}`)}
   onclick={select}
@@ -218,21 +198,21 @@
   {#if block.type === 'heading'}
     {@const level = Math.min(3, Math.max(1, block.level || 2))}
     {#if level === 1}
-      <h1 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</h1>
+      <h1 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></h1>
     {:else if level === 2}
-      <h2 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</h2>
+      <h2 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></h2>
     {:else}
-      <h3 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</h3>
+      <h3 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></h3>
     {/if}
   {:else if block.type === 'paragraph'}
-    <p style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</p>
+    <p style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></p>
   {:else if block.type === 'quote'}
-    <blockquote style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{@html inline(block.text)}</blockquote>
+    <blockquote style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></blockquote>
   {:else if block.type === 'bulletList' || block.type === 'orderedList'}
     {#if block.type === 'bulletList'}
-      <ul style:font-size={`${textSize()}px`} style:text-align={textAlign()}>{#each block.items || [] as item, itemIndex}<li contenteditable="true" oninput={(event) => setListItem(event, itemIndex)}>{item}</li>{/each}</ul>
+      <ul style:font-size={`${textSize()}px`} style:text-align={textAlign()}>{#each block.items || [] as item, itemIndex}<li contenteditable="true" use:plainText={item} oninput={(event) => setListItem(event, itemIndex)}></li>{/each}</ul>
     {:else}
-      <ol style:font-size={`${textSize()}px`} style:text-align={textAlign()}>{#each block.items || [] as item, itemIndex}<li contenteditable="true" oninput={(event) => setListItem(event, itemIndex)}>{item}</li>{/each}</ol>
+      <ol style:font-size={`${textSize()}px`} style:text-align={textAlign()}>{#each block.items || [] as item, itemIndex}<li contenteditable="true" use:plainText={item} oninput={(event) => setListItem(event, itemIndex)}></li>{/each}</ol>
     {/if}
   {:else if block.type === 'table'}
     <div class="table-editor">
@@ -252,9 +232,9 @@
               <tr>
                 {#each row as cell, columnIndex}
                   {#if rowIndex === 0}
-                    <th contenteditable="true" oninput={(event) => setTableCell(event, rowIndex, columnIndex)}>{cell}</th>
+                    <th contenteditable="true" use:plainText={cell} oninput={(event) => setTableCell(event, rowIndex, columnIndex)}></th>
                   {:else}
-                    <td contenteditable="true" oninput={(event) => setTableCell(event, rowIndex, columnIndex)}>{cell}</td>
+                    <td contenteditable="true" use:plainText={cell} oninput={(event) => setTableCell(event, rowIndex, columnIndex)}></td>
                   {/if}
                 {/each}
               </tr>
@@ -297,7 +277,7 @@
             alt={block.alt || ''}
             display={imageSize()}
           />
-          <figcaption contenteditable="true" oninput={(event) => setText(event, 'caption')}>{block.caption || t('studio.imageCaption')}</figcaption>
+          <figcaption contenteditable="true" use:plainText={block.caption || t('studio.imageCaption')} oninput={(event) => setText(event, 'caption')}></figcaption>
         </figure>
         {#if imageHasSideText()}
           <div
@@ -313,11 +293,11 @@
       </div>
     </div>
   {:else if block.type === 'code'}
-    <pre style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" oninput={setText}>{block.text || ''}</pre>
+    <pre style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:plainText={block.text} oninput={setText}></pre>
   {:else if block.type === 'callout'}
     <aside class="callout" style:font-size={`${textSize()}px`} style:text-align={textAlign()}>
-      <strong contenteditable="true" oninput={(event) => setText(event, 'title')}>{@html inline(block.title || t('studio.calloutTitle'))}</strong>
-      <p contenteditable="true" oninput={setText}>{@html inline(block.text)}</p>
+      <strong contenteditable="true" use:richText={block.title || t('studio.calloutTitle')} oninput={(event) => setText(event, 'title')}></strong>
+      <p contenteditable="true" use:richText={block.text} oninput={setText}></p>
     </aside>
   {:else if block.type === 'columns'}
     {#if !nested}
@@ -446,6 +426,12 @@
 
 <style>
   .canvas-block{position:relative;margin:2px -9px;padding:7px 9px;border:1px solid transparent;border-radius:var(--r-sm);transition:border-color .12s,background .12s}
+  /* Párrafos y títulos ENVUELVEN la ficha flotada (igual que en la página
+     publicada): siguen siendo bloques normales, así que sus líneas se estrechan
+     al lado de la ficha y recuperan el ancho completo al pasarla. Lo demás
+     —figuras, tablas, columnas, citas, avisos— se estrecha entero con flow-root,
+     que a diferencia de overflow:hidden no recorta el asa (left:-25px). */
+  .canvas-block:not([data-type="paragraph"]):not([data-type="heading"]){display:flow-root}
   .canvas-block:not(.nested):hover,.canvas-block.selected{border-color:var(--accent-line);background:color-mix(in srgb,var(--accent) 5%,transparent)}
   .canvas-block.nested{margin:2px 0;padding:7px 9px}
   [contenteditable="true"]{outline:0}

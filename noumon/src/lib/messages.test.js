@@ -36,8 +36,17 @@ test('ships every page-manager message in both interface languages', () => {
 
 test('ships every info-card message in both interface languages', () => {
   const keys = [
-    'studio.infoCard',
-    'studio.infoCardDesc',
+    'studio.infoCards',
+    'studio.infoCardsDesc',
+    'studio.infoCardsEmpty',
+    'studio.infoCardAdd',
+    'studio.infoCardNumber',
+    'studio.infoCardSide',
+    'studio.infoCardSide.right',
+    'studio.infoCardSide.left',
+    'studio.infoCardMoveCardUp',
+    'studio.infoCardMoveCardDown',
+    'studio.infoCardRemoveCard',
     'studio.infoCardAddImage',
     'studio.infoCardReplaceImage',
     'studio.infoCardRemoveImage',

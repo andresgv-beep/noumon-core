@@ -15,7 +15,10 @@
   import {
     normalizeStudioDocument, studioDocumentBlocks, studioPage, studioPages,
     createStudioPage, renameStudioPage, moveStudioPage, removeStudioPage,
+    createStudioInfoCard, removeStudioInfoCard, moveStudioInfoCard,
+    studioInfoCardsByAnchor,
   } from './studioContent.js';
+  import { plainText } from './studioEditable.js';
   import { itemSearch } from './libraryApi.js';
   import {
     listStudioDocuments, getStudioDocument, createStudioDocument,
@@ -32,6 +35,7 @@
   let activeSection = $state('structure');
   let selectedBlockID = $state('');
   let draggingBlockID = $state('');
+  let draggingCardID = $state('');
   let loading = $state(true);
   let saving = $state(false);
   let saved = $state(false);
@@ -73,12 +77,11 @@
     pages: [{ id: 'p1', title: '', blocks: [] }],
   };
   const activeBlocks = () => studioDocumentBlocks(selected, activePageID);
-  const infoCard = () => content().infoCard;
-  const infoCardVisible = () => !!(
-    infoCard()?.assetId ||
-    String(infoCard()?.caption || '').trim() ||
-    infoCard()?.rows?.some((row) => String(row?.label || '').trim() || String(row?.value || '').trim())
-  );
+  // Las fichas son de la página activa, no del documento.
+  const activePage = () => studioPage(selected, activePageID);
+  const infoCards = () => activePage()?.infoCards || [];
+  const infoCardVisible = () => infoCards().length > 0;
+  const cardSlots = () => studioInfoCardsByAnchor(infoCards(), documentBlocks().length);
   const documentCover = () => activeBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
   const documentBlocks = () => activeBlocks().filter((block) => block?.role !== 'cover');
 
@@ -326,8 +329,7 @@
     return {
       ...base,
       schemaVersion: 2,
-      infoCard: { assetId: '', caption: '', rows: [] },
-      pages: [{ id: 'p1', title: documentTitle, blocks }],
+      pages: [{ id: 'p1', title: documentTitle, blocks, infoCards: [] }],
     };
   }
 
@@ -707,14 +709,63 @@
     chooseImage({ cover: true });
   }
 
-  function chooseInfoCardImage() {
-    chooseImage({ infoCard: true });
+  function findInfoCard(cardId) {
+    return infoCards().find((card) => card.id === cardId) || null;
   }
 
-  function removeInfoCardImage() {
-    if (!infoCard()?.assetId) return;
-    infoCard().assetId = '';
+  function chooseInfoCardImage(cardId) {
+    chooseImage({ infoCardId: cardId });
+  }
+
+  function removeInfoCardImage(cardId) {
+    const card = findInfoCard(cardId);
+    if (!card?.assetId) return;
+    card.assetId = '';
     touch();
+  }
+
+  function addInfoCard() {
+    if (!selected || selected.status === 'archived') return;
+    if (!createStudioInfoCard(activePage())) return;
+    touch();
+  }
+
+  function removeInfoCard(cardId) {
+    if (!removeStudioInfoCard(activePage(), cardId)) return;
+    touch();
+  }
+
+  function moveInfoCard(cardId, delta) {
+    if (!moveStudioInfoCard(activePage(), cardId, delta, documentBlocks().length)) return;
+    selectedBlockID = cardId;
+    touch();
+  }
+
+  function flipInfoCardSide(cardId) {
+    const card = findInfoCard(cardId);
+    if (!card) return;
+    card.side = card.side === 'left' ? 'right' : 'left';
+    selectedBlockID = cardId;
+    touch();
+  }
+
+  function startInfoCardDrag(cardId, event) {
+    draggingCardID = cardId;
+    draggingBlockID = '';
+    selectedBlockID = cardId;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', cardId);
+  }
+
+  // Soltar una ficha sobre un bloque la ancla ahí. Sólo vale para bloques del
+  // cuerpo: los anidados (dentro de columnas) no son posiciones de anclaje.
+  function anchorInfoCardAt(index) {
+    const card = findInfoCard(draggingCardID);
+    draggingCardID = '';
+    if (!card || index < 0) return true;
+    card.anchor = index;
+    touch();
+    return true;
   }
 
   function removeDocumentCover() {
@@ -746,8 +797,10 @@
         caption: '', alt: '', sideText: '',
         imageSize: 'original', imageAlign: 'center',
       };
-      if (targetColumn?.infoCard) {
-        infoCard().assetId = asset.id;
+      if (targetColumn?.infoCardId) {
+        const card = findInfoCard(targetColumn.infoCardId);
+        if (!card) return;
+        card.assetId = asset.id;
         selectedBlockID = '';
         touch();
         return;
@@ -884,12 +937,28 @@
     }
   }
 
+  // Guardar una vez no basta para dejar el documento limpio: si el usuario sigue
+  // escribiendo durante la petición, saveNow conserva esos cambios, vuelve a
+  // marcar dirty y programa otro guardado. Publicar en ese momento publica la
+  // revisión anterior, y el guardado que viene detrás sube la revisión: la
+  // publicación queda pendiente al instante, justo después de publicar.
+  async function flushUntilClean(attempts = 5) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if (!await flushCurrent()) return false;
+      if (!dirty) return true;
+    }
+    return !dirty;
+  }
+
   async function publishSelected() {
     if (!selected || !canPublish) return;
-    if (!await flushCurrent()) return;
+    if (!await flushUntilClean()) return;
     try {
       const updated = await publishStudioDocument(selected.id);
-      selected = { ...selected, ...updated };
+      // Sólo el sobre (revisión, estado, publicación). Reemplazar el documento
+      // entero traería de vuelta el contenido del servidor sin normalizar y
+      // desmontaría el lienzo que el usuario está editando.
+      mergeSavedEnvelope(selected, updated);
       documents = documents.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
     } catch (e) {
       error = e.code || e.message;
@@ -898,10 +967,10 @@
 
   async function unpublishSelected() {
     if (!selected?.publishedRevision || !canPublish) return;
-    if (!await flushCurrent()) return;
+    if (!await flushUntilClean()) return;
     try {
       const updated = await unpublishStudioDocument(selected.id);
-      selected = { ...selected, ...updated };
+      mergeSavedEnvelope(selected, updated);
       documents = documents.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
     } catch (e) {
       error = e.code || e.message;
@@ -964,6 +1033,7 @@
 
   function endBlockDrag() {
     draggingBlockID = '';
+    draggingCardID = '';
   }
 
   function takeDraggedBlock(destinationBlockID = '') {
@@ -975,6 +1045,10 @@
   }
 
   function dropBeforeBlock(targetBlockID) {
+    if (draggingCardID) {
+      anchorInfoCardAt(documentBlocks().findIndex((block) => block.id === targetBlockID));
+      return;
+    }
     const block = takeDraggedBlock(targetBlockID);
     if (!block) return;
     const target = findBlockLocation(targetBlockID);
@@ -986,6 +1060,11 @@
   }
 
   function dropIntoColumn(columnsBlockID, columnIndex) {
+    // Una ficha no cabe dentro de una columna: se ancla al bloque de columnas.
+    if (draggingCardID) {
+      anchorInfoCardAt(documentBlocks().findIndex((block) => block.id === columnsBlockID));
+      return;
+    }
     const destinationBeforeMove = findBlockByID(columnsBlockID);
     if (!destinationBeforeMove || blockContainsID(findBlockByID(draggingBlockID), columnsBlockID)) return;
     const block = takeDraggedBlock(columnsBlockID);
@@ -1002,6 +1081,10 @@
   }
 
   function dropAtRootEnd() {
+    if (draggingCardID) {
+      anchorInfoCardAt(documentBlocks().length - 1);
+      return;
+    }
     const block = takeDraggedBlock();
     if (!block) return;
     activeBlocks().push(block);
@@ -1195,8 +1278,11 @@
         />
         <StudioInfoCardEditor
           documentId={selected.id}
-          card={infoCard()}
+          cards={infoCards()}
           uploading={uploadingImage}
+          onAdd={addInfoCard}
+          onRemoveCard={removeInfoCard}
+          onMoveCard={moveInfoCard}
           onChooseImage={chooseInfoCardImage}
           onRemoveImage={removeInfoCardImage}
           onChange={touch}
@@ -1346,21 +1432,58 @@
               style:font-size={`${pageTextSize('titleFontSize', 34)}px`}
               style:text-align={content().presentation?.titleTextAlign || 'left'}
               contenteditable="true"
+              use:plainText={selected.title}
               onfocus={() => (selectedBlockID = '@title')}
               oninput={(event) => { selected.title = event.currentTarget.innerText; touch(); }}
-            >{selected.title}</h1>
+            ></h1>
           </div>
           <div class="canvas-summary">
             <p
               style:font-size={`${pageTextSize('summaryFontSize', 17)}px`}
               style:text-align={content().presentation?.summaryTextAlign || 'left'}
               contenteditable="true"
+              use:plainText={selected.summary || t('studio.summaryPlaceholder')}
               onfocus={() => (selectedBlockID = '@summary')}
               oninput={(event) => { selected.summary = event.currentTarget.innerText; touch(); }}
-            >{selected.summary || t('studio.summaryPlaceholder')}</p>
+            ></p>
           </div>
 
-          {#each documentBlocks() as block (block.id)}
+          <!-- Dentro del lienzo y flotadas: se editan en el mismo sitio en el
+               que se publican. Cada ficha se emite junto al bloque en el que
+               está anclada, porque un flotado empieza donde aparece en el flujo:
+               eso es lo que permite bajarla por la página. -->
+          {#snippet canvasInfoCard(card)}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="canvas-info-card"
+              class:left={card.side === 'left'}
+              class:selected={selectedBlockID === card.id}
+              onclick={() => (selectedBlockID = card.id)}
+            >
+              <div class="card-tools">
+                <button
+                  class="grip"
+                  draggable="true"
+                  title={t('studio.infoCardDrag')}
+                  aria-label={t('studio.infoCardDrag')}
+                  ondragstart={(event) => startInfoCardDrag(card.id, event)}
+                  ondragend={endBlockDrag}
+                >⠿</button>
+                <button title={t('studio.infoCardMoveCardUp')} aria-label={t('studio.infoCardMoveCardUp')} onclick={(event) => { event.stopPropagation(); moveInfoCard(card.id, -1); }}>↑</button>
+                <button title={t('studio.infoCardMoveCardDown')} aria-label={t('studio.infoCardMoveCardDown')} onclick={(event) => { event.stopPropagation(); moveInfoCard(card.id, 1); }}>↓</button>
+                <button title={t('studio.infoCardFlipSide')} aria-label={t('studio.infoCardFlipSide')} onclick={(event) => { event.stopPropagation(); flipInfoCardSide(card.id); }}>⇄</button>
+              </div>
+              <StudioInfoCard documentId={selected.id} {card} compact />
+            </div>
+          {/snippet}
+
+          {#if !documentBlocks().length}
+            {#each infoCards() as card (card.id)}{@render canvasInfoCard(card)}{/each}
+          {/if}
+
+          {#each documentBlocks() as block, blockIndex (block.id)}
+            {#each cardSlots().get(blockIndex) || [] as card (card.id)}{@render canvasInfoCard(card)}{/each}
             <StudioCanvasBlock
               {block}
               documentId={selected.id}
@@ -1387,11 +1510,6 @@
             onclick={() => addBlock('paragraph')}
           ><b>＋</b>{t('studio.addAnyBlock')}</button>
           </article>
-          {#if infoCardVisible()}
-            <div class="canvas-info-card">
-              <StudioInfoCard documentId={selected.id} card={infoCard()} compact />
-            </div>
-          {/if}
         </div>
 
       </div>
@@ -1483,26 +1601,41 @@
   .document-palette .link-results button{padding:7px;background:var(--raise)}
   .canvas-column{width:100%;max-width:912px;min-width:0;margin:0 auto;transition:max-width .2s}
   .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:744px}
-  .canvas-column.has-info-card{max-width:1180px}.canvas-column.has-info-card.wide{max-width:1260px}.canvas-column.has-info-card.editorial{max-width:1460px}.canvas-column.has-info-card.compact{max-width:1010px}
+  /* Con ficha el lienzo sólo crece lo que ocupa la ficha; el texto conserva su
+     medida de lectura (ancho publicado + el relleno del lienzo). */
+  .canvas-column.has-info-card{max-width:1052px}.canvas-column.has-info-card.wide{max-width:1212px}.canvas-column.has-info-card.editorial{max-width:1392px}.canvas-column.has-info-card.compact{max-width:932px}
   .sidebar-hidden .canvas-column{max-width:1000px}
   .sidebar-hidden .canvas-column.wide{max-width:1120px}.sidebar-hidden .canvas-column.editorial{max-width:1340px}.sidebar-hidden .canvas-column.compact{max-width:820px}
-  .sidebar-hidden .canvas-column.has-info-card{max-width:1280px}.sidebar-hidden .canvas-column.has-info-card.wide{max-width:1400px}.sidebar-hidden .canvas-column.has-info-card.editorial{max-width:1640px}.sidebar-hidden .canvas-column.has-info-card.compact{max-width:1100px}
+  .sidebar-hidden .canvas-column.has-info-card{max-width:1052px}.sidebar-hidden .canvas-column.has-info-card.wide{max-width:1212px}.sidebar-hidden .canvas-column.has-info-card.editorial{max-width:1392px}.sidebar-hidden .canvas-column.has-info-card.compact{max-width:932px}
   .canvas-layout{min-width:0}
-  /* Misma banda compacta que la página publicada: el lienzo no se estira y la
-     ficha va a su derecha, para que editar y publicar se vean igual. */
-  .canvas-layout.has-info-card{display:grid;grid-template-columns:minmax(0,760px) minmax(280px,320px);justify-content:center;align-items:start;gap:clamp(14px,1.6vw,24px)}
-  .canvas-info-card{position:sticky;top:0;min-width:0}
+  /* La ficha flota dentro del lienzo, igual que en la página publicada: no es
+     una columna hermana, así que el lienzo vuelve a ser una sola caja. */
+  /* z-index alto a propósito: los bloques son position:relative, así que se
+     pintaban por encima del flotado y sus bordes y botones tapaban la ficha,
+     dejándola imposible de señalar. Con esto la ficha queda arriba y recibe el
+     clic y el arrastre. */
+  .canvas-info-card{position:relative;z-index:3;float:right;width:clamp(240px,32%,320px);margin:2px 0 18px clamp(16px,2vw,28px);border-radius:var(--r-md);outline:1px solid transparent;outline-offset:3px}
+  .canvas-info-card.left{float:left;margin:2px clamp(16px,2vw,28px) 18px 0}
+  .canvas-info-card:hover{outline-color:var(--accent-line)}
+  .canvas-info-card.selected{outline-color:var(--accent)}
+  .card-tools{position:absolute;z-index:1;right:4px;top:-25px;display:flex;gap:2px;padding:3px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--raise);opacity:0;transition:opacity .12s}
+  .canvas-info-card:hover .card-tools,.canvas-info-card.selected .card-tools{opacity:1}
+  .card-tools button{width:22px;height:20px;display:grid;place-items:center;border:0;border-radius:3px;background:transparent;color:var(--muted);font-size:11px}
+  .card-tools button:hover{color:var(--ink);background:var(--card)}
+  .card-tools .grip{cursor:grab}
   .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
   .revision-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px}.revision-panel header span{color:var(--faint)}
   .revision-list{display:grid;gap:5px}.revision-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:var(--r-sm);background:var(--raise)}
   .revision-row>span{min-width:0;display:flex;flex-direction:column}.revision-row b{font-size:11px}.revision-row small{color:var(--faint);font-size:9px}.revision-row button{padding:5px 8px;font-size:10px}
-  .document-canvas{width:100%;min-height:470px;margin:0 auto;padding:36px clamp(28px,4vw,56px);border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--shadow-soft);font-family:var(--font-read);transition:padding .2s}
+  /* Mismo corte de palabra que la página publicada, sin depender de la regla de
+     agente de usuario que Chrome aplica a los contenteditable. */
+  .document-canvas{width:100%;min-height:470px;margin:0 auto;padding:36px clamp(28px,4vw,56px);border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--shadow-soft);font-family:var(--font-read);transition:padding .2s;overflow-wrap:break-word}
   .document-canvas.compact{padding-inline:44px}.document-canvas.sans{font-family:var(--font)}
   .canvas-title,.canvas-summary{margin:2px -9px;padding:7px 9px;border:1px solid transparent;border-radius:var(--r-sm)}
   .canvas-title:hover,.canvas-title:focus-within,.canvas-summary:hover,.canvas-summary:focus-within{border-color:var(--accent-line);background:color-mix(in srgb,var(--accent) 5%,transparent)}
   .canvas-title h1{margin:0;outline:0;color:var(--ink);line-height:1.1;letter-spacing:-.03em}
   .canvas-summary p{min-height:28px;margin:0;outline:0;color:var(--muted);line-height:1.5}
-  .add-any{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:11px;border:1px dashed var(--border);border-radius:var(--r-md);background:transparent;color:var(--faint);font-size:12px}
+  .add-any{clear:both;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:11px;border:1px dashed var(--border);border-radius:var(--r-md);background:transparent;color:var(--faint);font-size:12px}
   .add-any:hover{border-color:var(--accent-line);color:var(--ink)}.add-any b{width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r-sm);background:var(--accent-weak);color:var(--accent-2)}
   .metadata-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .document-cover{width:100%;min-height:180px;display:grid;place-items:center;gap:8px;overflow:hidden;border:1px dashed var(--border);border-radius:var(--r-md);background:var(--card);color:var(--muted)}
@@ -1528,8 +1661,7 @@
     .block-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.style-options{grid-template-columns:repeat(3,minmax(0,1fr))}
   }
   @media(max-width:900px){
-    .canvas-layout.has-info-card{display:flex;flex-direction:column}
-    .canvas-info-card{position:static;order:2;width:min(100%,560px);margin:0 auto}
+    .canvas-info-card,.canvas-info-card.left{float:none;width:100%;margin:0 0 20px}
   }
   @media(max-width:700px){
     .studio-home{padding:24px 14px 50px}.create-grid{grid-template-columns:1fr}.create-card{min-height:124px}

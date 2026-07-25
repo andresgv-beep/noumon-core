@@ -24,6 +24,7 @@ const (
 	studioMaxFacetValues = 32
 	studioMaxPages       = 100
 	studioMaxInfoRows    = 40
+	studioMaxInfoCards   = 4
 )
 
 var (
@@ -84,10 +85,27 @@ type StudioContent struct {
 }
 
 type StudioInfoCard struct {
-	AssetID string          `json:"assetId,omitempty"`
-	Caption string          `json:"caption,omitempty"`
-	Rows    []StudioInfoRow `json:"rows,omitempty"`
+	// Identidad dentro de la página, lado del artículo al que se pega y bloque
+	// junto al que empieza a flotar (0 = arriba del todo).
+	ID      string `json:"id,omitempty"`
+	Side    string `json:"side,omitempty"`
+	Anchor  int    `json:"anchor,omitempty"`
+	AssetID string `json:"assetId,omitempty"`
+	Caption string `json:"caption,omitempty"`
+	// Encuadre de la imagen: vacío o "natural" respeta la forma original; el
+	// resto recorta a una proporción fija. ImageFocus* (0-100) es el punto de
+	// la imagen que se conserva al recortar.
+	ImageRatio  string          `json:"imageRatio,omitempty"`
+	ImageFocusX *int            `json:"imageFocusX,omitempty"`
+	ImageFocusY *int            `json:"imageFocusY,omitempty"`
+	Rows        []StudioInfoRow `json:"rows,omitempty"`
 }
+
+var studioInfoRatios = map[string]bool{
+	"natural": true, "wide": true, "square": true, "portrait": true, "tall": true,
+}
+
+var studioInfoSides = map[string]bool{"right": true, "left": true}
 
 type StudioInfoRow struct {
 	Label string `json:"label"`
@@ -98,6 +116,9 @@ type StudioPage struct {
 	ID     string            `json:"id"`
 	Title  string            `json:"title"`
 	Blocks []json.RawMessage `json:"blocks"`
+	// Las fichas son de la página, no del documento: cada página tiene las
+	// suyas y una página nueva nace sin ninguna.
+	InfoCards []StudioInfoCard `json:"infoCards,omitempty"`
 }
 
 type StudioDocumentInput struct {
@@ -289,6 +310,40 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 					return studioValidatedInput{}, err
 				}
 			}
+			if len(page.InfoCards) > 0 && surface != "documents" {
+				return studioValidatedInput{}, fmt.Errorf("page.infoCards: unsupported for surface")
+			}
+			if len(page.InfoCards) > studioMaxInfoCards {
+				return studioValidatedInput{}, fmt.Errorf("page.infoCards: at most %d per page", studioMaxInfoCards)
+			}
+			cardIDs := make(map[string]bool, len(page.InfoCards))
+			for cardIndex := range page.InfoCards {
+				card := &page.InfoCards[cardIndex]
+				card.ID = strings.TrimSpace(card.ID)
+				if !studioIDRE.MatchString(card.ID) || cardIDs[card.ID] {
+					return studioValidatedInput{}, fmt.Errorf("infoCard.id: invalid or duplicate")
+				}
+				cardIDs[card.ID] = true
+				card.Side = strings.TrimSpace(card.Side)
+				if card.Side == "" {
+					card.Side = "right"
+				}
+				if !studioInfoSides[card.Side] {
+					return studioValidatedInput{}, fmt.Errorf("infoCard.side: invalid")
+				}
+				// El anclaje es una posición, no una referencia: se recorta al
+				// número de bloques en vez de rechazar el documento, porque los
+				// bloques pueden haber desaparecido desde que se ancló.
+				if card.Anchor < 0 {
+					card.Anchor = 0
+				}
+				if last := len(page.Blocks) - 1; card.Anchor > last {
+					card.Anchor = max(0, last)
+				}
+				if err := validateStudioInfoCard(card, &state); err != nil {
+					return studioValidatedInput{}, err
+				}
+			}
 		}
 	} else {
 		for _, raw := range content.Blocks {
@@ -338,6 +393,20 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	}, nil
 }
 
+func clampStudioFocus(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	clamped := *value
+	if clamped < 0 {
+		clamped = 0
+	}
+	if clamped > 100 {
+		clamped = 100
+	}
+	return &clamped
+}
+
 func validateStudioInfoCard(card *StudioInfoCard, state *studioBlockValidation) error {
 	if card == nil {
 		return nil
@@ -350,6 +419,14 @@ func validateStudioInfoCard(card *StudioInfoCard, state *studioBlockValidation) 
 		}
 		state.assets[card.AssetID] = true
 	}
+	card.ImageRatio = strings.TrimSpace(card.ImageRatio)
+	if card.ImageRatio != "" && !studioInfoRatios[card.ImageRatio] {
+		return fmt.Errorf("infoCard.imageRatio: invalid")
+	}
+	// El punto focal es cosmético: se recorta al rango válido en vez de
+	// rechazar el documento entero.
+	card.ImageFocusX = clampStudioFocus(card.ImageFocusX)
+	card.ImageFocusY = clampStudioFocus(card.ImageFocusY)
 	if utf8.RuneCountInString(card.Caption) > 1000 {
 		return fmt.Errorf("infoCard.caption: too long")
 	}

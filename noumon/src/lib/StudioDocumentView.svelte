@@ -2,7 +2,10 @@
   import StudioBlockView from './StudioBlockView.svelte';
   import StudioImage from './StudioImage.svelte';
   import StudioInfoCard from './StudioInfoCard.svelte';
-  import { studioDocumentBlocks, studioPage } from './studioContent.js';
+  import {
+    studioDocumentBlocks, studioPage, studioPageInfoCards, studioInfoCardHasContent,
+    studioInfoCardsByAnchor,
+  } from './studioContent.js';
   import { t, relTime } from './i18n.svelte.js';
 
   let { document, pageId = '', preview = false, expanded = false, onOpenItem, onToc } = $props();
@@ -11,12 +14,11 @@
   const presentation = () => content().presentation || {};
   const activePage = () => studioPage(document, pageId);
   const pageTitle = () => activePage()?.title || document.title;
-  const infoCard = () => content().infoCard || {};
-  const hasInfoCard = () => !!(
-    infoCard().assetId ||
-    String(infoCard().caption || '').trim() ||
-    infoCard().rows?.some((row) => String(row?.label || '').trim() || String(row?.value || '').trim())
-  );
+  // Fichas de ESTA página. Una ficha sin nada dentro no se publica, aunque en el
+  // editor siga visible para poder rellenarla.
+  const infoCards = () => studioPageInfoCards(document, pageId).filter(studioInfoCardHasContent);
+  const hasInfoCard = () => infoCards().length > 0;
+  const cardSlots = () => studioInfoCardsByAnchor(infoCards(), bodyBlocks().length);
   const pageBlocks = () => studioDocumentBlocks(document, pageId);
   const cover = () => pageBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
   const bodyBlocks = () => pageBlocks().filter((block) => block?.role !== 'cover');
@@ -90,7 +92,25 @@
       </figure>
     {/if}
 
-    {#each bodyBlocks() as block (block.id)}
+    <!-- Las fichas viven DENTRO de la página, flotadas al lado que les toque: el
+         texto las envuelve, como en cualquier artículo de enciclopedia. Cada una
+         se emite junto al bloque en el que está anclada, porque un flotado
+         empieza donde aparece en el flujo: así una ficha puede ir a media página
+         y no siempre arriba del todo. -->
+    {#if !bodyBlocks().length}
+      {#each infoCards() as card (card.id)}
+        <aside class="info-slot" class:left={card.side === 'left'}>
+          <StudioInfoCard documentId={document.id} {card} compact={preview} />
+        </aside>
+      {/each}
+    {/if}
+
+    {#each bodyBlocks() as block, index (block.id)}
+      {#each cardSlots().get(index) || [] as card (card.id)}
+        <aside class="info-slot" class:left={card.side === 'left'}>
+          <StudioInfoCard documentId={document.id} {card} compact={preview} />
+        </aside>
+      {/each}
       <StudioBlockView {block} documentId={document.id} {onOpenItem} />
     {/each}
 
@@ -98,27 +118,31 @@
       <footer>{#each document.tags as tag}<span>{tag}</span>{/each}</footer>
     {/if}
   </article>
-  {#if hasInfoCard()}
-    <div class="info-slot">
-      <StudioInfoCard documentId={document.id} card={infoCard()} compact={preview} />
-    </div>
-  {/if}
 </div>
 
 <style>
   .document-layout{width:100%}
-  /* Artículo + ficha forman UNA banda compacta centrada, como una página de
-     enciclopedia: la columna de texto conserva una medida legible (no se estira
-     con la ventana) y la ficha va pegada a su derecha, no desterrada al borde. */
-  .document-layout.has-info-card{display:grid;grid-template-columns:minmax(0,760px) minmax(300px,352px);justify-content:center;align-items:start;gap:clamp(20px,2.4vw,40px);width:100%}
-  .document-layout.has-info-card.compact{grid-template-columns:minmax(0,640px) minmax(280px,320px)}
-  .document-layout.has-info-card.wide{grid-template-columns:minmax(0,900px) minmax(300px,368px)}
-  .document-layout.has-info-card.editorial{grid-template-columns:minmax(0,1040px) minmax(320px,392px)}
-  .document-layout.has-info-card .page{max-width:none;padding-inline:clamp(16px,1.6vw,26px)}
-  .info-slot{position:sticky;top:24px;padding-top:clamp(20px,2.6vw,40px)}
+  /* La ficha es un elemento del artículo, no un vecino: flota a la derecha
+     dentro de la página y el texto la envuelve. Por eso la página se estrecha
+     cuando hay ficha (así el texto que corre por debajo de ella mantiene una
+     medida legible en vez de estirarse a lo ancho de la ventana). */
+  .document-layout.has-info-card .page{max-width:940px}
+  .document-layout.has-info-card .page.compact{max-width:820px}
+  .document-layout.has-info-card .page.wide{max-width:1100px}
+  .document-layout.has-info-card .page.editorial{max-width:1280px}
+  .info-slot{position:relative;z-index:1;float:right;width:clamp(260px,32%,340px);margin:4px 0 22px clamp(20px,2.4vw,34px)}
+  .info-slot.left{float:left;margin:4px clamp(20px,2.4vw,34px) 22px 0}
+  /* Los bloques con cuerpo propio (figuras, tablas, citas, avisos) se estrechan
+     junto a la ficha en vez de deslizarse por debajo: flow-root crea contexto
+     de bloque sin recortar nada. Párrafos y títulos sí la envuelven. */
+  .page :global(figure),.page :global(.table-scroll),.page :global(blockquote),.page :global(.callout),.page :global(.columns){display:flow-root}
   /* Página a ras, como cualquier página del navegador: sin marco de tarjeta
      (borde/sombra/fondo propio) y llenando el ancho de lectura. */
-  .page{width:100%;max-width:1120px;box-sizing:border-box;margin:0 auto;padding:clamp(24px,3.2vw,52px) clamp(20px,3.2vw,60px) 64px;color:var(--ink);font-family:var(--font-read,Georgia,serif);line-height:1.75}
+  /* overflow-wrap explícito: el editor lo recibe gratis del navegador (regla de
+     agente de usuario sobre contenteditable), la página publicada no. Sin él una
+     cadena larga sin espacios no se puede partir, se desborda a lo ancho y el
+     navegador la empuja por debajo de la ficha. */
+  .page{width:100%;max-width:1120px;box-sizing:border-box;margin:0 auto;padding:clamp(24px,3.2vw,52px) clamp(20px,3.2vw,60px) 64px;color:var(--ink);font-family:var(--font-read,Georgia,serif);line-height:1.75;overflow-wrap:break-word}
   .page.sans{font-family:var(--font,system-ui,sans-serif)}
   .page.compact{max-width:760px}.page.wide{max-width:1320px}.page.editorial{max-width:1500px}
   .page.preview{padding-top:clamp(20px,2.6vw,40px)}
@@ -131,12 +155,13 @@
   .lead{font-size:18px;color:var(--muted);line-height:1.55}
   .meta{font-family:var(--font,system-ui,sans-serif);font-size:12px;color:var(--faint)}
   .cover{margin:0 0 38px}.cover :global(img),.cover :global(.placeholder){width:100%;max-height:560px;object-fit:cover;border-radius:var(--r-md)}.cover figcaption{margin-top:8px;color:var(--muted);font:12px var(--font,system-ui,sans-serif);text-align:center}
-  footer{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:50px;padding-top:22px}
+  footer{clear:both;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:50px;padding-top:22px}
   footer span{font-family:var(--font,system-ui,sans-serif);font-size:11px;padding:4px 9px;border-radius:var(--r-pill);background:var(--raise);color:var(--muted)}
   .preview header{padding-bottom:20px;margin-bottom:26px}
   .preview h1{font-size:30px}
-  @media(max-width:980px){
-    .document-layout.has-info-card{display:block;max-width:1120px}
-    .info-slot{position:static;max-width:560px;margin:0 auto;padding:0 clamp(20px,3.2vw,60px) 52px}
+  @media(max-width:820px){
+    /* Sin sitio para envolver: la ficha deja de flotar y ocupa el ancho de la
+       página, pero sigue dentro del artículo. */
+    .info-slot,.info-slot.left{float:none;width:100%;margin:0 0 28px}
   }
 </style>
