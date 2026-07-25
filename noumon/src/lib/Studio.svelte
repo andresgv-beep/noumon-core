@@ -1633,7 +1633,9 @@
   .studio-new{flex:1 1 auto;height:100%;min-height:0;min-width:0;background:var(--ground);color:var(--ink);overflow:hidden}
   .studio-state{height:100%;display:grid;place-items:center;color:var(--muted);font-size:13px}
   .studio-home{height:100%;overflow:auto;padding:clamp(28px,5vw,64px) clamp(20px,6vw,80px) 70px}
+  .studio-home>:is(h2,.create-grid,.recent-list,.studio-error){width:100%;max-width:780px;margin-left:auto;margin-right:auto}
   .studio-home>h2{margin:0 0 12px;color:var(--faint);font-size:9px;font-weight:650;letter-spacing:.14em;text-transform:uppercase}
+  .studio-home>h2{margin-left:auto;margin-right:auto}
   .studio-home>h2:not(:first-child){margin-top:32px}
   .create-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;max-width:780px}
   .create-card{min-height:150px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:20px 17px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);color:var(--ink);text-align:left;box-shadow:var(--shadow-soft);transition:border-color .14s,transform .14s}

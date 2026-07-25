@@ -94,7 +94,7 @@
   .section-kind .glyph{color:var(--accent-2);font-size:16px}.section-kind span:last-child{display:flex;flex-direction:column}
   .section-kind b{font-size:12px}.section-kind small{color:var(--muted);font-size:10px}
   .editor-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding-bottom:10px;border-bottom:1px solid var(--border)}
-  .editor-nav button{min-width:0;display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:var(--r-sm);color:var(--muted);font-size:10px;text-align:left}
+  .editor-nav button{min-width:0;display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:var(--r-sm);color:var(--muted);font-size:11px;text-align:left}
   .editor-nav button span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .editor-nav button:hover{background:var(--raise);color:var(--ink)}
   .editor-nav button.active{background:var(--accent-weak);color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent-line)}
