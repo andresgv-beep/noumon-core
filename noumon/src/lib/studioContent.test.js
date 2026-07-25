@@ -53,6 +53,30 @@ test('keeps pages and resolves the requested active page', () => {
   assert.equal(studioDocumentBlocks(document, 'inexistente')[0].id, 'a');
 });
 
+test('normalizes the document info card without changing page content', () => {
+  const document = normalizeStudioDocument({
+    templateKey: 'document',
+    title: 'Archivo local',
+    metadata: {},
+    content: {
+      schemaVersion: 2,
+      infoCard: {
+        assetId: 'asset-card',
+        caption: 'Retrato',
+        rows: [{ label: 'Autor', value: 'Equipo local' }],
+      },
+      pages: [{ id: 'p1', title: 'Inicio', blocks: [] }],
+    },
+  });
+
+  assert.deepEqual(document.content.infoCard, {
+    assetId: 'asset-card',
+    caption: 'Retrato',
+    rows: [{ label: 'Autor', value: 'Equipo local' }],
+  });
+  assert.equal(document.content.pages[0].id, 'p1');
+});
+
 test('does not migrate Cabinet or Moments payloads to the document schema', () => {
   const media = normalizeStudioContent(
     { schemaVersion: 1, blocks: [] },

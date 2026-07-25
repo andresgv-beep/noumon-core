@@ -23,6 +23,7 @@ const (
 	studioMaxTags        = 50
 	studioMaxFacetValues = 32
 	studioMaxPages       = 100
+	studioMaxInfoRows    = 40
 )
 
 var (
@@ -77,8 +78,20 @@ type StudioContent struct {
 	SchemaVersion  int                  `json:"schemaVersion"`
 	Classification StudioClassification `json:"classification,omitempty"`
 	Presentation   StudioPresentation   `json:"presentation,omitempty"`
+	InfoCard       *StudioInfoCard      `json:"infoCard,omitempty"`
 	Blocks         []json.RawMessage    `json:"blocks,omitempty"`
 	Pages          []StudioPage         `json:"pages,omitempty"`
+}
+
+type StudioInfoCard struct {
+	AssetID string          `json:"assetId,omitempty"`
+	Caption string          `json:"caption,omitempty"`
+	Rows    []StudioInfoRow `json:"rows,omitempty"`
+}
+
+type StudioInfoRow struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
 }
 
 type StudioPage struct {
@@ -284,6 +297,14 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 			}
 		}
 	}
+	if surface != "documents" && content.InfoCard != nil {
+		return studioValidatedInput{}, fmt.Errorf("infoCard: unsupported for surface")
+	}
+	if surface == "documents" {
+		if err := validateStudioInfoCard(content.InfoCard, &state); err != nil {
+			return studioValidatedInput{}, err
+		}
+	}
 	if state.count > studioMaxBlocks || state.runes > studioMaxTextRunes {
 		return studioValidatedInput{}, fmt.Errorf("content: limits exceeded")
 	}
@@ -315,6 +336,47 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 		Input: in, Content: content, Classification: classification,
 		PlainText: plain, Links: links, Assets: assets, Facets: facets,
 	}, nil
+}
+
+func validateStudioInfoCard(card *StudioInfoCard, state *studioBlockValidation) error {
+	if card == nil {
+		return nil
+	}
+	card.AssetID = strings.TrimSpace(card.AssetID)
+	card.Caption = strings.TrimSpace(card.Caption)
+	if card.AssetID != "" {
+		if !studioIDRE.MatchString(card.AssetID) {
+			return fmt.Errorf("infoCard.assetId: invalid")
+		}
+		state.assets[card.AssetID] = true
+	}
+	if utf8.RuneCountInString(card.Caption) > 1000 {
+		return fmt.Errorf("infoCard.caption: too long")
+	}
+	if card.Caption != "" {
+		state.runes += utf8.RuneCountInString(card.Caption)
+		state.plain = append(state.plain, card.Caption)
+	}
+	if len(card.Rows) > studioMaxInfoRows {
+		return fmt.Errorf("infoCard.rows: too many")
+	}
+	for index := range card.Rows {
+		row := &card.Rows[index]
+		row.Label = strings.TrimSpace(row.Label)
+		row.Value = strings.TrimSpace(row.Value)
+		if utf8.RuneCountInString(row.Label) > 120 ||
+			utf8.RuneCountInString(row.Value) > 4000 {
+			return fmt.Errorf("infoCard.rows: value too long")
+		}
+		for _, value := range []string{row.Label, row.Value} {
+			if value == "" {
+				continue
+			}
+			state.runes += utf8.RuneCountInString(value)
+			state.plain = append(state.plain, value)
+		}
+	}
+	return nil
 }
 
 func normalizeStudioContentVersion(

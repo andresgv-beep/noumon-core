@@ -29,6 +29,7 @@ export function normalizeStudioContent(content, documentTitle = '', templateKey 
       ...source,
       schemaVersion: STUDIO_CONTENT_SCHEMA_VERSION,
       pages,
+      infoCard: normalizeStudioInfoCard(source.infoCard),
     };
     delete normalized.blocks;
     return normalized;
@@ -37,6 +38,7 @@ export function normalizeStudioContent(content, documentTitle = '', templateKey 
   const normalized = {
     ...source,
     schemaVersion: STUDIO_CONTENT_SCHEMA_VERSION,
+    infoCard: normalizeStudioInfoCard(source.infoCard),
     pages: [{
       id: 'p1',
       title: String(documentTitle || 'Page 1'),
@@ -45,6 +47,22 @@ export function normalizeStudioContent(content, documentTitle = '', templateKey 
   };
   delete normalized.blocks;
   return normalized;
+}
+
+export function normalizeStudioInfoCard(infoCard) {
+  const source = infoCard && typeof infoCard === 'object' && !Array.isArray(infoCard)
+    ? infoCard
+    : {};
+  return {
+    assetId: String(source.assetId || ''),
+    caption: String(source.caption || ''),
+    rows: Array.isArray(source.rows)
+      ? source.rows.slice(0, 40).map((row) => ({
+          label: String(row?.label || ''),
+          value: String(row?.value || ''),
+        }))
+      : [],
+  };
 }
 
 export function normalizeStudioDocument(document) {

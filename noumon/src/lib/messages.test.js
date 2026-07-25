@@ -33,3 +33,31 @@ test('ships every page-manager message in both interface languages', () => {
     }
   }
 });
+
+test('ships every info-card message in both interface languages', () => {
+  const keys = [
+    'studio.infoCard',
+    'studio.infoCardDesc',
+    'studio.infoCardAddImage',
+    'studio.infoCardReplaceImage',
+    'studio.infoCardRemoveImage',
+    'studio.infoCardCaption',
+    'studio.infoCardCaptionPlaceholder',
+    'studio.infoCardRows',
+    'studio.infoCardAddRow',
+    'studio.infoCardLabel',
+    'studio.infoCardValue',
+    'studio.infoCardMoveUp',
+    'studio.infoCardMoveDown',
+    'studio.infoCardRemoveRow',
+    'studio.infoCardEmpty',
+    'documents.infoCard',
+    'documents.infoCardImage',
+  ];
+  for (const language of ['es', 'en']) {
+    for (const key of keys) {
+      assert.equal(typeof messages[language][key], 'string', `${language}.${key}`);
+      assert.notEqual(messages[language][key].trim(), '', `${language}.${key}`);
+    }
+  }
+});

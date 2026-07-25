@@ -4,6 +4,8 @@
   import StudioCanvasBlock from './StudioCanvasBlock.svelte';
   import StudioDocumentView from './StudioDocumentView.svelte';
   import StudioImage from './StudioImage.svelte';
+  import StudioInfoCard from './StudioInfoCard.svelte';
+  import StudioInfoCardEditor from './StudioInfoCardEditor.svelte';
   import StudioMediaEditor from './StudioMediaEditor.svelte';
   import StudioPageManager from './StudioPageManager.svelte';
   import { t, relTime } from './i18n.svelte.js';
@@ -71,6 +73,12 @@
     pages: [{ id: 'p1', title: '', blocks: [] }],
   };
   const activeBlocks = () => studioDocumentBlocks(selected, activePageID);
+  const infoCard = () => content().infoCard;
+  const infoCardVisible = () => !!(
+    infoCard()?.assetId ||
+    String(infoCard()?.caption || '').trim() ||
+    infoCard()?.rows?.some((row) => String(row?.label || '').trim() || String(row?.value || '').trim())
+  );
   const documentCover = () => activeBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
   const documentBlocks = () => activeBlocks().filter((block) => block?.role !== 'cover');
 
@@ -318,6 +326,7 @@
     return {
       ...base,
       schemaVersion: 2,
+      infoCard: { assetId: '', caption: '', rows: [] },
       pages: [{ id: 'p1', title: documentTitle, blocks }],
     };
   }
@@ -698,6 +707,16 @@
     chooseImage({ cover: true });
   }
 
+  function chooseInfoCardImage() {
+    chooseImage({ infoCard: true });
+  }
+
+  function removeInfoCardImage() {
+    if (!infoCard()?.assetId) return;
+    infoCard().assetId = '';
+    touch();
+  }
+
   function removeDocumentCover() {
     const cover = documentCover();
     if (!cover) return;
@@ -727,6 +746,12 @@
         caption: '', alt: '', sideText: '',
         imageSize: 'original', imageAlign: 'center',
       };
+      if (targetColumn?.infoCard) {
+        infoCard().assetId = asset.id;
+        selectedBlockID = '';
+        touch();
+        return;
+      }
       if (targetColumn?.cover) {
         const current = documentCover();
         if (current) {
@@ -1168,6 +1193,14 @@
           onMove={reorderPage}
           onRemove={deletePage}
         />
+        <StudioInfoCardEditor
+          documentId={selected.id}
+          card={infoCard()}
+          uploading={uploadingImage}
+          onChooseImage={chooseInfoCardImage}
+          onRemoveImage={removeInfoCardImage}
+          onChange={touch}
+        />
         <h3>{t('studio.insertBlock')}</h3>
         <div class="block-grid">
           <button onclick={() => addBlock('paragraph')}><b>¶</b>{t('studio.block.paragraph')}</button>
@@ -1266,6 +1299,7 @@
 
       <div
         class="canvas-column"
+        class:has-info-card={infoCardVisible()}
         class:wide={content().presentation?.contentWidth === 'wide'}
         class:editorial={content().presentation?.contentWidth === 'editorial'}
         class:compact={content().presentation?.contentWidth === 'compact'}
@@ -1298,14 +1332,15 @@
           </section>
         {/if}
 
-        <article
-          class="document-canvas"
-          class:wide={content().presentation?.contentWidth === 'wide'}
-          class:editorial={content().presentation?.contentWidth === 'editorial'}
-          class:compact={content().presentation?.contentWidth === 'compact'}
-          class:sans={content().presentation?.fontPreset === 'sans'}
-          data-studio-section="structure"
-        >
+        <div class="canvas-layout" class:has-info-card={infoCardVisible()}>
+          <article
+            class="document-canvas"
+            class:wide={content().presentation?.contentWidth === 'wide'}
+            class:editorial={content().presentation?.contentWidth === 'editorial'}
+            class:compact={content().presentation?.contentWidth === 'compact'}
+            class:sans={content().presentation?.fontPreset === 'sans'}
+            data-studio-section="structure"
+          >
           <div class="canvas-title selected">
             <h1
               style:font-size={`${pageTextSize('titleFontSize', 34)}px`}
@@ -1351,7 +1386,13 @@
             ondrop={(event) => { event.preventDefault(); dropAtRootEnd(); }}
             onclick={() => addBlock('paragraph')}
           ><b>＋</b>{t('studio.addAnyBlock')}</button>
-        </article>
+          </article>
+          {#if infoCardVisible()}
+            <div class="canvas-info-card">
+              <StudioInfoCard documentId={selected.id} card={infoCard()} compact />
+            </div>
+          {/if}
+        </div>
 
       </div>
       <input class="file-input" bind:this={imageInput} type="file" accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp" onchange={imageSelected} />
@@ -1418,8 +1459,8 @@
   .home-empty{padding:24px;border:1px dashed var(--border);border-radius:var(--r-lg);color:var(--muted);font-size:12px;text-align:center}
   .studio-error{margin:12px 0;padding:9px 11px;border-left:3px solid #df7474;background:color-mix(in srgb,#df7474 9%,var(--panel));color:#df8585;font-size:12px}
 
-  .document-workspace{height:100%;overflow:auto;display:grid;grid-template-columns:244px minmax(0,1180px);align-items:start;justify-content:center;gap:18px;padding:22px clamp(10px,1.5vw,24px) 70px}
-  .sidebar-hidden .document-workspace{grid-template-columns:260px minmax(0,1340px);padding-inline:clamp(10px,1.2vw,20px)}
+  .document-workspace{height:100%;overflow:auto;display:grid;grid-template-columns:244px minmax(0,1500px);align-items:start;justify-content:center;gap:18px;padding:22px clamp(10px,1.5vw,24px) 70px}
+  .sidebar-hidden .document-workspace{grid-template-columns:260px minmax(0,1640px);padding-inline:clamp(10px,1.2vw,20px)}
   .document-palette{position:sticky;top:0;display:grid;gap:8px;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
   .document-palette h3{margin:6px 0 1px}.document-palette h3:first-child{margin-top:0}
   .palette-section{display:grid;gap:8px;margin:3px -5px 0;padding:5px;border:1px solid transparent;border-radius:var(--r-md);transition:border-color .14s,background .14s}
@@ -1442,8 +1483,13 @@
   .document-palette .link-results button{padding:7px;background:var(--raise)}
   .canvas-column{width:100%;max-width:912px;min-width:0;margin:0 auto;transition:max-width .2s}
   .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:744px}
+  .canvas-column.has-info-card{max-width:1180px}.canvas-column.has-info-card.wide{max-width:1260px}.canvas-column.has-info-card.editorial{max-width:1460px}.canvas-column.has-info-card.compact{max-width:1010px}
   .sidebar-hidden .canvas-column{max-width:1000px}
   .sidebar-hidden .canvas-column.wide{max-width:1120px}.sidebar-hidden .canvas-column.editorial{max-width:1340px}.sidebar-hidden .canvas-column.compact{max-width:820px}
+  .sidebar-hidden .canvas-column.has-info-card{max-width:1280px}.sidebar-hidden .canvas-column.has-info-card.wide{max-width:1400px}.sidebar-hidden .canvas-column.has-info-card.editorial{max-width:1640px}.sidebar-hidden .canvas-column.has-info-card.compact{max-width:1100px}
+  .canvas-layout{min-width:0}
+  .canvas-layout.has-info-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,260px);align-items:start;gap:16px}
+  .canvas-info-card{position:sticky;top:0;min-width:0}
   .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
   .revision-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px}.revision-panel header span{color:var(--faint)}
   .revision-list{display:grid;gap:5px}.revision-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:var(--r-sm);background:var(--raise)}
@@ -1478,6 +1524,10 @@
   @media(max-width:1080px){
     .document-workspace{grid-template-columns:1fr;justify-content:stretch}.document-palette{position:static;max-width:980px;width:100%;margin:0 auto}
     .block-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.style-options{grid-template-columns:repeat(3,minmax(0,1fr))}
+  }
+  @media(max-width:900px){
+    .canvas-layout.has-info-card{display:flex;flex-direction:column}
+    .canvas-info-card{position:static;order:2;width:min(100%,560px);margin:0 auto}
   }
   @media(max-width:700px){
     .studio-home{padding:24px 14px 50px}.create-grid{grid-template-columns:1fr}.create-card{min-height:124px}

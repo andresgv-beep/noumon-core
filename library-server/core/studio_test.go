@@ -899,6 +899,63 @@ func TestStudioMultipageValidationUsesDocumentWideIdentityAndLimits(t *testing.T
 	}
 }
 
+func TestStudioInfoCardUsesValidatedAssetsAndSearchText(t *testing.T) {
+	content := StudioContent{
+		SchemaVersion: studioSchemaVersion,
+		Pages: []StudioPage{{
+			ID: "inicio", Title: "Inicio", Blocks: []json.RawMessage{},
+		}},
+		InfoCard: &StudioInfoCard{
+			AssetID: "asset-ficha",
+			Caption: "Retrato del archivo local",
+			Rows: []StudioInfoRow{
+				{Label: "Autor", Value: "Equipo de documentación"},
+				{Label: "Periodo", Value: "2024–2026"},
+			},
+		},
+	}
+	encoded, err := json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey: "document",
+		Title:       "Documento con ficha",
+		Content:     encoded,
+	})
+	if err != nil {
+		t.Fatalf("ficha válida rechazada: %v", err)
+	}
+	if len(valid.Assets) != 1 || valid.Assets[0] != "asset-ficha" {
+		t.Fatalf("asset de ficha no recogido: %#v", valid.Assets)
+	}
+	for _, expected := range []string{
+		"Retrato del archivo local", "Autor", "Equipo de documentación",
+		"Periodo", "2024–2026",
+	} {
+		if !strings.Contains(valid.PlainText, expected) {
+			t.Fatalf("texto de ficha %q ausente de PlainText: %q", expected, valid.PlainText)
+		}
+	}
+
+	content.InfoCard.AssetID = "../fuera"
+	encoded, _ = json.Marshal(content)
+	if _, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey: "document", Title: "Ficha insegura", Content: encoded,
+	}); err == nil || !strings.Contains(err.Error(), "infoCard.assetId") {
+		t.Fatalf("assetId inseguro de ficha aceptado: %v", err)
+	}
+
+	content.InfoCard.AssetID = ""
+	content.InfoCard.Rows = make([]StudioInfoRow, studioMaxInfoRows+1)
+	encoded, _ = json.Marshal(content)
+	if _, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey: "document", Title: "Ficha excesiva", Content: encoded,
+	}); err == nil || !strings.Contains(err.Error(), "infoCard.rows") {
+		t.Fatalf("límite de filas de ficha no aplicado: %v", err)
+	}
+}
+
 func TestStudioFeaturedAndRelatedUsePublishedSnapshots(t *testing.T) {
 	s := testAuthServer(t, "")
 	h := studioTestMux(s)

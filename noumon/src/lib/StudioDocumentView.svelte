@@ -1,6 +1,7 @@
 <script>
   import StudioBlockView from './StudioBlockView.svelte';
   import StudioImage from './StudioImage.svelte';
+  import StudioInfoCard from './StudioInfoCard.svelte';
   import { studioDocumentBlocks, studioPage } from './studioContent.js';
   import { t, relTime } from './i18n.svelte.js';
 
@@ -10,6 +11,12 @@
   const presentation = () => content().presentation || {};
   const activePage = () => studioPage(document, pageId);
   const pageTitle = () => activePage()?.title || document.title;
+  const infoCard = () => content().infoCard || {};
+  const hasInfoCard = () => !!(
+    infoCard().assetId ||
+    String(infoCard().caption || '').trim() ||
+    infoCard().rows?.some((row) => String(row?.label || '').trim() || String(row?.value || '').trim())
+  );
   const pageBlocks = () => studioDocumentBlocks(document, pageId);
   const cover = () => pageBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
   const bodyBlocks = () => pageBlocks().filter((block) => block?.role !== 'cover');
@@ -50,7 +57,13 @@
   });
 </script>
 
-<div class="document-layout">
+<div
+  class="document-layout"
+  class:has-info-card={hasInfoCard()}
+  class:compact={presentation().contentWidth === 'compact'}
+  class:wide={presentation().contentWidth === 'wide'}
+  class:editorial={presentation().contentWidth === 'editorial'}
+>
   <article
     class="page"
     class:preview
@@ -85,10 +98,19 @@
       <footer>{#each document.tags as tag}<span>{tag}</span>{/each}</footer>
     {/if}
   </article>
+  {#if hasInfoCard()}
+    <div class="info-slot">
+      <StudioInfoCard documentId={document.id} card={infoCard()} compact={preview} />
+    </div>
+  {/if}
 </div>
 
 <style>
   .document-layout{width:100%}
+  .document-layout.has-info-card{max-width:1450px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,300px);align-items:start;gap:24px}
+  .document-layout.has-info-card.compact{max-width:1084px}.document-layout.has-info-card.wide{max-width:1644px}.document-layout.has-info-card.editorial{max-width:1824px}
+  .document-layout.has-info-card .page{max-width:none}
+  .info-slot{position:sticky;top:24px;padding-top:clamp(24px,3.2vw,52px)}
   /* Página a ras, como cualquier página del navegador: sin marco de tarjeta
      (borde/sombra/fondo propio) y llenando el ancho de lectura. */
   .page{width:100%;max-width:1120px;box-sizing:border-box;margin:0 auto;padding:clamp(24px,3.2vw,52px) clamp(20px,3.2vw,60px) 64px;color:var(--ink);font-family:var(--font-read,Georgia,serif);line-height:1.75}
@@ -107,4 +129,8 @@
   footer span{font-family:var(--font,system-ui,sans-serif);font-size:11px;padding:4px 9px;border-radius:var(--r-pill);background:var(--raise);color:var(--muted)}
   .preview header{padding-bottom:20px;margin-bottom:26px}
   .preview h1{font-size:30px}
+  @media(max-width:980px){
+    .document-layout.has-info-card{display:block;max-width:1120px}
+    .info-slot{position:static;max-width:560px;margin:0 auto;padding:0 clamp(20px,3.2vw,60px) 52px}
+  }
 </style>
