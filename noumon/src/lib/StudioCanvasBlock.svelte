@@ -23,7 +23,12 @@
     onChooseImage,
     onMoveToRoot,
     onOpenItem,
+    pageIDs = [],
   } = $props();
+
+  function rich(value) {
+    return { text: value || '', pageIDs };
+  }
 
   function setText(event, field = 'text') {
     block[field] = inlineText(event.currentTarget);
@@ -168,6 +173,7 @@
   class:selected={selected || activeBlockID === block.id}
   class:nested
   data-type={block.type}
+  data-studio-block-id={block.id}
   role="group"
   aria-label={t(`studio.block.${block.type}`)}
   onclick={select}
@@ -198,16 +204,16 @@
   {#if block.type === 'heading'}
     {@const level = Math.min(3, Math.max(1, block.level || 2))}
     {#if level === 1}
-      <h1 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></h1>
+      <h1 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={rich(block.text)} oninput={setText}></h1>
     {:else if level === 2}
-      <h2 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></h2>
+      <h2 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={rich(block.text)} oninput={setText}></h2>
     {:else}
-      <h3 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></h3>
+      <h3 style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={rich(block.text)} oninput={setText}></h3>
     {/if}
   {:else if block.type === 'paragraph'}
-    <p style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></p>
+    <p style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={rich(block.text)} oninput={setText}></p>
   {:else if block.type === 'quote'}
-    <blockquote style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={block.text} oninput={setText}></blockquote>
+    <blockquote style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:richText={rich(block.text)} oninput={setText}></blockquote>
   {:else if block.type === 'bulletList' || block.type === 'orderedList'}
     {#if block.type === 'bulletList'}
       <ul style:font-size={`${textSize()}px`} style:text-align={textAlign()}>{#each block.items || [] as item, itemIndex}<li contenteditable="true" use:plainText={item} oninput={(event) => setListItem(event, itemIndex)}></li>{/each}</ul>
@@ -296,8 +302,8 @@
     <pre style:font-size={`${textSize()}px`} style:text-align={textAlign()} contenteditable="true" use:plainText={block.text} oninput={setText}></pre>
   {:else if block.type === 'callout'}
     <aside class="callout" style:font-size={`${textSize()}px`} style:text-align={textAlign()}>
-      <strong contenteditable="true" use:richText={block.title || t('studio.calloutTitle')} oninput={(event) => setText(event, 'title')}></strong>
-      <p contenteditable="true" use:richText={block.text} oninput={setText}></p>
+      <strong contenteditable="true" use:richText={rich(block.title || t('studio.calloutTitle'))} oninput={(event) => setText(event, 'title')}></strong>
+      <p contenteditable="true" use:richText={rich(block.text)} oninput={setText}></p>
     </aside>
   {:else if block.type === 'columns'}
     {#if !nested}
@@ -398,6 +404,7 @@
               {onChooseImage}
               {onMoveToRoot}
               {onOpenItem}
+              {pageIDs}
             />
           {/each}
           <div class="column-add" aria-label={t('studio.addToColumn')}>
@@ -426,6 +433,8 @@
 
 <style>
   .canvas-block{position:relative;margin:2px -9px;padding:7px 9px;border:1px solid transparent;border-radius:var(--r-sm);transition:border-color .12s,background .12s}
+  .canvas-block :global([contenteditable="true"] .studio-inline-link){color:var(--accent-2);text-decoration:underline;text-underline-offset:3px;pointer-events:none}
+  .canvas-block :global([contenteditable="true"] .studio-inline-link.is-broken){color:#df7474;text-decoration-style:wavy}
   /* Párrafos y títulos ENVUELVEN la ficha flotada (igual que en la página
      publicada): siguen siendo bloques normales, así que sus líneas se estrechan
      al lado de la ficha y recuperan el ancho completo al pasarla. Lo demás

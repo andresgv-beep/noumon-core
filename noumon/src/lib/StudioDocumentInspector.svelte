@@ -29,6 +29,23 @@
 
 {#if document()}
   <div class="inspector">
+    {#if state.brokenPageLinks?.length}
+      <div class="broken-links">
+        <b>{t('studio.pageLinkBrokenTitle')}</b>
+        <small>{t('studio.pageLinkBrokenHint')}</small>
+        {#each state.brokenPageLinks as link (link.id)}
+          <span>
+            <code>{link.id}</code>
+            <small>{link.count}</small>
+            <button
+              title={t('studio.pageLinkRemoveHint')}
+              onclick={() => state.removeBrokenPageLink?.(link.id)}
+            >{t('studio.pageLinkRemove')}</button>
+          </span>
+        {/each}
+      </div>
+    {/if}
+
     {#if state.activeSection === 'pages'}
       <StudioPageManager
         document={document()}
@@ -41,6 +58,32 @@
       />
     {:else if state.activeSection === 'insert'}
       <section class="panel">
+        <h3>{t('studio.pageLinks')}</h3>
+        <button
+          class="link-tool"
+          class:active={!!state.pageLinkSelection}
+          onclick={() => state.capturePageLinkSelection?.()}
+        >
+          <b>↗</b>{t('studio.pageLink')}
+        </button>
+        {#if state.pageLinkSelection}
+          <div class="page-link-picker">
+            <small>{t('studio.pageLinkSelection', { text: state.pageLinkSelection.label })}</small>
+            <div>
+              {#each state.pages || [] as page (page.id)}
+                <button onclick={() => state.applyPageLink?.(page.id)}>
+                  <b>{page.title}</b>
+                  <small>{page.id}</small>
+                </button>
+              {/each}
+            </div>
+            <button class="cancel" onclick={() => state.cancelPageLink?.()}>{t('common.cancel')}</button>
+          </div>
+        {:else if state.pageLinkMessage}
+          <small class="link-message">{t(state.pageLinkMessage)}</small>
+        {:else}
+          <small class="link-hint">{t('studio.pageLinkHint')}</small>
+        {/if}
         <h3>{t('studio.insertBlock')}</h3>
         <div class="block-grid">
           <button onclick={() => state.addBlock?.('paragraph')}><b>¶</b>{t('studio.block.paragraph')}</button>
@@ -176,7 +219,24 @@
   .metadata-grid input,.link-picker input{width:100%;min-width:0;padding:8px 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font-size:10.5px;outline:0}
   .metadata-grid input:focus,.link-picker input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
   .link-tool{width:100%;display:flex;align-items:center;gap:7px;padding:8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
+  .link-tool>b{color:var(--accent-2);font-size:12px}
   .link-tool.active{border-color:var(--accent-line);color:var(--accent-2)}
+  .link-hint,.link-message{display:block;color:var(--faint);font-size:9.5px;line-height:1.45}
+  .link-message{color:#df7474}
+  .page-link-picker{display:grid;gap:7px;padding:8px;border:1px solid var(--accent-line);border-radius:var(--r-sm);background:var(--card)}
+  .page-link-picker>small{overflow:hidden;color:var(--muted);font-size:9.5px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}
+  .page-link-picker>div{display:grid;gap:4px;max-height:210px;overflow:auto}
+  .page-link-picker>div button{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px;border-radius:var(--r-sm);background:var(--raise);color:var(--ink);text-align:left}
+  .page-link-picker>div button:hover{box-shadow:inset 0 0 0 1px var(--accent-line)}
+  .page-link-picker>div b{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+  .page-link-picker>div small{color:var(--faint);font:8px var(--mono)}
+  .page-link-picker .cancel{justify-self:end;color:var(--muted);font-size:9px}
+  .broken-links{display:grid;gap:5px;padding:8px;border-left:2px solid #df7474;background:color-mix(in srgb,#df7474 8%,transparent)}
+  .broken-links>b{color:#df7474;font-size:9.5px}.broken-links>small{color:var(--muted);font-size:8.5px;line-height:1.4}
+  .broken-links>span{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 6px;color:var(--ink);font-size:9px}
+  .broken-links code{overflow:hidden;text-overflow:ellipsis}.broken-links span small{color:var(--faint)}
+  .broken-links span button{grid-column:1/-1;padding:6px;border:1px solid color-mix(in srgb,#df7474 36%,var(--border));border-radius:var(--r-sm);background:var(--card);color:#df9a9a;font-size:8.5px}
+  .broken-links span button:hover{border-color:#df7474;color:#f0b0b0}
   .link-picker{display:grid;gap:7px;padding:8px;border:1px solid var(--accent-line);border-radius:var(--r-sm);background:var(--card)}
   .link-picker>small{color:var(--faint);font-size:9.5px}
   .link-results{display:grid;gap:4px;max-height:220px;overflow:auto}

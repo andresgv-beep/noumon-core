@@ -21,10 +21,104 @@ export function escapeHTML(value) {
 }
 
 /** Texto con marcado ligero (**negrita**, *cursiva*) a HTML. */
-export function inline(value) {
+const studioInlineLinkRE = /\[\[(page|item):([A-Za-z0-9][A-Za-z0-9._:-]{0,127})\|([^\]\r\n]+)\]\]/g;
+const studioEmptyInlineLinkRE = /\[\[(page|item):([A-Za-z0-9][A-Za-z0-9._:-]{0,127})\|\]\]/g;
+
+function formattedText(value) {
   return escapeHTML(value)
     .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+}
+
+export function studioInlineLinks(value) {
+  const source = String(value || '');
+  const links = [...source.matchAll(studioInlineLinkRE)].map((match) => ({
+    syntax: match[0],
+    kind: match[1],
+    id: match[2],
+    label: match[3],
+  }));
+  links.push(...[...source.matchAll(studioEmptyInlineLinkRE)].map((match) => ({
+    syntax: match[0],
+    kind: match[1],
+    id: match[2],
+    label: '',
+    invalid: true,
+  })));
+  return links;
+}
+
+export function collectStudioInlineLinks(value, result = []) {
+  if (typeof value === 'string') {
+    result.push(...studioInlineLinks(value));
+    return result;
+  }
+  if (Array.isArray(value)) {
+    for (const child of value) collectStudioInlineLinks(child, result);
+    return result;
+  }
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) collectStudioInlineLinks(child, result);
+  }
+  return result;
+}
+
+/**
+ * Convierte los enlaces a una página en texto normal dentro de todo el
+ * documento. Conserva la etiqueta visible y limpia también la forma vacía que
+ * generaban versiones anteriores del editor.
+ */
+export function removeStudioPageLinks(value, pageID) {
+  let removed = 0;
+
+  function unlinkText(text) {
+    const replaceLink = (syntax, kind, id, label = '') => {
+      if (kind !== 'page' || id !== pageID) return syntax;
+      removed++;
+      return label;
+    };
+    return text
+      .replace(studioInlineLinkRE, replaceLink)
+      .replace(
+        studioEmptyInlineLinkRE,
+        (syntax, kind, id) => replaceLink(syntax, kind, id, ''),
+      );
+  }
+
+  function visit(current) {
+    if (typeof current === 'string') return unlinkText(current);
+    if (Array.isArray(current)) {
+      for (let index = 0; index < current.length; index++) {
+        current[index] = visit(current[index]);
+      }
+      return current;
+    }
+    if (current && typeof current === 'object') {
+      for (const key of Object.keys(current)) current[key] = visit(current[key]);
+    }
+    return current;
+  }
+
+  return { value: visit(value), removed };
+}
+
+/** Texto con marcado ligero y enlaces internos a HTML seguro. */
+export function inline(value, { pageIDs = [] } = {}) {
+  // Una etiqueta vacía no tiene nada que representar y no debe dejar visible
+  // el marcado interno de una versión antigua del editor.
+  const source = String(value || '').replace(studioEmptyInlineLinkRE, '');
+  const knownPages = new Set(pageIDs || []);
+  let cursor = 0;
+  let output = '';
+  for (const match of source.matchAll(studioInlineLinkRE)) {
+    output += formattedText(source.slice(cursor, match.index));
+    const [, kind, id, label] = match;
+    const broken = kind === 'page' && !knownPages.has(id);
+    const classes = `studio-inline-link studio-inline-link-${kind}${broken ? ' is-broken' : ''}`;
+    output += `<a class="${classes}" href="#studio-${kind}-${encodeURIComponent(id)}" data-studio-link-kind="${kind}" data-studio-link-id="${escapeHTML(id)}"${broken ? ' aria-invalid="true"' : ''}>${formattedText(label)}</a>`;
+    cursor = match.index + match[0].length;
+  }
+  return output + formattedText(source.slice(cursor));
 }
 
 /**
@@ -38,17 +132,42 @@ export function inlineText(node) {
   const content = [...node.childNodes].map(inlineText).join('');
   if (node.tagName === 'STRONG' || node.tagName === 'B') return `**${content}**`;
   if (node.tagName === 'EM' || node.tagName === 'I') return `*${content}*`;
+  if (node.tagName === 'A') {
+    const kind = node.dataset?.studioLinkKind;
+    const id = node.dataset?.studioLinkId;
+    if ((kind === 'page' || kind === 'item') &&
+      /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id || '')) {
+      if (!content.trim()) return content;
+      return `[[${kind}:${id}|${content}]]`;
+    }
+  }
   if (node.tagName === 'BR') return '\n';
   return content;
 }
 
+function richTextOptions(value) {
+  if (value && typeof value === 'object') {
+    return {
+      text: String(value.text ?? ''),
+      pageIDs: Array.isArray(value.pageIDs) ? value.pageIDs : [],
+    };
+  }
+  return { text: String(value ?? ''), pageIDs: [] };
+}
+
 /** Acción para un contenteditable con marcado ligero. */
 export function richText(node, value) {
-  node.innerHTML = inline(value);
+  let options = richTextOptions(value);
+  let pageSignature = options.pageIDs.join('\u0000');
+  node.innerHTML = inline(options.text, options);
   return {
     update(next) {
-      if (inlineText(node) === String(next ?? '')) return;
-      node.innerHTML = inline(next);
+      const nextOptions = richTextOptions(next);
+      const nextPageSignature = nextOptions.pageIDs.join('\u0000');
+      if (inlineText(node) === nextOptions.text && pageSignature === nextPageSignature) return;
+      options = nextOptions;
+      pageSignature = nextPageSignature;
+      node.innerHTML = inline(options.text, options);
     },
   };
 }

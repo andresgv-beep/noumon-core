@@ -462,6 +462,8 @@ func writeStudioStoreError(w http.ResponseWriter, err error, currentRevision int
 		writeStudioError(w, http.StatusUnprocessableEntity, "studio.media_incomplete", nil)
 	case errors.Is(err, errStudioPurgeRequiresArchive):
 		writeStudioError(w, http.StatusConflict, "studio.purge_requires_archive", nil)
+	case errors.Is(err, errStudioBrokenPageLinks):
+		writeStudioError(w, http.StatusUnprocessableEntity, "studio.page_link_broken", nil)
 	default:
 		writeStudioError(w, http.StatusInternalServerError, "studio.internal", nil)
 	}

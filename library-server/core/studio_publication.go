@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -34,6 +35,13 @@ func (s *Store) publishStudioDocument(id string, editor *User) (StudioDocument, 
 	valid, err := validateStudioInput(input)
 	if err != nil {
 		return StudioDocument{}, err
+	}
+	if len(valid.BrokenPageLinks) > 0 {
+		return StudioDocument{}, fmt.Errorf(
+			"%w: %s",
+			errStudioBrokenPageLinks,
+			strings.Join(valid.BrokenPageLinks, ","),
+		)
 	}
 
 	now := time.Now().Unix()

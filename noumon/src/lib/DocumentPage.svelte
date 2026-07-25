@@ -4,7 +4,7 @@
   import StudioDocumentView from './StudioDocumentView.svelte';
   import { studioPage, studioPages } from './studioContent.js';
 
-  let { tab, onOpenItem, onToc, onPages, onPageResolved } = $props();
+  let { tab, onOpenItem, onOpenPage, onToc, onPages, onPageResolved } = $props();
   let document = $state(null);
   let loading = $state(true);
   let error = $state(false);
@@ -77,7 +77,7 @@
   {:else if error || !document}
     <div class="state">{t('documents.loadError')}</div>
   {:else}
-    <StudioDocumentView {document} pageId={tab.pageId} {onOpenItem} {onToc} />
+    <StudioDocumentView {document} pageId={tab.pageId} {onOpenItem} {onOpenPage} {onToc} />
     {#if backlinks.length}
       <section class="backlinks">
         <span>{t('documents.linksHere')}</span>

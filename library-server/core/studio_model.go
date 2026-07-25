@@ -34,9 +34,11 @@ var (
 	errStudioRevisionNotFound     = errors.New("studio revision not found")
 	errStudioAssetInvalid         = errors.New("studio asset invalid")
 	errStudioPurgeRequiresArchive = errors.New("studio purge requires archived document")
+	errStudioBrokenPageLinks      = errors.New("studio page links unresolved")
 
-	studioSlugRE = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$`)
-	studioIDRE   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+	studioSlugRE       = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$`)
+	studioIDRE         = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+	studioInlineLinkRE = regexp.MustCompile(`\[\[(page|item):([A-Za-z0-9][A-Za-z0-9._:-]{0,127})\|([^\]\r\n]+)\]\]`)
 )
 
 var studioTemplates = map[string]string{
@@ -157,13 +159,14 @@ type StudioDocument struct {
 }
 
 type studioValidatedInput struct {
-	Input          StudioDocumentInput
-	Content        StudioContent
-	Classification StudioClassification
-	PlainText      string
-	Links          []string
-	Assets         []string
-	Facets         map[string][]string
+	Input           StudioDocumentInput
+	Content         StudioContent
+	Classification  StudioClassification
+	PlainText       string
+	Links           []string
+	BrokenPageLinks []string
+	Assets          []string
+	Facets          map[string][]string
 }
 
 type StudioPortableSnapshot struct {
@@ -286,23 +289,29 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 
 	state := studioBlockValidation{
 		ids: map[string]bool{}, links: map[string]bool{}, assets: map[string]bool{},
+		brokenPageLinks: map[string]bool{},
 	}
 	if content.SchemaVersion == studioSchemaVersion {
 		if len(content.Pages) < 1 || len(content.Pages) > studioMaxPages {
 			return studioValidatedInput{}, fmt.Errorf("pages: one to %d pages required", studioMaxPages)
 		}
-		pageIDs := map[string]bool{}
+		state.pageIDs = map[string]bool{}
+		// Primero se recogen todas las identidades. Así un enlace puede apuntar
+		// hacia una página posterior sin depender del orden del documento.
 		for index := range content.Pages {
 			page := &content.Pages[index]
 			page.ID = strings.TrimSpace(page.ID)
 			page.Title = strings.TrimSpace(page.Title)
-			if !studioIDRE.MatchString(page.ID) || pageIDs[page.ID] {
+			if !studioIDRE.MatchString(page.ID) || state.pageIDs[page.ID] {
 				return studioValidatedInput{}, fmt.Errorf("page.id: invalid or duplicate")
 			}
 			if page.Title == "" || utf8.RuneCountInString(page.Title) > 240 {
 				return studioValidatedInput{}, fmt.Errorf("page.title: required or too long")
 			}
-			pageIDs[page.ID] = true
+			state.pageIDs[page.ID] = true
+		}
+		for index := range content.Pages {
+			page := &content.Pages[index]
 			state.runes += utf8.RuneCountInString(page.Title)
 			state.plain = append(state.plain, page.Title)
 			for _, raw := range page.Blocks {
@@ -369,6 +378,11 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 		links = append(links, id)
 	}
 	sort.Strings(links)
+	brokenPageLinks := make([]string, 0, len(state.brokenPageLinks))
+	for id := range state.brokenPageLinks {
+		brokenPageLinks = append(brokenPageLinks, id)
+	}
+	sort.Strings(brokenPageLinks)
 	assets := make([]string, 0, len(state.assets))
 	for id := range state.assets {
 		assets = append(assets, id)
@@ -389,7 +403,8 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	in.Content = normalizedContent
 	return studioValidatedInput{
 		Input: in, Content: content, Classification: classification,
-		PlainText: plain, Links: links, Assets: assets, Facets: facets,
+		PlainText: plain, Links: links, BrokenPageLinks: brokenPageLinks,
+		Assets: assets, Facets: facets,
 	}, nil
 }
 
@@ -431,8 +446,9 @@ func validateStudioInfoCard(card *StudioInfoCard, state *studioBlockValidation) 
 		return fmt.Errorf("infoCard.caption: too long")
 	}
 	if card.Caption != "" {
-		state.runes += utf8.RuneCountInString(card.Caption)
-		state.plain = append(state.plain, card.Caption)
+		if err := state.addText(card.Caption, true, true); err != nil {
+			return fmt.Errorf("infoCard.caption: %w", err)
+		}
 	}
 	if len(card.Rows) > studioMaxInfoRows {
 		return fmt.Errorf("infoCard.rows: too many")
@@ -449,8 +465,9 @@ func validateStudioInfoCard(card *StudioInfoCard, state *studioBlockValidation) 
 			if value == "" {
 				continue
 			}
-			state.runes += utf8.RuneCountInString(value)
-			state.plain = append(state.plain, value)
+			if err := state.addText(value, true, true); err != nil {
+				return fmt.Errorf("infoCard.rows: %w", err)
+			}
 		}
 	}
 	return nil
@@ -600,12 +617,49 @@ func normalizeStudioLabels(values []string, maxItems, maxRunes int, slugs bool) 
 }
 
 type studioBlockValidation struct {
-	ids    map[string]bool
-	links  map[string]bool
-	assets map[string]bool
-	count  int
-	runes  int
-	plain  []string
+	ids             map[string]bool
+	links           map[string]bool
+	pageIDs         map[string]bool
+	brokenPageLinks map[string]bool
+	assets          map[string]bool
+	count           int
+	runes           int
+	plain           []string
+}
+
+func (s *studioBlockValidation) inlinePlainText(value string) (string, error) {
+	matches := studioInlineLinkRE.FindAllStringSubmatch(value, -1)
+	for _, match := range matches {
+		switch match[1] {
+		case "page":
+			if !s.pageIDs[match[2]] {
+				s.brokenPageLinks[match[2]] = true
+			}
+		case "item":
+			s.links[match[2]] = true
+		}
+	}
+	remaining := studioInlineLinkRE.ReplaceAllString(value, "")
+	if strings.Contains(remaining, "[[page:") || strings.Contains(remaining, "[[item:") {
+		return "", fmt.Errorf("inline link: invalid syntax")
+	}
+	return studioInlineLinkRE.ReplaceAllString(value, "$3"), nil
+}
+
+func (s *studioBlockValidation) addText(value string, includePlain, parseLinks bool) error {
+	s.runes += utf8.RuneCountInString(value)
+	plain := value
+	var err error
+	if parseLinks {
+		plain, err = s.inlinePlainText(value)
+		if err != nil {
+			return err
+		}
+	}
+	if includePlain && strings.TrimSpace(plain) != "" {
+		s.plain = append(s.plain, strings.TrimSpace(plain))
+	}
+	return nil
 }
 
 func (s *studioBlockValidation) validate(raw json.RawMessage, depth int) error {
@@ -657,9 +711,8 @@ func (s *studioBlockValidation) validate(raw json.RawMessage, depth int) error {
 			if n > 100000 {
 				return fmt.Errorf("block.%s: too long", key)
 			}
-			s.runes += n
-			if strings.TrimSpace(text) != "" && key != "alt" {
-				s.plain = append(s.plain, strings.TrimSpace(text))
+			if err := s.addText(text, key != "alt", !(typ == "code" && key == "text")); err != nil {
+				return fmt.Errorf("block.%s: %w", key, err)
 			}
 		}
 	}
@@ -672,8 +725,9 @@ func (s *studioBlockValidation) validate(raw json.RawMessage, depth int) error {
 			if utf8.RuneCountInString(item) > 10000 {
 				return fmt.Errorf("block.items: value too long")
 			}
-			s.runes += utf8.RuneCountInString(item)
-			s.plain = append(s.plain, strings.TrimSpace(item))
+			if err := s.addText(item, true, true); err != nil {
+				return fmt.Errorf("block.items: %w", err)
+			}
 		}
 	}
 	if typ == "image" {
@@ -752,8 +806,9 @@ func (s *studioBlockValidation) validateTable(raw json.RawMessage) error {
 			if n > 10000 {
 				return fmt.Errorf("table.cell: too long")
 			}
-			s.runes += n
-			s.plain = append(s.plain, strings.TrimSpace(cell))
+			if err := s.addText(cell, true, true); err != nil {
+				return fmt.Errorf("table.cell: %w", err)
+			}
 		}
 	}
 	return nil

@@ -2,19 +2,23 @@
   import StudioBlockView from './StudioBlockView.svelte';
   import StudioImage from './StudioImage.svelte';
   import StudioItemReference from './StudioItemReference.svelte';
+  import { inline } from './studioEditable.js';
 
-  let { block, documentId, onOpenItem } = $props();
+  let { block, documentId, pageIDs = [], onOpenItem, onOpenPage } = $props();
 
-  function escapeHTML(value) {
-    return String(value || '').replace(/[&<>"']/g, (char) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    })[char]);
+  function rendered(value) {
+    return inline(value, { pageIDs });
   }
 
-  function inline(value) {
-    return escapeHTML(value)
-      .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  function openInlineLink(event) {
+    const link = event.target?.closest?.('[data-studio-link-kind]');
+    if (!link || !event.currentTarget?.contains?.(link)) return;
+    const kind = link.dataset.studioLinkKind;
+    const id = link.dataset.studioLinkId;
+    event.preventDefault();
+    event.stopPropagation();
+    if (kind === 'page') onOpenPage?.(id);
+    else if (kind === 'item') onOpenItem?.(id);
   }
 
   function headingId() {
@@ -53,19 +57,24 @@
   }
 </script>
 
+<!-- Los enlaces creados con {@html} delegan aquí el clic. display:contents
+     conserva el flujo editorial de párrafos y fichas laterales. -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="block-view" onclick={openInlineLink}>
 {#if block.type === 'heading'}
   {@const level = Math.min(3, Math.max(1, block.level || 2))}
-  {#if level === 1}<h1 id={headingId()} style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</h1>{:else if level === 2}<h2 id={headingId()} style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</h2>{:else}<h3 id={headingId()} style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</h3>{/if}
+  {#if level === 1}<h1 id={headingId()} style:font-size={textSize()} style:text-align={textAlign()}>{@html rendered(block.text)}</h1>{:else if level === 2}<h2 id={headingId()} style:font-size={textSize()} style:text-align={textAlign()}>{@html rendered(block.text)}</h2>{:else}<h3 id={headingId()} style:font-size={textSize()} style:text-align={textAlign()}>{@html rendered(block.text)}</h3>{/if}
 {:else if block.type === 'paragraph'}
-  <p style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</p>
+  <p style:font-size={textSize()} style:text-align={textAlign()}>{@html rendered(block.text)}</p>
 {:else if block.type === 'quote'}
-  <blockquote style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.text)}</blockquote>
+  <blockquote style:font-size={textSize()} style:text-align={textAlign()}>{@html rendered(block.text)}</blockquote>
 {:else if block.type === 'bulletList'}
-  <ul style:font-size={textSize()} style:text-align={textAlign()}>{#each block.items || [] as item}<li>{@html inline(item)}</li>{/each}</ul>
+  <ul style:font-size={textSize()} style:text-align={textAlign()}>{#each block.items || [] as item}<li>{@html rendered(item)}</li>{/each}</ul>
 {:else if block.type === 'orderedList'}
-  <ol style:font-size={textSize()} style:text-align={textAlign()}>{#each block.items || [] as item}<li>{@html inline(item)}</li>{/each}</ol>
+  <ol style:font-size={textSize()} style:text-align={textAlign()}>{#each block.items || [] as item}<li>{@html rendered(item)}</li>{/each}</ol>
 {:else if block.type === 'table'}
-  <div class="table-scroll"><table style:font-size={textSize()}><tbody>{#each block.rows || [] as row, rowIndex}<tr>{#each row as cell}{#if rowIndex === 0}<th>{@html inline(cell)}</th>{:else}<td>{@html inline(cell)}</td>{/if}{/each}</tr>{/each}</tbody></table></div>
+  <div class="table-scroll"><table style:font-size={textSize()}><tbody>{#each block.rows || [] as row, rowIndex}<tr>{#each row as cell}{#if rowIndex === 0}<th>{@html rendered(cell)}</th>{:else}<td>{@html rendered(cell)}</td>{/if}{/each}</tr>{/each}</tbody></table></div>
 {:else if block.type === 'image'}
   <div
     class={`image-layout image-${imageSize()} align-${imageAlign()}`}
@@ -78,20 +87,20 @@
         alt={block.alt || ''}
         display={imageSize()}
       />
-      {#if block.caption}<figcaption>{@html inline(block.caption)}</figcaption>{/if}
+    {#if block.caption}<figcaption>{@html rendered(block.caption)}</figcaption>{/if}
     </figure>
     {#if imageHasSideText()}
-      <div class="image-side-text" style:font-size={textSize()} style:text-align={textAlign()}>{@html inline(block.sideText)}</div>
+      <div class="image-side-text" style:font-size={textSize()} style:text-align={textAlign()}>{@html rendered(block.sideText)}</div>
     {/if}
   </div>
 {:else if block.type === 'code'}
   <pre style:font-size={textSize()} style:text-align={textAlign()}><code>{block.text || ''}</code></pre>
 {:else if block.type === 'callout'}
   <aside class="callout" style:font-size={textSize()} style:text-align={textAlign()}>
-    {#if block.title}<b>{@html inline(block.title)}</b>{/if}
-    {#if block.text}<p>{@html inline(block.text)}</p>{/if}
+    {#if block.title}<b>{@html rendered(block.title)}</b>{/if}
+    {#if block.text}<p>{@html rendered(block.text)}</p>{/if}
     {#each block.children || block.blocks || [] as child (child.id)}
-      <StudioBlockView block={child} {documentId} {onOpenItem} />
+      <StudioBlockView block={child} {documentId} {pageIDs} {onOpenItem} {onOpenPage} />
     {/each}
   </aside>
 {:else if block.type === 'columns'}
@@ -105,7 +114,7 @@
     class:half-right={block.layout === 'half-right'}
   >
     {#each block.columns || [] as column}
-      <div>{#each column as child (child.id)}<StudioBlockView block={child} {documentId} {onOpenItem} />{/each}</div>
+      <div>{#each column as child (child.id)}<StudioBlockView block={child} {documentId} {pageIDs} {onOpenItem} {onOpenPage} />{/each}</div>
     {/each}
   </div>
 {:else if block.type === 'itemRef'}
@@ -118,8 +127,10 @@
 {:else if block.type === 'divider'}
   <hr />
 {/if}
+</div>
 
 <style>
+  .block-view{display:contents}
   h1{font-size:clamp(28px,4vw,44px);line-height:1.12;margin:38px 0 12px}
   h2{font-size:26px;line-height:1.25;margin:38px 0 9px}
   h3{font-size:19px;margin:30px 0 7px}
@@ -153,6 +164,9 @@
   .columns.lead-left{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
   .columns.lead-right{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
   hr{border:0;border-top:1px solid var(--border);margin:32px 0}
+  :global(.studio-inline-link){color:var(--accent-2);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;cursor:pointer}
+  :global(.studio-inline-link:hover){color:var(--ink)}
+  :global(.studio-inline-link.is-broken){color:#df7474;text-decoration-style:wavy}
   @media(max-width:680px){
     .columns,.columns.single,.columns.single.half-left,.columns.single.half-right,.columns.three,.columns.lead-left,.columns.lead-right{grid-template-columns:1fr;justify-content:stretch}
     .image-layout.image-medium{width:min(86%,760px)}.image-layout.image-small{width:min(62%,420px)}

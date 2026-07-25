@@ -899,6 +899,124 @@ func TestStudioMultipageValidationUsesDocumentWideIdentityAndLimits(t *testing.T
 	}
 }
 
+func TestStudioInlineLinksValidateIndexAndBlockBrokenPublication(t *testing.T) {
+	content := StudioContent{
+		SchemaVersion: studioSchemaVersion,
+		Pages: []StudioPage{
+			{
+				ID: "inicio", Title: "Inicio",
+				Blocks: []json.RawMessage{
+					json.RawMessage(`{"id":"intro","type":"paragraph","text":"Consulta [[page:detalle|el detalle]] y [[item:zim:enciclopedia_es:Q0hB|la fuente local]]."}`),
+				},
+			},
+			{ID: "detalle", Title: "Detalle", Blocks: []json.RawMessage{}},
+		},
+	}
+	encoded, err := json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey: "document", Title: "Enlaces internos", Content: encoded,
+	})
+	if err != nil {
+		t.Fatalf("enlaces válidos rechazados: %v", err)
+	}
+	if len(valid.BrokenPageLinks) != 0 ||
+		len(valid.Links) != 1 ||
+		valid.Links[0] != "zim:enciclopedia_es:Q0hB" {
+		t.Fatalf("destinos recogidos incorrectamente: broken=%#v links=%#v",
+			valid.BrokenPageLinks, valid.Links)
+	}
+	if strings.Contains(valid.PlainText, "[[") ||
+		!strings.Contains(valid.PlainText, "el detalle") ||
+		!strings.Contains(valid.PlainText, "la fuente local") {
+		t.Fatalf("PlainText conserva sintaxis o pierde etiquetas: %q", valid.PlainText)
+	}
+
+	content.Pages[0].Blocks[0] =
+		json.RawMessage(`{"id":"intro","type":"paragraph","text":"Enlace [[page:detalle|]] roto"}`)
+	encoded, _ = json.Marshal(content)
+	if _, err := validateStudioInput(StudioDocumentInput{
+		TemplateKey: "document", Title: "Sintaxis inválida", Content: encoded,
+	}); err == nil || !strings.Contains(err.Error(), "inline link") {
+		t.Fatalf("sintaxis de enlace inválida aceptada: %v", err)
+	}
+
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	cookie := sessionFor(t, s, "autora-enlaces", 30, false)
+	grantStudio(t, s, "autora-enlaces", true)
+
+	content.Pages[0].Blocks[0] =
+		json.RawMessage(`{"id":"intro","type":"paragraph","text":"Ir a [[page:ausente|una página pendiente]] y [[item:zim:enciclopedia_es:Q0hB|la fuente]]."}`)
+	content.Pages = content.Pages[:1]
+	contentJSON, err := json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(StudioDocumentInput{
+		TemplateKey: "document",
+		Title:       "Borrador con enlace pendiente",
+		Content:     contentJSON,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdRec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents", string(body), cookie,
+	)
+	created := decodeStudioDocumentResponse(t, createdRec)
+	if createdRec.Code != http.StatusCreated {
+		t.Fatalf("el borrador con enlace pendiente no se guardó: %d %s",
+			createdRec.Code, createdRec.Body.String())
+	}
+	publishRec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/publish", "", cookie,
+	)
+	if publishRec.Code != http.StatusUnprocessableEntity ||
+		!strings.Contains(publishRec.Body.String(), `"studio.page_link_broken"`) {
+		t.Fatalf("publicación con enlace roto no fue bloqueada: %d %s",
+			publishRec.Code, publishRec.Body.String())
+	}
+
+	content.Pages = append(content.Pages, StudioPage{
+		ID: "ausente", Title: "Página ya creada", Blocks: []json.RawMessage{},
+	})
+	contentJSON, err = json.Marshal(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateBody, err := json.Marshal(StudioDocumentInput{
+		TemplateKey:  "document",
+		Title:        "Borrador con enlace resuelto",
+		Content:      contentJSON,
+		BaseRevision: created.Revision,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateRec := studioRequest(
+		h, http.MethodPut, "/api/studio/documents/"+created.ID, string(updateBody), cookie,
+	)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("resolver el enlace no se guardó: %d %s", updateRec.Code, updateRec.Body.String())
+	}
+	publishRec = studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/publish", "", cookie,
+	)
+	if publishRec.Code != http.StatusOK {
+		t.Fatalf("publicación con enlace resuelto: %d %s", publishRec.Code, publishRec.Body.String())
+	}
+	relations, err := s.store.publishedStudioRelations(created.ID)
+	if err != nil ||
+		len(relations.OutgoingItemIDs) != 1 ||
+		relations.OutgoingItemIDs[0] != "zim:enciclopedia_es:Q0hB" {
+		t.Fatalf("el enlace item en texto no llegó al snapshot publicado: %#v err=%v",
+			relations.OutgoingItemIDs, err)
+	}
+}
+
 func TestStudioInfoCardUsesValidatedAssetsAndSearchText(t *testing.T) {
 	content := StudioContent{
 		SchemaVersion: studioSchemaVersion,

@@ -3,16 +3,20 @@
   import StudioImage from './StudioImage.svelte';
   import StudioInfoCard from './StudioInfoCard.svelte';
   import {
-    studioDocumentBlocks, studioPage, studioPageInfoCards, studioInfoCardHasContent,
+    studioDocumentBlocks, studioPage, studioPages, studioPageInfoCards, studioInfoCardHasContent,
     studioInfoCardsByAnchor,
   } from './studioContent.js';
   import { t, relTime } from './i18n.svelte.js';
 
-  let { document, pageId = '', preview = false, expanded = false, onOpenItem, onToc } = $props();
+  let {
+    document, pageId = '', preview = false, expanded = false,
+    onOpenItem, onOpenPage, onToc,
+  } = $props();
 
   const content = () => document?.content || {};
   const presentation = () => content().presentation || {};
   const activePage = () => studioPage(document, pageId);
+  const pageIDs = () => studioPages(document).map((page) => page.id);
   const pageTitle = () => activePage()?.title || document.title;
   // Fichas de ESTA página. Una ficha sin nada dentro no se publica, aunque en el
   // editor siga visible para poder rellenarla.
@@ -111,7 +115,13 @@
           <StudioInfoCard documentId={document.id} {card} compact={preview} />
         </aside>
       {/each}
-      <StudioBlockView {block} documentId={document.id} {onOpenItem} />
+      <StudioBlockView
+        {block}
+        documentId={document.id}
+        pageIDs={pageIDs()}
+        {onOpenItem}
+        {onOpenPage}
+      />
     {/each}
 
     {#if document.tags?.length}

@@ -259,6 +259,7 @@
       <DocumentPage
         {tab}
         {onOpenItem}
+        onOpenPage={onOpenDocumentPage}
         onToc={handleDocToc}
         onPages={handleDocPages}
         onPageResolved={onResolveDocumentPage}

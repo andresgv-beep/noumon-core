@@ -14,7 +14,9 @@
     createStudioInfoCard, removeStudioInfoCard, moveStudioInfoCard,
     studioInfoCardsByAnchor,
   } from './studioContent.js';
-  import { plainText } from './studioEditable.js';
+  import {
+    collectStudioInlineLinks, plainText, removeStudioPageLinks,
+  } from './studioEditable.js';
   import { itemSearch } from './libraryApi.js';
   import {
     listStudioDocuments, getStudioDocument, createStudioDocument,
@@ -50,6 +52,8 @@
   let linkQuery = $state('');
   let linkResults = $state([]);
   let linkLoading = $state(false);
+  let pageLinkSelection = $state(null);
+  let pageLinkMessage = $state('');
   let imageInput = $state(null);
   let imageTargetColumn = $state(null);
   let saveTimer;
@@ -64,6 +68,7 @@
   let linkSearchTimer;
   let linkAbort;
   let blockSequence = 1;
+  let rememberedPageTextSelection = null;
   let activePageID = $state('');
 
   const content = () => selected?.content || {
@@ -73,6 +78,23 @@
     pages: [{ id: 'p1', title: '', blocks: [] }],
   };
   const activeBlocks = () => studioDocumentBlocks(selected, activePageID);
+  const pageIDs = () => studioPages(selected).map((page) => page.id);
+  const brokenPageLinks = () => {
+    const known = new Set(pageIDs());
+    const counts = new Map();
+    for (const link of collectStudioInlineLinks(content())) {
+      if (link.kind !== 'page' || (!link.invalid && known.has(link.id))) continue;
+      counts.set(link.id, (counts.get(link.id) || 0) + 1);
+    }
+    return [...counts].map(([id, count]) => ({ id, count }));
+  };
+
+  function removeBrokenPageLink(pageID) {
+    if (!selected || selected.status === 'archived') return;
+    const result = removeStudioPageLinks(content(), pageID);
+    if (!result.removed) return;
+    touch();
+  }
   // Las fichas son de la página activa, no del documento.
   const activePage = () => studioPage(selected, activePageID);
   const infoCards = () => activePage()?.infoCards || [];
@@ -245,9 +267,14 @@
       retryAttempt = 0;
       scheduleRetry(0);
     };
+    const selectionChange = () => {
+      const snapshot = currentPageTextSelection();
+      if (snapshot) rememberedPageTextSelection = snapshot;
+    };
     window.addEventListener('beforeunload', beforeUnload);
     window.addEventListener('keydown', keydown);
     window.addEventListener('online', online);
+    globalThis.document.addEventListener('selectionchange', selectionChange);
     return () => {
       studioActive = false;
       clearTimeout(saveTimer);
@@ -262,6 +289,7 @@
       window.removeEventListener('beforeunload', beforeUnload);
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('online', online);
+      globalThis.document.removeEventListener('selectionchange', selectionChange);
     };
   });
 
@@ -586,11 +614,25 @@
       ? 'studio.restorePublishedConfirm'
       : 'studio.restoreConfirm';
     if (!confirm(t(confirmKey, { revision: revision.revision }))) return;
-    if (!await flushCurrent()) return;
     const documentId = selected.id;
     restoringRevision = revision.revision;
     error = '';
     try {
+      // Restaurar significa descartar deliberadamente el borrador local. No se
+      // debe intentar validarlo ni guardarlo primero: precisamente una revisión
+      // anterior es la vía de salida cuando el borrador actual está dañado.
+      clearTimeout(saveTimer);
+      clearTimeout(recoveryTimer);
+      saveTimer = null;
+      recoveryTimer = null;
+      clearRetry();
+      if (savePromise) await savePromise;
+      if (selected?.id !== documentId) return;
+      clearTimeout(saveTimer);
+      clearTimeout(recoveryTimer);
+      saveTimer = null;
+      recoveryTimer = null;
+      error = '';
       const restored = normalizeDocument(await restoreStudioRevision(
         documentId, revision.revision, selected.revision,
       ));
@@ -649,11 +691,80 @@
 
   function closeLinkPicker() {
     linkPicker = false;
+    pageLinkSelection = null;
+    pageLinkMessage = '';
+    rememberedPageTextSelection = null;
     clearTimeout(linkSearchTimer);
     linkAbort?.abort();
     linkQuery = '';
     linkResults = [];
     linkLoading = false;
+  }
+
+  function currentPageTextSelection() {
+    const selection = globalThis.getSelection?.();
+    if (!selection?.rangeCount || selection.isCollapsed) return null;
+    const range = selection.getRangeAt(0);
+    const startElement = range.startContainer?.nodeType === 1
+      ? range.startContainer
+      : range.startContainer?.parentElement;
+    const editable = startElement?.closest?.('[contenteditable="true"]');
+    if (!editable ||
+      !editable.closest?.('[data-studio-block-id]') ||
+      !editable.contains(range.endContainer)) return null;
+    const label = selection.toString().replace(/\s+/g, ' ').trim();
+    if (!label) return null;
+    return { range: range.cloneRange(), editable, label };
+  }
+
+  function capturePageLinkSelection() {
+    pageLinkSelection = null;
+    pageLinkMessage = '';
+    const snapshot = currentPageTextSelection() || rememberedPageTextSelection;
+    if (!snapshot?.editable?.isConnected) {
+      pageLinkMessage = 'studio.pageLinkSelectText';
+      activeSection = 'insert';
+      return;
+    }
+    pageLinkSelection = snapshot;
+    activeSection = 'insert';
+    showRevisions = false;
+  }
+
+  function cancelPageLink() {
+    pageLinkSelection = null;
+    pageLinkMessage = '';
+    rememberedPageTextSelection = null;
+  }
+
+  function applyPageLink(pageId) {
+    const pending = pageLinkSelection;
+    if (!pending?.editable?.isConnected || !pageIDs().includes(pageId)) {
+      pageLinkSelection = null;
+      pageLinkMessage = 'studio.pageLinkSelectionExpired';
+      return;
+    }
+    const anchor = globalThis.document.createElement('a');
+    anchor.className = 'studio-inline-link studio-inline-link-page';
+    anchor.href = `#studio-page-${encodeURIComponent(pageId)}`;
+    anchor.dataset.studioLinkKind = 'page';
+    anchor.dataset.studioLinkId = pageId;
+    anchor.textContent = pending.label;
+    pending.range.deleteContents();
+    pending.range.insertNode(anchor);
+    const selection = globalThis.getSelection?.();
+    if (selection) {
+      const caret = globalThis.document.createRange();
+      caret.setStartAfter(anchor);
+      caret.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(caret);
+    }
+    pending.editable.dispatchEvent(new Event('input', { bubbles: true }));
+    pending.editable.focus();
+    pageLinkSelection = null;
+    pageLinkMessage = '';
+    rememberedPageTextSelection = null;
   }
 
   function searchLinkTargets(value) {
@@ -969,6 +1080,11 @@
 
   async function publishSelected() {
     if (!selected || !canPublish) return;
+    if (brokenPageLinks().length) {
+      error = 'studio.page_link_broken';
+      activeSection = 'insert';
+      return;
+    }
     if (!await flushUntilClean()) return;
     try {
       const updated = await publishStudioDocument(selected.id);
@@ -1142,6 +1258,10 @@
       toggleLinkPicker();
       return;
     }
+    if (key === 'pageLink') {
+      capturePageLinkSelection();
+      return;
+    }
     const types = {
       heading: 'heading', list: 'bulletList', quote: 'quote', code: 'code',
       columns: 'columns', table: 'table',
@@ -1178,6 +1298,7 @@
     return [
       { key: 'bold', short: 'B', label: t('studio.tool.bold') },
       { key: 'italic', short: 'I', label: t('studio.tool.italic') },
+      { key: 'pageLink', short: '↗', label: t('studio.pageLink') },
       { key: 'heading', short: 'H₁', label: t('studio.block.heading') },
       { key: 'list', short: '≔', label: t('studio.block.bulletList') },
       { key: 'quote', short: '❝', label: t('studio.block.quote') },
@@ -1190,7 +1311,8 @@
 
   $effect(() => {
     const surface = surfaceOf();
-    const publishDisabled = !selected || selected.status === 'archived';
+    const unresolvedPageLinks = brokenPageLinks();
+    const publishDisabled = !selected || selected.status === 'archived' || unresolvedPageLinks.length > 0;
     const publicationPending = !!selected?.publishedRevision &&
       (dirty || selected.revision !== selected.publishedRevision);
     onShellChange?.({
@@ -1202,6 +1324,9 @@
       textControl: selectedTextControl(),
       canPublish,
       publishDisabled,
+      publishDisabledReason: unresolvedPageLinks.length
+        ? t('studio.pageLinkBrokenPublish')
+        : t('studio.publishUnavailable'),
       publishLabel: selected?.publishedRevision ? t('studio.updatePublication') : t('studio.publish'),
       documents,
       selected,
@@ -1216,6 +1341,11 @@
       linkQuery,
       linkResults,
       linkLoading,
+      pages: studioPages(selected),
+      pageLinkSelection: pageLinkSelection ? { label: pageLinkSelection.label } : null,
+      pageLinkMessage,
+      brokenPageLinks: unresolvedPageLinks,
+      removeBrokenPageLink,
       revisionsOpen: showRevisions,
       revisionCount: revisions.length || selected?.revision || 0,
       kindGlyph: surface === 'cabinet' ? '▣' : surface === 'moments' ? '▶' : '✎',
@@ -1253,6 +1383,9 @@
       toggleLinkPicker,
       searchLinkTargets,
       insertItemReference,
+      capturePageLinkSelection,
+      applyPageLink,
+      cancelPageLink,
       setTags,
       changeDocument: touch,
       toggleRevisions,
@@ -1312,7 +1445,14 @@
     </main>
   {:else if selected && mode === 'preview'}
     <main class="preview-mode scroll thin">
-      <StudioDocumentView document={selected} pageId={activePageID} {onOpenItem} preview expanded={!sidebarOpen} />
+      <StudioDocumentView
+        document={selected}
+        pageId={activePageID}
+        {onOpenItem}
+        onOpenPage={selectPage}
+        preview
+        expanded={!sidebarOpen}
+      />
     </main>
   {:else if selected && surfaceOf() === 'document'}
     <main class="document-workspace scroll thin">
@@ -1435,6 +1575,7 @@
               onChooseImage={(blockID, columnIndex) => chooseImage({ blockID, columnIndex })}
               onMoveToRoot={moveBlockToRoot}
               {onOpenItem}
+              pageIDs={pageIDs()}
             />
           {/each}
           <button
