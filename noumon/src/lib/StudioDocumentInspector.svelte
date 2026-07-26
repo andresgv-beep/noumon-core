@@ -159,6 +159,19 @@
           {/each}
         </div>
 
+        <!-- Una sola medida para todo el menú: los tamaños interiores van en em,
+             así los números y los encabezados escalan con los títulos y no se
+             descuadra la columna. -->
+        <label class="size-row">
+          <span>{t('studio.navFontSize')}</span>
+          <input
+            type="range" min="9" max="20" step="1"
+            value={presentation().navFontSize || 12}
+            oninput={(event) => setPresentation('navFontSize', Number(event.currentTarget.value))}
+          />
+          <small>{presentation().navFontSize || 12} px</small>
+        </label>
+
         <h3>{t('studio.typography')}</h3>
         <div class="style-options">
           <button class:active={presentation().fontPreset !== 'sans'} onclick={() => setPresentation('fontPreset', 'editorial')}>
@@ -263,4 +276,8 @@
   .cover-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .cover-actions button{min-width:0;padding:7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:9.5px}
   .cover-actions button:hover{border-color:var(--accent-line);color:var(--ink)}.cover-actions .remove{color:#df7474}
+  .size-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 8px;margin-bottom:14px}
+  .size-row span{color:var(--faint);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase}
+  .size-row small{color:var(--muted);font-size:10px;text-align:right}
+  .size-row input{grid-column:1/-1;width:100%;min-width:0;padding:0;accent-color:var(--accent)}
 </style>

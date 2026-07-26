@@ -72,7 +72,9 @@ type StudioPresentation struct {
 	ContentWidth string `json:"contentWidth,omitempty"`
 	// Marco del menu de contenidos: vacio o "none" a ras, "framed" con marco
 	// recto, "rounded" con esquinas redondeadas.
-	NavFrame         string `json:"navFrame,omitempty"`
+	NavFrame string `json:"navFrame,omitempty"`
+	// Tamano del texto del menu en px; 0 = el valor por defecto del cliente.
+	NavFontSize      int    `json:"navFontSize,omitempty"`
 	FontPreset       string `json:"fontPreset,omitempty"`
 	TitleFontSize    int    `json:"titleFontSize,omitempty"`
 	SummaryFontSize  int    `json:"summaryFontSize,omitempty"`
@@ -282,6 +284,9 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	case "", "editorial", "sans":
 	default:
 		return studioValidatedInput{}, fmt.Errorf("presentation.fontPreset: invalid")
+	}
+	if size := content.Presentation.NavFontSize; size != 0 && (size < 9 || size > 20) {
+		return studioValidatedInput{}, fmt.Errorf("presentation.navFontSize: invalid")
 	}
 	if size := content.Presentation.TitleFontSize; size != 0 && (size < 10 || size > 96) {
 		return studioValidatedInput{}, fmt.Errorf("presentation.titleFontSize: invalid")

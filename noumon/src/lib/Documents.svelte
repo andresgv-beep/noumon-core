@@ -128,7 +128,10 @@
 </section>
 
 <style>
-  .documents{height:100%;overflow:auto;padding:clamp(28px,5vw,64px);background:var(--ground)}
+  /* flex:1 y min-width:0 como Cabinet y Moments: es un elemento flex del armazón
+     del lector, y sin estirarse se quedaba del ancho de su contenido, pegado a la
+     izquierda y con su propia barra de desplazamiento a media pantalla. */
+  .documents{flex:1;min-width:0;height:100%;overflow:auto;padding:clamp(28px,5vw,64px);background:var(--ground)}
   .hero{max-width:1050px;margin:0 auto 28px;display:flex;align-items:center;gap:18px}
   .mark{width:52px;height:52px;display:grid;place-items:center;border-radius:var(--r-lg);color:var(--accent-2);background:color-mix(in srgb,var(--accent) 18%,var(--panel));border:1px solid var(--accent-line)}
   .hero span{font-size:11px;color:var(--accent-2);font-weight:700;letter-spacing:.12em;text-transform:uppercase}

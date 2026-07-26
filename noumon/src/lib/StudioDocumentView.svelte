@@ -67,6 +67,7 @@
       activePageID={activePage()?.id || ''}
       title={content().navTitle || ''}
       frame={presentation().navFrame || 'none'}
+      fontSize={presentation().navFontSize || 0}
       onSelect={onOpenPage}
     />
   {/if}
@@ -131,7 +132,7 @@
   /* Índice y artículo forman una sola banda centrada, como una web de
      documentación. El artículo conserva su ancho de lectura y el índice se le
      suma a la izquierda, en vez de vivir pegado al borde de la ventana. */
-  .document-layout.has-nav{display:flex;align-items:flex-start;justify-content:center;gap:clamp(18px,3vw,44px);padding-left:clamp(12px,2vw,28px)}
+  .document-layout.has-nav{display:flex;align-items:flex-start;justify-content:center;gap:clamp(18px,3vw,44px)}
   /* Arranca por debajo del titulo, no a la altura del borde superior: pegado
      arriba competia con el encabezado del articulo. Es un desplazamiento fijo,
      asi que en una pagina que no empiece por un titulo quedara algo baja. */
@@ -139,10 +140,13 @@
   /* margin:0 en la banda: `.page` lleva `margin:0 auto`, y en flex los márgenes
      automáticos absorben todo el espacio libre, empujando el artículo lejos del
      índice. Centrar la banda entera es cosa de justify-content, no del margen. */
-  .document-layout.has-nav>.page{flex:0 1 auto;margin:0}
+  /* min-width:0 es obligatorio en un flex item: sin el no puede encogerse por
+     debajo del ancho minimo de su contenido, y una tabla o una cadena larga
+     desbordan la banda y sacan barra horizontal. */
+  .document-layout.has-nav>.page{flex:0 1 auto;min-width:0;margin:0}
   @media(max-width:900px){
     /* En estrecho el índice se apila encima y la banda vuelve a una columna. */
-    .document-layout.has-nav{display:block;padding-left:0}
+    .document-layout.has-nav{display:block}
     .document-layout.has-nav>:global(.page-nav){width:auto;margin:0 auto;padding:0 clamp(20px,3.2vw,60px)}
   }
   /* La ficha pertenece al flujo del artículo y envuelve el texto, pero nunca

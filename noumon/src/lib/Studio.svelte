@@ -1570,6 +1570,7 @@
               activePageID={activePageID}
               title={content().navTitle || ''}
               frame={content().presentation?.navFrame || 'none'}
+              fontSize={content().presentation?.navFontSize || 0}
               onSelect={selectPage}
             />
           {/if}

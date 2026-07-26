@@ -2,7 +2,7 @@
   import { studioNavGroups } from './studioContent.js';
   import { t } from './i18n.svelte.js';
 
-  let { pages = [], activePageID = '', title = '', frame = 'none', onSelect } = $props();
+  let { pages = [], activePageID = '', title = '', frame = 'none', fontSize = 0, onSelect } = $props();
 
   let groups = $derived(studioNavGroups(pages));
   // La numeración es del documento, no del grupo: la página 4 sigue siendo la 4
@@ -20,6 +20,7 @@
   class="page-nav"
   class:framed={frame === 'framed'}
   class:rounded={frame === 'rounded'}
+  style:--nav-font={Number(fontSize) >= 9 && Number(fontSize) <= 24 ? `${Math.round(fontSize)}px` : null}
   aria-label={title || t('documents.contentsMenu')}
 >
   <div class="nav-head">
@@ -46,7 +47,7 @@
 </nav>
 
 <style>
-  .page-nav{position:sticky;top:24px;align-self:start;display:grid;gap:2px;min-width:0;font-family:var(--font,system-ui,sans-serif)}
+  .page-nav{position:sticky;top:24px;align-self:start;display:grid;gap:2px;min-width:0;font-family:var(--font,system-ui,sans-serif);font-size:var(--nav-font,12px)}
   /* Marco opcional del índice: a ras por defecto, para que parezca parte del
      documento y no una caja aparte. Sólo el borde, sin fondo ni sombra: así el
      índice sigue sobre la página en vez de convertirse en una tarjeta. Con
@@ -55,17 +56,17 @@
   .page-nav.rounded{border-radius:var(--r-lg)}
   :global(:root[data-skin="retro"]) .page-nav.rounded{border-radius:0}
   .nav-head{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;padding:0 9px 8px;border-bottom:1px solid var(--border)}
-  .nav-head b{overflow-wrap:break-word;color:var(--faint);font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
-  .nav-head small{color:var(--faint);font-size:9.5px}
+  .nav-head b{overflow-wrap:break-word;color:var(--faint);font-size:.79em;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+  .nav-head small{color:var(--faint);font-size:.79em}
   /* La sección abre grupo: su propio título y una separación por encima. La
      primera no necesita separarse de nada. */
-  .nav-section{margin:14px 0 4px;padding:10px 9px 0;border-top:1px solid var(--border);color:var(--muted);font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+  .nav-section{margin:14px 0 4px;padding:10px 9px 0;border-top:1px solid var(--border);color:var(--muted);font-size:.79em;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
   .nav-section.first{margin-top:0;padding-top:0;border-top:0}
   .page-link{width:100%;min-width:0;display:grid;grid-template-columns:16px minmax(0,1fr);align-items:start;gap:8px;padding:7px 9px;border:0;border-left:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);text-align:left}
   .page-link:hover{color:var(--ink);background:color-mix(in srgb,var(--ink) 4%,transparent)}
   .page-link.active{border-left-color:var(--accent);color:var(--ink)}
-  .page-link span{padding-top:1px;color:var(--faint);font-size:9.5px;text-align:right}
-  .page-link b{overflow-wrap:break-word;font-size:12px;font-weight:520;line-height:1.4}
+  .page-link span{padding-top:1px;color:var(--faint);font-size:.79em;text-align:right}
+  .page-link b{overflow-wrap:break-word;font-size:1em;font-weight:520;line-height:1.4}
   .page-link.active b{font-weight:650}
   @media(max-width:900px){
     /* Sin sitio al lado: el índice se coloca encima del artículo. */
