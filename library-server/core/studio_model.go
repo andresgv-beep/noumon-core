@@ -69,7 +69,10 @@ type StudioClassification struct {
 }
 
 type StudioPresentation struct {
-	ContentWidth     string `json:"contentWidth,omitempty"`
+	ContentWidth string `json:"contentWidth,omitempty"`
+	// Marco del menu de contenidos: vacio o "none" a ras, "framed" con marco
+	// recto, "rounded" con esquinas redondeadas.
+	NavFrame         string `json:"navFrame,omitempty"`
 	FontPreset       string `json:"fontPreset,omitempty"`
 	TitleFontSize    int    `json:"titleFontSize,omitempty"`
 	SummaryFontSize  int    `json:"summaryFontSize,omitempty"`
@@ -85,7 +88,7 @@ type StudioContent struct {
 	Blocks         []json.RawMessage    `json:"blocks,omitempty"`
 	Pages          []StudioPage         `json:"pages,omitempty"`
 	// Titulo del menu de contenidos. Vacio = el nombre por defecto del cliente.
-	NavTitle       string               `json:"navTitle,omitempty"`
+	NavTitle string `json:"navTitle,omitempty"`
 }
 
 type StudioInfoCard struct {
@@ -121,7 +124,7 @@ type StudioPage struct {
 	Title  string            `json:"title"`
 	Blocks []json.RawMessage `json:"blocks"`
 	// Seccion del menu: una pagina estrena grupo cuando difiere de la anterior.
-	Section string           `json:"section,omitempty"`
+	Section string `json:"section,omitempty"`
 	// Las fichas son de la página, no del documento: cada página tiene las
 	// suyas y una página nueva nace sin ninguna.
 	InfoCards []StudioInfoCard `json:"infoCards,omitempty"`
@@ -269,6 +272,11 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	case "", "reading", "wide", "compact", "editorial":
 	default:
 		return studioValidatedInput{}, fmt.Errorf("presentation.contentWidth: invalid")
+	}
+	switch content.Presentation.NavFrame {
+	case "", "none", "framed", "rounded":
+	default:
+		return studioValidatedInput{}, fmt.Errorf("presentation.navFrame: invalid")
 	}
 	switch content.Presentation.FontPreset {
 	case "", "editorial", "sans":

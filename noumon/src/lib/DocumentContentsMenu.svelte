@@ -2,7 +2,7 @@
   import { studioNavGroups } from './studioContent.js';
   import { t } from './i18n.svelte.js';
 
-  let { pages = [], activePageID = '', title = '', onSelect } = $props();
+  let { pages = [], activePageID = '', title = '', frame = 'none', onSelect } = $props();
 
   let groups = $derived(studioNavGroups(pages));
   // La numeración es del documento, no del grupo: la página 4 sigue siendo la 4
@@ -16,7 +16,12 @@
   parte del documento y no como una barra del navegador. Se queda pegada al
   desplazar, que es lo que se espera de un índice en un documento largo.
 -->
-<nav class="page-nav" aria-label={title || t('documents.contentsMenu')}>
+<nav
+  class="page-nav"
+  class:framed={frame === 'framed'}
+  class:rounded={frame === 'rounded'}
+  aria-label={title || t('documents.contentsMenu')}
+>
   <div class="nav-head">
     <b>{title || t('documents.contentsMenu')}</b>
     <small>{t('documents.contentsCount', { count: pages.length })}</small>
@@ -42,6 +47,13 @@
 
 <style>
   .page-nav{position:sticky;top:24px;align-self:start;display:grid;gap:2px;min-width:0;font-family:var(--font,system-ui,sans-serif)}
+  /* Marco opcional del índice: a ras por defecto, para que parezca parte del
+     documento y no una caja aparte. Sólo el borde, sin fondo ni sombra: así el
+     índice sigue sobre la página en vez de convertirse en una tarjeta. Con
+     marco necesita su propio relleno. */
+  .page-nav.framed,.page-nav.rounded{padding:14px 6px;border:1px solid var(--border)}
+  .page-nav.rounded{border-radius:var(--r-lg)}
+  :global(:root[data-skin="retro"]) .page-nav.rounded{border-radius:0}
   .nav-head{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;padding:0 9px 8px;border-bottom:1px solid var(--border)}
   .nav-head b{overflow-wrap:break-word;color:var(--faint);font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
   .nav-head small{color:var(--faint);font-size:9.5px}

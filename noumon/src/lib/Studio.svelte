@@ -1569,6 +1569,7 @@
               pages={studioPages(selected)}
               activePageID={activePageID}
               title={content().navTitle || ''}
+              frame={content().presentation?.navFrame || 'none'}
               onSelect={selectPage}
             />
           {/if}

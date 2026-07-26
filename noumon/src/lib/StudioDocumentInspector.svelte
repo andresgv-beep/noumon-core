@@ -145,6 +145,20 @@
           {/each}
         </div>
 
+        <h3>{t('studio.navFrame')}</h3>
+        <div class="style-options">
+          {#each [
+            ['none', t('studio.frameNone')],
+            ['framed', t('studio.frameSquare')],
+            ['rounded', t('studio.frameRounded')],
+          ] as option}
+            <button
+              class:active={(presentation().navFrame || 'none') === option[0]}
+              onclick={() => setPresentation('navFrame', option[0])}
+            ><span>{option[1]}</span></button>
+          {/each}
+        </div>
+
         <h3>{t('studio.typography')}</h3>
         <div class="style-options">
           <button class:active={presentation().fontPreset !== 'sans'} onclick={() => setPresentation('fontPreset', 'editorial')}>

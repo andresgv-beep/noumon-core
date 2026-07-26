@@ -66,6 +66,7 @@
       pages={studioPages(document)}
       activePageID={activePage()?.id || ''}
       title={content().navTitle || ''}
+      frame={presentation().navFrame || 'none'}
       onSelect={onOpenPage}
     />
   {/if}
