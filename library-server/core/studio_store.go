@@ -28,10 +28,12 @@ type StudioDocumentSummary struct {
 	Revision          int                  `json:"revision"`
 	PublishedRevision *int                 `json:"publishedRevision,omitempty"`
 	PublicationKind   string               `json:"publicationKind,omitempty"`
-	Created           int64                `json:"created"`
-	Updated           int64                `json:"updated"`
-	Published         *int64               `json:"published,omitempty"`
-	Featured          bool                 `json:"featured,omitempty"`
+	// Portada de la publicacion: la usa la tarjeta de la coleccion.
+	CoverAssetID string `json:"coverAssetId,omitempty"`
+	Created      int64  `json:"created"`
+	Updated      int64  `json:"updated"`
+	Published    *int64 `json:"published,omitempty"`
+	Featured     bool   `json:"featured,omitempty"`
 }
 
 type studioScanner interface {
@@ -103,8 +105,21 @@ func studioSummary(doc StudioDocument) StudioDocumentSummary {
 		Classification: doc.Classification, Revision: doc.Revision,
 		PublishedRevision: doc.PublishedRevision, PublicationKind: doc.PublicationKind,
 		Created: doc.Created, Updated: doc.Updated, Published: doc.Published,
-		Featured: studioDocumentFeatured(doc.Metadata),
+		Featured:     studioDocumentFeatured(doc.Metadata),
+		CoverAssetID: studioDocumentCover(doc.Content),
 	}
+}
+
+// La portada vive en el contenido, no en una columna aparte: asi acompana a la
+// revision publicada y no depende de un campo que haya que mantener en paralelo.
+func studioDocumentCover(content json.RawMessage) string {
+	var fields struct {
+		CoverAssetID string `json:"coverAssetId"`
+	}
+	if json.Unmarshal(content, &fields) != nil {
+		return ""
+	}
+	return fields.CoverAssetID
 }
 
 func studioDocumentFeatured(metadata json.RawMessage) bool {

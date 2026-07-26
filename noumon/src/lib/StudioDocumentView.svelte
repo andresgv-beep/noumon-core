@@ -1,7 +1,6 @@
 <script>
   import DocumentContentsMenu from './DocumentContentsMenu.svelte';
   import StudioBlockView from './StudioBlockView.svelte';
-  import StudioImage from './StudioImage.svelte';
   import StudioInfoCard from './StudioInfoCard.svelte';
   import {
     studioDocumentBlocks, studioDocumentHeading, studioPage, studioPages, studioPageInfoCards,
@@ -26,8 +25,7 @@
   const hasInfoCard = () => infoCards().length > 0;
   const cardSlots = () => studioInfoCardsByAnchor(infoCards(), bodyBlocks().length);
   const pageBlocks = () => studioDocumentBlocks(document, pageId);
-  const cover = () => pageBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
-  const bodyBlocks = () => pageBlocks().filter((block) => block?.role !== 'cover');
+  const bodyBlocks = () => pageBlocks();
 
   function collectHeadings(blocks, result = [], depth = 0) {
     if (!Array.isArray(blocks) || depth > 12) return result;
@@ -86,13 +84,6 @@
          El título, el resumen y el autor siguen existiendo como metadatos: los
          usan la biblioteca, la pestaña, el menú de páginas y el buscador, que
          los indexa del modelo y no de lo que aquí se pinte. -->
-    {#if cover()}
-      <figure class="cover">
-        <StudioImage documentId={document.id} assetId={cover().assetId} alt={cover().alt || heading()} display="poster" />
-        {#if cover().caption}<figcaption>{cover().caption}</figcaption>{/if}
-      </figure>
-    {/if}
-
     <!-- Las fichas viven DENTRO de la página, flotadas al lado que les toque: el
          texto las envuelve, como en cualquier artículo de enciclopedia. Cada una
          se emite junto al bloque en el que está anclada, porque un flotado
@@ -167,7 +158,6 @@
   .page.sans{font-family:var(--font,system-ui,sans-serif)}
   .page.compact{max-width:620px}.page.wide{max-width:980px}.page.editorial{max-width:1180px}
   .page.preview{padding-top:clamp(20px,2.6vw,40px)}
-  .cover{margin:0 0 38px}.cover :global(img),.cover :global(.placeholder){width:100%;max-height:560px;object-fit:cover;border-radius:var(--r-md)}.cover figcaption{margin-top:8px;color:var(--muted);font:12px var(--font,system-ui,sans-serif);text-align:center}
   footer{clear:both;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:50px;padding-top:22px}
   footer span{font-family:var(--font,system-ui,sans-serif);font-size:11px;padding:4px 9px;border-radius:var(--r-pill);background:var(--raise);color:var(--muted)}
   @media(max-width:820px){

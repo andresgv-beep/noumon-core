@@ -3,6 +3,7 @@
   import Icon from './Icon.svelte';
   import { t, relTime } from './i18n.svelte.js';
   import { listPublishedDocuments } from './studioApi.js';
+  import { serverUrl } from './connection.js';
 
   let { onOpenItem } = $props();
   let documents = $state([]);
@@ -21,8 +22,31 @@
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, 12);
   });
-  let recent = $derived(documents.slice(0, 4));
-  let featured = $derived(documents.filter((doc) => doc.featured).slice(0, 4));
+  // Portada de respaldo: sin ella, una estantería visual nace llena de huecos
+  // grises, porque casi ningún documento tiene imagen. El tono sale del id, así
+  // que es estable —el mismo documento tiene siempre el mismo color— y dos
+  // documentos seguidos rara vez se parecen.
+  function coverHue(id) {
+    let hash = 0;
+    for (const char of String(id)) hash = (hash * 31 + char.codePointAt(0)) % 360;
+    return hash;
+  }
+
+  function coverInitial(title) {
+    const clean = String(title || '').trim();
+    return clean ? [...clean][0].toLocaleUpperCase() : '·';
+  }
+
+  function coverUrl(doc) {
+    return doc.coverAssetId
+      ? serverUrl(`/api/studio/documents/${encodeURIComponent(doc.id)}/assets/${encodeURIComponent(doc.coverAssetId)}`)
+      : '';
+  }
+
+  // Seis en recientes: con tres por fila son dos filas completas, sin la fila
+  // coja que dejaban cuatro. Van rotando solas segun publicas.
+  let recent = $derived(documents.slice(0, 6));
+  let featured = $derived(documents.filter((doc) => doc.featured).slice(0, 6));
   let filtered = $derived.by(() => {
     const needle = query.trim().toLocaleLowerCase();
     return documents.filter((doc) =>
@@ -82,9 +106,18 @@
           <div class="recent-grid">
             {#each featured as doc (doc.id)}
               <button onclick={() => onOpenItem?.(`studio:${doc.id}`)}>
-                <small>{doc.classification?.workType || t('documents.article')}</small>
-                <b>{doc.title}</b>
-                <span>{doc.summary || t('documents.noSummary')}</span>
+                <span class="r-body">
+                  <small>{doc.classification?.workType || t('documents.article')}</small>
+                  <b>{doc.title}</b>
+                  <span>{doc.summary || t('documents.noSummary')}</span>
+                </span>
+                <span class="r-cover">
+                  {#if coverUrl(doc)}
+                    <img src={coverUrl(doc)} alt="" loading="lazy" />
+                  {:else}
+                    <i style:--hue={coverHue(doc.id)}>{coverInitial(doc.title)}</i>
+                  {/if}
+                </span>
               </button>
             {/each}
           </div>
@@ -95,9 +128,18 @@
         <div class="recent-grid">
           {#each recent as doc (doc.id)}
             <button onclick={() => onOpenItem?.(`studio:${doc.id}`)}>
-              <small>{doc.classification?.workType || t('documents.article')} · {relTime(doc.published || doc.updated)}</small>
-              <b>{doc.title}</b>
-              <span>{doc.summary || t('documents.noSummary')}</span>
+              <span class="r-body">
+                <small>{doc.classification?.workType || t('documents.article')} · {relTime(doc.published || doc.updated)}</small>
+                <b>{doc.title}</b>
+                <span>{doc.summary || t('documents.noSummary')}</span>
+              </span>
+              <span class="r-cover">
+                {#if coverUrl(doc)}
+                  <img src={coverUrl(doc)} alt="" loading="lazy" />
+                {:else}
+                  <i style:--hue={coverHue(doc.id)}>{coverInitial(doc.title)}</i>
+                {/if}
+              </span>
             </button>
           {/each}
         </div>
@@ -108,6 +150,16 @@
     <div class="grid">
       {#each filtered as doc (doc.id)}
         <button class="doc" onclick={() => onOpenItem?.(`studio:${doc.id}`)}>
+          <!-- La portada manda: es lo que reconoces antes de leer el título.
+               Sin imagen propia se dibuja una de respaldo, para que la parrilla
+               no tenga huecos. -->
+          {#if coverUrl(doc)}
+            <img class="doc-cover" src={coverUrl(doc)} alt="" loading="lazy" />
+          {:else}
+            <div class="doc-cover fallback" style:--hue={coverHue(doc.id)} aria-hidden="true">
+              <span>{coverInitial(doc.title)}</span>
+            </div>
+          {/if}
           <div class="doc-top">
             <span class="type">{doc.classification?.workType || t('documents.article')}</span>
             <small>{relTime(doc.published || doc.updated)}</small>
@@ -146,21 +198,35 @@
   .topics small{font-size:9px;opacity:.7}
   .recent{max-width:1050px;margin:0 auto 28px}
   .section-title{margin-bottom:9px}
-  .recent-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
-  .recent-grid button{min-width:0;min-height:145px;display:flex;flex-direction:column;align-items:flex-start;padding:15px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);color:var(--ink);text-align:left}
+  .recent-grid{display:grid;grid-template-columns:repeat(auto-fill,272px);justify-content:start;gap:10px}
+  /* Apaisada, como el boceto: texto a la izquierda y portada a la derecha
+     ocupando todo el alto, a sangre contra el borde. */
+  .recent-grid button{min-width:0;min-height:96px;display:grid;grid-template-columns:minmax(0,1fr) 88px;align-items:stretch;overflow:hidden;padding:0;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);color:var(--ink);text-align:left}
+  .r-body{min-width:0;display:flex;flex-direction:column;align-items:flex-start;padding:11px 12px}
+  .r-cover{min-width:0;display:block;overflow:hidden}
+  .r-cover img{width:100%;height:100%;object-fit:cover;display:block}
   .recent-grid button:hover{border-color:var(--accent-line)}
   .recent-grid small{color:var(--accent-2);font-size:9px;text-transform:uppercase;letter-spacing:.05em}
-  .recent-grid b{margin:16px 0 6px;font-size:15px;line-height:1.25}
+  .recent-grid b{margin:5px 0 4px;overflow-wrap:break-word;font-size:13.5px;line-height:1.25}
   .recent-grid span{color:var(--muted);font-size:11px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .count{max-width:1050px;margin:0 auto 10px;display:flex;justify-content:space-between;gap:10px}
-  .grid{max-width:1050px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:13px}
-  .doc{min-height:230px;padding:20px;display:flex;flex-direction:column;text-align:left;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-soft);color:var(--ink);transition:transform .14s,border-color .14s}
+  .grid{max-width:1050px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:11px}
+  /* La portada ocupa el ancho completo de la tarjeta y manda sobre el texto. */
+  /* La portada ocupa todo el alto a la derecha, a sangre contra el borde. */
+  .doc-cover{width:calc(100% + 28px);height:104px;margin:-14px -14px 10px;object-fit:cover;border-radius:var(--r-lg) var(--r-lg) 0 0;background:var(--raise)}
+  /* Respaldo: tono estable derivado del id, inicial grande y marca de agua. */
+  .doc-cover.fallback,.recent-grid i{display:grid;place-items:center;background:linear-gradient(150deg,hsl(var(--hue) 42% 26%),hsl(calc(var(--hue) + 38) 38% 15%));color:hsl(var(--hue) 60% 86%)}
+  .doc-cover.fallback span{font:600 32px/1 var(--font-read,Georgia,serif);opacity:.62}
+  .recent-grid i{width:100%;height:100%;font:600 20px/1 var(--font-read,Georgia,serif);font-style:normal;opacity:.62}
+  .doc{min-height:0;padding:14px;overflow:hidden;display:flex;flex-direction:column;text-align:left;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-soft);color:var(--ink);transition:transform .14s,border-color .14s}
   .doc:hover{transform:translateY(-2px);border-color:var(--accent-line)}
   .doc-top,.byline{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .type{font-size:10px;font-weight:700;color:var(--accent-2);text-transform:uppercase;letter-spacing:.08em}.doc small{color:var(--faint)}
-  .doc h2{margin:23px 0 8px;font-size:20px;line-height:1.25}.doc p{margin:0;color:var(--muted);line-height:1.5;font-size:13px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-  .byline{margin-top:auto;padding-top:22px;color:var(--ink-dim);font-size:12px}.arrow{color:var(--accent-2);font-size:18px}
-  .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}.tags span{font-size:10px;padding:3px 7px;border-radius:var(--r-pill);background:var(--raise);color:var(--muted)}
+  .doc h2{margin:9px 0 6px;font-size:15px;line-height:1.25;overflow-wrap:break-word}.doc p{margin:0;color:var(--muted);line-height:1.45;font-size:11.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .byline{margin-top:auto;padding-top:12px;color:var(--ink-dim);font-size:11px}.arrow{color:var(--accent-2);font-size:15px}
+  .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;overflow:hidden;max-height:20px}.tags span{font-size:10px;padding:3px 7px;border-radius:var(--r-pill);background:var(--raise);color:var(--muted)}
+  /* Piel retro: esquinas en punta, igual que el resto de la interfaz. */
+  :global(:root[data-skin="retro"]) :is(.doc,.doc-cover,.recent-grid button){border-radius:0}
   .state{max-width:650px;margin:70px auto;text-align:center;color:var(--muted)}.state :global(.ic){color:var(--accent-2)}.state h2{color:var(--ink);margin-bottom:4px}.state p{margin-top:0}
   @media(max-width:900px){.recent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:560px){.recent-grid{grid-template-columns:1fr}}

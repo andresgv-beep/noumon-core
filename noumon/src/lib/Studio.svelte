@@ -101,7 +101,10 @@
   const infoCards = () => activePage()?.infoCards || [];
   const infoCardVisible = () => infoCards().length > 0;
   const cardSlots = () => studioInfoCardsByAnchor(infoCards(), documentBlocks().length);
-  const documentCover = () => activeBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
+  // La portada identifica la publicacion en la coleccion; no se pinta sobre la
+  // pagina. Vive en el contenido, no como bloque, para que no estorbe al leer ni
+  // quede invisible al editar.
+  const documentCover = () => content().coverAssetId || '';
   const documentBlocks = () => activeBlocks().filter((block) => block?.role !== 'cover');
 
   function defaultSection(document = selected) {
@@ -911,11 +914,8 @@
   }
 
   function removeDocumentCover() {
-    const cover = documentCover();
-    if (!cover) return;
-    const blocks = activeBlocks();
-    const index = blocks.indexOf(cover);
-    if (index >= 0) blocks.splice(index, 1);
+    if (!documentCover()) return;
+    content().coverAssetId = '';
     touch();
   }
 
@@ -948,16 +948,7 @@
         return;
       }
       if (targetColumn?.cover) {
-        const current = documentCover();
-        if (current) {
-          current.assetId = asset.id;
-          current.imageSize = 'poster';
-          current.imageAlign = 'center';
-        } else {
-          imageBlock.role = 'cover';
-          imageBlock.imageSize = 'poster';
-          activeBlocks().unshift(imageBlock);
-        }
+        content().coverAssetId = asset.id;
         selectedBlockID = '';
         touch();
         return;

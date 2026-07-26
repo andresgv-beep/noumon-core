@@ -89,6 +89,10 @@ type StudioContent struct {
 	InfoCard       *StudioInfoCard      `json:"infoCard,omitempty"`
 	Blocks         []json.RawMessage    `json:"blocks,omitempty"`
 	Pages          []StudioPage         `json:"pages,omitempty"`
+	// Portada del documento: identifica la publicacion en la coleccion, no se
+	// pinta sobre la pagina. Antes vivia como bloque con role "cover" dentro de
+	// la pagina 1, donde estorbaba al leer y no se veia al editar.
+	CoverAssetID string `json:"coverAssetId,omitempty"`
 	// Titulo del menu de contenidos. Vacio = el nombre por defecto del cliente.
 	NavTitle string `json:"navTitle,omitempty"`
 }
@@ -316,6 +320,13 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 		brokenPageLinks: map[string]bool{},
 	}
 	validatedPages := []studioValidatedPage{}
+	content.CoverAssetID = strings.TrimSpace(content.CoverAssetID)
+	if content.CoverAssetID != "" {
+		if !studioIDRE.MatchString(content.CoverAssetID) {
+			return studioValidatedInput{}, fmt.Errorf("coverAssetId: invalid")
+		}
+		state.assets[content.CoverAssetID] = true
+	}
 	content.NavTitle = strings.TrimSpace(content.NavTitle)
 	if utf8.RuneCountInString(content.NavTitle) > 120 {
 		return studioValidatedInput{}, fmt.Errorf("navTitle: too long")

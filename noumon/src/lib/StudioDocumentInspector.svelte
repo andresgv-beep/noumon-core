@@ -197,7 +197,7 @@
         <h3>{t('studio.section.cover')}</h3>
         <button class="document-cover" class:ready={!!state.documentCover} onclick={() => state.chooseDocumentCover?.()} disabled={state.uploadingImage}>
           {#if state.documentCover}
-            <StudioImage documentId={document().id} assetId={state.documentCover.assetId} alt={t('studio.section.cover')} compact />
+            <StudioImage documentId={document().id} assetId={state.documentCover} alt={t('studio.section.cover')} compact />
           {:else}
             <b>＋</b><span>{state.uploadingImage ? t('studio.uploadingImage') : t('studio.addCover')}</span>
           {/if}
