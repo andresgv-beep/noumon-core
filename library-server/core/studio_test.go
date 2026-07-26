@@ -2458,3 +2458,76 @@ func TestStudioMediaProfileRejectsWrongPrimaryType(t *testing.T) {
 		t.Fatalf("failed publication left visible sidecar: %v", err)
 	}
 }
+
+// El nombre de la pagina solo dice A CUAL de ellas lleva el resultado. En un
+// documento de una sola pagina no hay eleccion, y ese nombre es el que la
+// pagina recibio al nacer: si el documento se renombra despues, la linea de
+// origen del buscador acaba enseñando un nombre viejo en vez de la fuente.
+func TestBusquedaOcultaElNombreDeUnaPaginaUnica(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	cookie := sessionFor(t, s, "autora-pagina-unica", 30, false)
+	grantStudio(t, s, "autora-pagina-unica", true)
+
+	const titulo = "Prueba de indexacion Noumon"
+	created := decodeStudioDocumentResponse(t, studioRequest(
+		h, http.MethodPost, "/api/studio/documents",
+		validStudioDocumentBody(titulo, 0), cookie,
+	))
+	var input map[string]any
+	if err := json.Unmarshal(
+		[]byte(validStudioDocumentBody(titulo, created.Revision)), &input,
+	); err != nil {
+		t.Fatal(err)
+	}
+	// Una sola pagina, con el nombre de relleno que hereda al crearse y que ya
+	// no coincide con el titulo del documento.
+	input["content"] = map[string]any{
+		"schemaVersion":  2,
+		"classification": map[string]any{"workType": "article"},
+		"pages": []any{
+			map[string]any{
+				"id": "p1", "title": "Documento sin titulo",
+				"blocks": []any{
+					map[string]any{
+						"id": "intro", "type": "paragraph",
+						"text": "Llevaba tres fragmentos de conocimiento sin conexion.",
+					},
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := studioRequest(
+		h, http.MethodPut, "/api/studio/documents/"+created.ID, string(body), cookie,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("guardar pagina unica: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := studioRequest(
+		h, http.MethodPost, "/api/studio/documents/"+created.ID+"/publish", "", cookie,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("publicar: %d %s", rec.Code, rec.Body.String())
+	}
+
+	hits, err := s.store.searchPublishedStudioDocuments("fragmentos de conocimiento")
+	if err != nil || len(hits) != 1 {
+		t.Fatalf("busqueda: hits=%#v err=%v", hits, err)
+	}
+	if hits[0].Title != titulo {
+		t.Fatalf("el resultado debe titularse como el documento: %q", hits[0].Title)
+	}
+	if hits[0].PageTitle != "" {
+		t.Fatalf("con una sola pagina no se enseña su nombre; se enseño %q", hits[0].PageTitle)
+	}
+	// El deep-link sigue existiendo: lo que se calla es el nombre, no el destino.
+	if hits[0].PageID != "p1" {
+		t.Fatalf("se perdio el destino de la pagina: %q", hits[0].PageID)
+	}
+	// Y se sigue pudiendo buscar por ese nombre aunque no se muestre.
+	if named, err := s.store.searchPublishedStudioDocuments("Documento sin titulo"); err != nil || len(named) != 1 {
+		t.Fatalf("buscar por el nombre de la pagina: hits=%#v err=%v", named, err)
+	}
+}

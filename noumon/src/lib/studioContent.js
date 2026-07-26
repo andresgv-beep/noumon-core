@@ -166,6 +166,22 @@ export function studioPage(document, pageId = '') {
   return pages.find((page) => page.id === pageId) || pages[0] || null;
 }
 
+/**
+ * Encabezado de la página publicada. Es SIEMPRE el título del documento: es el
+ * que se escribe en el lienzo, y el que acompañan la entradilla, el autor y la
+ * fecha en esa misma cabecera.
+ *
+ * El título de página es otra cosa: nombra la página en el menú de contenidos.
+ * Encabezar con él dejaba invisible el título del usuario, porque la primera
+ * página nace con nombre propio y ese nombre ganaba siempre. Sólo se usa como
+ * último recurso, si el documento no tiene título.
+ */
+export function studioDocumentHeading(document, pageId = '') {
+  const title = String(document?.title || '').trim();
+  if (title) return title;
+  return String(studioPage(document, pageId)?.title || '');
+}
+
 export function studioDocumentBlocks(document, pageId = '') {
   if (!isDocumentTemplate(document?.templateKey)) {
     return Array.isArray(document?.content?.blocks) ? document.content.blocks : [];

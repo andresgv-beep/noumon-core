@@ -487,7 +487,9 @@ func (s *Store) searchPublishedStudioDocuments(query string) ([]FederatedSearchR
 		SELECT f.document_id, f.page_id, f.title, f.page_title,
 		       f.summary, f.author_label,
 		       snippet(studio_published_fts, 5, '', '', ' … ', 28),
-		       bm25(studio_published_fts, 0, 0, 10, 8, 5, 1, 2, 3, 3, 4)
+		       bm25(studio_published_fts, 0, 0, 10, 8, 5, 1, 2, 3, 3, 4),
+		       (SELECT COUNT(*) FROM studio_published_fts p
+		         WHERE p.document_id = f.document_id)
 		FROM studio_published_fts f
 		JOIN studio_documents d ON d.id=f.document_id
 		WHERE studio_published_fts MATCH ?
@@ -503,8 +505,9 @@ func (s *Store) searchPublishedStudioDocuments(query string) ([]FederatedSearchR
 	for rows.Next() {
 		var id, pageID, title, pageTitle, summary, author, snippet string
 		var rank float64
+		var pageCount int
 		if err := rows.Scan(
-			&id, &pageID, &title, &pageTitle, &summary, &author, &snippet, &rank,
+			&id, &pageID, &title, &pageTitle, &summary, &author, &snippet, &rank, &pageCount,
 		); err != nil {
 			return nil, err
 		}
@@ -515,8 +518,17 @@ func (s *Store) searchPublishedStudioDocuments(query string) ([]FederatedSearchR
 		score := scoreHit(
 			query, title+" "+pageTitle, author, summary+" "+snippet,
 		) + 140 + int(-rank*100)
+		// El nombre de la página existe para decir A CUÁL de ellas lleva el
+		// resultado. En un documento de una sola página no dice nada: no hay
+		// eleccion posible, y ese nombre es ademas el que la pagina recibio al
+		// nacer, que envejece mal en cuanto se renombra el documento. Se sigue
+		// buscando por él (arriba, en el score); solo no se enseña.
+		shownPageTitle := pageTitle
+		if pageCount <= 1 {
+			shownPageTitle = ""
+		}
 		out = append(out, FederatedSearchResult{
-			ItemID: "studio:" + id, PageID: pageID, PageTitle: pageTitle,
+			ItemID: "studio:" + id, PageID: pageID, PageTitle: shownPageTitle,
 			CollectionID: studioDocumentsCollectionID,
 			Title:        title, Subtitle: author,
 			Snippet: snippet, Kind: "document",

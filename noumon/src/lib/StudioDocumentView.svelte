@@ -3,8 +3,8 @@
   import StudioImage from './StudioImage.svelte';
   import StudioInfoCard from './StudioInfoCard.svelte';
   import {
-    studioDocumentBlocks, studioPage, studioPages, studioPageInfoCards, studioInfoCardHasContent,
-    studioInfoCardsByAnchor,
+    studioDocumentBlocks, studioDocumentHeading, studioPage, studioPages, studioPageInfoCards,
+    studioInfoCardHasContent, studioInfoCardsByAnchor,
   } from './studioContent.js';
   import { t, relTime } from './i18n.svelte.js';
 
@@ -17,7 +17,9 @@
   const presentation = () => content().presentation || {};
   const activePage = () => studioPage(document, pageId);
   const pageIDs = () => studioPages(document).map((page) => page.id);
-  const pageTitle = () => activePage()?.title || document.title;
+  // El encabezado del artículo es el título del DOCUMENTO; el de la página
+  // nombra la página en el menú de contenidos y no encabeza nada.
+  const heading = () => studioDocumentHeading(document, pageId);
   // Fichas de ESTA página. Una ficha sin nada dentro no se publica, aunque en el
   // editor siga visible para poder rellenarla.
   const infoCards = () => studioPageInfoCards(document, pageId).filter(studioInfoCardHasContent);
@@ -81,7 +83,7 @@
   >
     <header>
       <span>{document.classification?.workType || content().classification?.workType || t('documents.article')}</span>
-      <h1 style:font-size={pageTextSize('titleFontSize')} style:text-align={pageTextAlign('titleTextAlign')}>{pageTitle()}</h1>
+      <h1 style:font-size={pageTextSize('titleFontSize')} style:text-align={pageTextAlign('titleTextAlign')}>{heading()}</h1>
       {#if document.summary}<p class="lead" style:font-size={pageTextSize('summaryFontSize')} style:text-align={pageTextAlign('summaryTextAlign')}>{document.summary}</p>{/if}
       <div class="meta">
         {document.authorLabel || t('documents.localAuthor')}
@@ -91,7 +93,7 @@
 
     {#if cover()}
       <figure class="cover">
-        <StudioImage documentId={document.id} assetId={cover().assetId} alt={cover().alt || pageTitle()} display="poster" />
+        <StudioImage documentId={document.id} assetId={cover().assetId} alt={cover().alt || heading()} display="poster" />
         {#if cover().caption}<figcaption>{cover().caption}</figcaption>{/if}
       </figure>
     {/if}

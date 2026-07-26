@@ -129,23 +129,25 @@
   }
   function normalizeResults(results) {
     return (results || []).map((hit) => {
-      // El titulo de pagina solo aporta cuando difiere del titulo del resultado:
-      // por defecto la primera pagina se llama como el documento, y en uno de una
-      // sola pagina siempre coinciden. Sin esta comprobacion la linea repetiria
-      // el titulo y se comeria el autor.
-      const pageName = hit.pageTitle && hit.pageTitle !== hit.title ? hit.pageTitle : '';
-      // Un documento sin autor se quedaba sin nada que mostrar y acababa
-      // enseñando el identificador de la coleccion (col:studio:documents). Se
-      // sustituye por el nombre que esa coleccion tiene en el resto de la
-      // interfaz, para no filtrar identificadores internos a la vista.
-      const collectionName = hit.collectionId === 'col:studio:documents'
+      // Esta linea es la PROCEDENCIA del resultado: en un articulo ZIM se lee
+      // "Lo mejor de Wikipedia", y el lector la usa para saber de donde sale lo
+      // que esta mirando. Para un documento propio la procedencia es la
+      // coleccion donde vive, igual que para los demas. Antes ganaban el nombre
+      // de la pagina o el autor, y el documento parecia venir de otro sitio o
+      // de ninguno; el identificador interno (col:studio:documents) llego a
+      // asomar por aqui cuando el documento no tenia autor.
+      const book = hit.collectionId === 'col:studio:documents'
         ? t('documents.knowledgeBase')
-        : hit.collectionId;
-      const book = pageName || hit.subtitle || collectionName || '';
+        : (hit.subtitle || hit.collectionId || '');
+      // El nombre de la pagina dice a CUAL de ellas lleva el resultado. El
+      // servidor solo lo manda cuando el documento tiene varias, asi que aqui
+      // solo hay que colocarlo: detras de la procedencia, sin desplazarla.
+      const pageName = hit.pageTitle && hit.pageTitle !== hit.title ? hit.pageTitle : '';
       return {
         ...hit,
         thumb: hit.preview?.kind === 'image' ? hit.preview.url : '',
         book,
+        pageName,
         // Restaura el icono real del ZIM: el resultado trae el nombre de la
         // colección (subtitle), que casa con la librería del catálogo.
         icon: libraries.find((l) => l.name === book)?.icon,
@@ -265,6 +267,7 @@
                   <ZimIcon icon={hit.icon} name={hit.book || hit.kind} size={16} radius={4} />
                   <span>{hit.book}</span>
                   {#if hit.kind}<span class="dot">-</span><span>{kindLabel(hit.kind)}</span>{/if}
+                  {#if hit.pageName}<span class="dot">-</span><span>{hit.pageName}</span>{/if}
                 </div>
               </div>
               {#if hit.thumb}<img class="hthumb" src={hit.thumb} alt="" loading="lazy" />{/if}

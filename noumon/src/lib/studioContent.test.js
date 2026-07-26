@@ -11,6 +11,7 @@ import {
   removeStudioPage,
   renameStudioPage,
   studioDocumentBlocks,
+  studioDocumentHeading,
   studioInfoCardsByAnchor,
   studioPage,
   studioPageInfoCards,
@@ -291,4 +292,42 @@ test('keeps edits from multiple pages across an in-flight save snapshot and reco
   const recovered = normalizeStudioDocument(JSON.parse(JSON.stringify(document)));
   assert.equal(studioDocumentBlocks(recovered, 'p1')[0].text, 'Guardado en vuelo');
   assert.equal(studioDocumentBlocks(recovered, 'p2')[0].text, 'Escrito mientras guardaba');
+});
+
+test('el encabezado publicado es el título del documento, no el de la página', () => {
+  // El fallo real: la primera página nace con nombre propio ("Documento sin
+  // título" heredado del relleno de la interfaz) y ese nombre encabezaba el
+  // artículo, así que el título escrito por el usuario no aparecía NUNCA.
+  const document = normalizeStudioDocument({
+    id: 'd1',
+    templateKey: 'document',
+    title: 'Prueba de indexación Noumon',
+    metadata: {},
+    content: {
+      schemaVersion: 2,
+      pages: [
+        { id: 'p1', title: 'Documento sin título', blocks: [] },
+        { id: 'p2', title: 'Segunda parte', blocks: [] },
+      ],
+    },
+  });
+
+  assert.equal(studioDocumentHeading(document, 'p1'), 'Prueba de indexación Noumon');
+  // Cambiar de página no cambia de artículo: el encabezado se queda.
+  assert.equal(studioDocumentHeading(document, 'p2'), 'Prueba de indexación Noumon');
+});
+
+test('sin título de documento, el encabezado cae al de la página', () => {
+  const document = normalizeStudioDocument({
+    id: 'd2',
+    templateKey: 'document',
+    title: '   ',
+    metadata: {},
+    content: {
+      schemaVersion: 2,
+      pages: [{ id: 'p1', title: 'Capítulo uno', blocks: [] }],
+    },
+  });
+
+  assert.equal(studioDocumentHeading(document, 'p1'), 'Capítulo uno');
 });
