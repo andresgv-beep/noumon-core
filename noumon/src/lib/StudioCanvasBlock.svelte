@@ -475,7 +475,7 @@
   .image-layout.with-side-text figure{flex:0 0 58%;min-width:0}
   .image-layout.with-side-text.image-small figure{flex-basis:40%}
   .image-layout.with-side-text.align-right figure{order:2}
-  .image-side-text{flex:1;min-width:0;min-height:120px;padding:12px 14px;border-left:1px solid var(--border);border-radius:0;color:var(--ink-dim);font:14.5px/1.68 var(--font);white-space:pre-wrap}
+  .image-side-text{flex:1;min-width:0;overflow-wrap:anywhere;min-height:120px;padding:12px 14px;border-left:1px solid var(--border);border-radius:0;color:var(--ink-dim);font:14.5px/1.68 var(--font);white-space:pre-wrap}
   .image-layout.align-right .image-side-text{border-right:1px solid var(--border);border-left:0}
   .image-side-text:empty::before{content:attr(data-placeholder);color:var(--faint)}
   .column-layout-tools{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0 0 12px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--raise);font-family:var(--font)}

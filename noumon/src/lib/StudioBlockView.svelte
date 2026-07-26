@@ -146,7 +146,7 @@
   .image-layout.with-side-text.image-small figure{flex-basis:40%}
   .image-layout.with-side-text.align-right figure{order:2}
   .image-layout.with-side-text figure{margin-top:30px;margin-bottom:30px}
-  .image-side-text{flex:1;min-width:0;margin:30px 0;color:var(--ink-dim);line-height:1.75;white-space:pre-wrap}
+  .image-side-text{flex:1;min-width:0;overflow-wrap:anywhere;margin:30px 0;color:var(--ink-dim);line-height:1.75;white-space:pre-wrap}
   figcaption{margin-top:8px;text-align:center;color:var(--muted);font-family:var(--font,system-ui,sans-serif);font-size:12px}
   .table-scroll{overflow:auto;margin:24px 0}
   table{width:100%;border-collapse:collapse;font-family:var(--font,system-ui,sans-serif);font-size:14px}
