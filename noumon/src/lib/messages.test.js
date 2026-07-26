@@ -10,6 +10,21 @@ test('keeps the Spanish and English interface dictionaries in exact parity', () 
   );
 });
 
+test('ships every home-background setting in both interface languages', () => {
+  const keys = [
+    'settings.homeBackground',
+    'settings.homeBackgroundDesc',
+    'settings.homeBackgroundNebula',
+    'settings.homeBackgroundFlat',
+  ];
+  for (const language of ['es', 'en']) {
+    for (const key of keys) {
+      assert.equal(typeof messages[language][key], 'string', `${language}.${key}`);
+      assert.notEqual(messages[language][key].trim(), '', `${language}.${key}`);
+    }
+  }
+});
+
 test('ships every page-manager message in both interface languages', () => {
   const keys = [
     'studio.pages',

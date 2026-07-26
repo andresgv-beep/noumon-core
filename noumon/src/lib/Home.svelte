@@ -8,6 +8,7 @@
   import { siteShown } from './sites.svelte.js';
   import { itemSearch, globalImages, mapSearch } from './libraryApi.js';
   import { t, tn, i18n } from './i18n.svelte.js';
+  import { theme } from './theme.svelte.js';
 
   let { tab, libraries = [], favorites = [], onNavigate, onOpenItem, onOpenView, onToggleHome } = $props();
   const bookName = (id) => libraries.find((l) => l.id === id)?.name || id;
@@ -159,7 +160,7 @@
   let pageResults = $derived(normalizeResults(s.results || []));
 </script>
 
-<div class="home scroll" class:ambient={!activeView}>
+<div class="home scroll" class:ambient={!activeView && theme.homeBackground === 'nebula'}>
   <div class="top" class:compact={activeView}>
     {#if !activeView}
       <div class="brand">

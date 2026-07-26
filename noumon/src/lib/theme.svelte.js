@@ -8,6 +8,7 @@
 const STORE_KEY = 'noumon-theme';
 const SKIN_KEY = 'noumon-skin';
 const ACCENT_KEY = 'noumon-accent';
+const HOME_BACKGROUND_KEY = 'noumon-home-background';
 
 export const THEMES = [
   { code: 'system', labelKey: 'settings.themeSystem', icon: 'contrast' },
@@ -18,6 +19,11 @@ export const THEMES = [
 export const SKINS = [
   { code: 'modern', labelKey: 'settings.skinModern', icon: 'panel' },
   { code: 'retro', labelKey: 'settings.skinRetro', icon: 'book' },
+];
+
+export const HOME_BACKGROUNDS = [
+  { code: 'nebula', labelKey: 'settings.homeBackgroundNebula' },
+  { code: 'flat', labelKey: 'settings.homeBackgroundFlat' },
 ];
 
 // Acentos de serie; el usuario también puede elegir uno libre.
@@ -56,6 +62,13 @@ function savedAccent() {
   } catch (e) {}
   return ''; // vacío = acento por defecto de la piel/luz activas
 }
+function savedHomeBackground() {
+  try {
+    const value = localStorage.getItem(HOME_BACKGROUND_KEY);
+    if (HOME_BACKGROUNDS.some((background) => background.code === value)) return value;
+  } catch (e) {}
+  return 'nebula';
+}
 function systemDark() {
   try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return true; }
 }
@@ -67,6 +80,7 @@ export const theme = $state({
   resolved: resolve(saved()),
   skin: savedSkin(),
   accent: savedAccent(),
+  homeBackground: savedHomeBackground(),
 });
 
 function apply() {
@@ -95,6 +109,12 @@ export function setSkin(code) {
   theme.skin = code;
   try { localStorage.setItem(SKIN_KEY, code); } catch (e) {}
   apply();
+}
+
+export function setHomeBackground(code) {
+  if (!HOME_BACKGROUNDS.some((background) => background.code === code)) return;
+  theme.homeBackground = code;
+  try { localStorage.setItem(HOME_BACKGROUND_KEY, code); } catch (e) {}
 }
 
 // hex '#rrggbb' o '' para volver al acento por defecto.

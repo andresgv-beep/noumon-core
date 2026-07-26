@@ -2,7 +2,10 @@
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
   import { t, i18n, setLocale, LANGS } from './i18n.svelte.js';
-  import { theme, setTheme, THEMES, SKINS, ACCENTS, setSkin, setAccent } from './theme.svelte.js';
+  import {
+    theme, setTheme, THEMES, SKINS, HOME_BACKGROUNDS, ACCENTS,
+    setSkin, setHomeBackground, setAccent,
+  } from './theme.svelte.js';
   import { profile, PROFILE_COLORS, setProfileName, setProfileColor, profileInitials, profileGradient } from './profile.svelte.js';
   import { getServerBase, setServerBase, serverFetch, isGateway, isShell, getGatewayTarget, setGatewayTarget } from './connection.js';
 
@@ -147,6 +150,31 @@
       </div>
     </section>
 
+    {#if theme.skin === 'modern'}
+      <section class="card">
+        <div class="srow">
+          <div class="sinfo">
+            <b>{t('settings.homeBackground')}</b>
+            <small>{t('settings.homeBackgroundDesc')}</small>
+          </div>
+        </div>
+        <div class="background-options">
+          {#each HOME_BACKGROUNDS as background}
+            <button
+              class="background-option"
+              class:on={theme.homeBackground === background.code}
+              aria-pressed={theme.homeBackground === background.code}
+              onclick={() => setHomeBackground(background.code)}
+            >
+              <span class:nebula={background.code === 'nebula'} class="background-preview"></span>
+              <span class="background-name">{t(background.labelKey)}</span>
+              {#if theme.homeBackground === background.code}<Icon name="check" size={16} />{/if}
+            </button>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
     <section class="card">
       <div class="srow">
         <div class="sinfo">
@@ -259,6 +287,19 @@
   .lang .lname{flex:1;font-size:14px;font-weight:520}
   .lang.on :global(.ic){color:var(--accent-2)}
 
+  .background-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
+  .background-option{position:relative;display:grid;grid-template-columns:68px minmax(0,1fr) 18px;align-items:center;gap:12px;min-height:68px;padding:8px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--ground);color:var(--ink-dim);text-align:left;box-shadow:var(--shadow);transition:border-color .12s,background .12s,color .12s}
+  .background-option:hover{background:var(--raise);color:var(--ink)}
+  .background-option.on{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--ink)}
+  .background-preview{width:68px;height:48px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--ground);box-shadow:inset 0 1px color-mix(in srgb,var(--ink) 5%,transparent)}
+  .background-preview.nebula{background:url('/backgrounds/home-aurora-dark.webp') center/cover no-repeat}
+  :global(:root[data-theme="light"]) .background-preview.nebula{background-image:url('/backgrounds/home-aurora-light.webp')}
+  .background-name{min-width:0;font-size:14px;font-weight:560}
+  .background-option :global(.ic){color:var(--accent-2)}
+
   .soon{opacity:.8}
   .pill{flex:none;font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--accent-2);background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:var(--r-pill);padding:5px 11px;white-space:nowrap}
+  @media(max-width:560px){
+    .background-options{grid-template-columns:1fr}
+  }
 </style>
