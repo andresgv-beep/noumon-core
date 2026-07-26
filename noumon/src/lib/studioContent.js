@@ -23,12 +23,14 @@ export function normalizeStudioContent(content, documentTitle = '', templateKey 
           id: String(page?.id || `p${index + 1}`),
           title: String(page?.title || documentTitle || `Page ${index + 1}`),
           blocks: Array.isArray(page?.blocks) ? page.blocks : [],
+          section: String(page?.section || '').trim().slice(0, 120),
           infoCards: normalizeStudioInfoCards(page?.infoCards),
         }))
       : [{ id: 'p1', title: String(documentTitle || 'Page 1'), blocks: [], infoCards: [] }];
     const normalized = {
       ...source,
       schemaVersion: STUDIO_CONTENT_SCHEMA_VERSION,
+      navTitle: String(source.navTitle || '').trim().slice(0, 120),
       pages: adoptLegacyInfoCard(pages, source.infoCard),
     };
     delete normalized.blocks;
@@ -43,6 +45,7 @@ export function normalizeStudioContent(content, documentTitle = '', templateKey 
       id: 'p1',
       title: String(documentTitle || 'Page 1'),
       blocks: Array.isArray(source.blocks) ? source.blocks : [],
+      section: '',
       infoCards: [],
     }], source.infoCard),
   };
@@ -154,6 +157,23 @@ export function normalizeStudioDocument(document) {
     document.templateKey,
   );
   return document;
+}
+
+/**
+ * Agrupa las páginas para el menú de contenidos. Una página estrena grupo cuando
+ * su sección difiere de la anterior, así que la sección es un atributo de la
+ * página y no una lista aparte: el menú sigue listándolas TODAS y ninguna puede
+ * quedar huérfana por olvidarse de añadirla a ningún sitio.
+ */
+export function studioNavGroups(pages) {
+  const groups = [];
+  for (const page of pages || []) {
+    const section = String(page?.section || '').trim();
+    const last = groups[groups.length - 1];
+    if (!last || last.section !== section) groups.push({ section, pages: [page] });
+    else last.pages.push(page);
+  }
+  return groups;
 }
 
 export function studioPages(document) {
@@ -281,7 +301,7 @@ export function createStudioPage(document, title, requestedId = '') {
     while (used.has(id)) id = `page-${random}-${suffix++}`;
   }
   // Página nueva = página limpia: sin bloques y sin fichas heredadas.
-  const page = { id, title: String(title || '').trim(), blocks: [], infoCards: [] };
+  const page = { id, title: String(title || '').trim(), blocks: [], section: '', infoCards: [] };
   document.content.pages.push(page);
   return page;
 }

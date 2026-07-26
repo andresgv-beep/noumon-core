@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import StudioCanvasBlock from './StudioCanvasBlock.svelte';
   import StudioDocumentView from './StudioDocumentView.svelte';
+  import DocumentContentsMenu from './DocumentContentsMenu.svelte';
   import StudioInfoCard from './StudioInfoCard.svelte';
   import StudioMediaEditor from './StudioMediaEditor.svelte';
   import { t, relTime } from './i18n.svelte.js';
@@ -141,6 +142,15 @@
   function renamePage(pageId, title) {
     if (!selected || selected.status === 'archived') return;
     if (renameStudioPage(selected, pageId, title)) touch();
+  }
+
+  // La seccion agrupa paginas en el menu: una pagina estrena grupo cuando su
+  // seccion difiere de la anterior. Vacia significa que sigue en el grupo previo.
+  function setPageSection(section) {
+    const page = activePage();
+    if (!page || selected?.status === 'archived') return;
+    page.section = String(section || '').slice(0, 120);
+    touch();
   }
 
   function reorderPage(pageId, delta) {
@@ -1491,7 +1501,77 @@
           </section>
         {/if}
 
-        <div class="canvas-layout" class:has-info-card={infoCardVisible()}>
+        <!-- Franja de metadatos, FUERA del lienzo. El titulo, la entradilla y el
+             nombre de pagina identifican el documento en la biblioteca, la
+             pestaña, el menu y el buscador, pero ya no se estampan sobre la
+             pagina: el lienzo es una hoja en blanco y lo que se vea lo pone el
+             autor con sus bloques. -->
+        <div class="canvas-meta">
+          <label>
+            <span>{t('studio.documentTitle')}</span>
+            <input
+              maxlength="240"
+              value={selected.title}
+              placeholder={t('studio.documentTitle')}
+              oninput={(event) => { selected.title = event.currentTarget.value; touch(); }}
+            />
+          </label>
+          <label>
+            <span>{t('studio.documentSummary')}</span>
+            <input
+              maxlength="1000"
+              value={selected.summary || ''}
+              placeholder={t('studio.summaryPlaceholder')}
+              oninput={(event) => { selected.summary = event.currentTarget.value; touch(); }}
+            />
+          </label>
+          {#if studioPages(selected).length > 1}
+            <!-- La clave por pagina rellena el campo al cambiar de pagina y evita
+                 que se reescriba mientras tecleas: renameStudioPage rechaza los
+                 nombres vacios, y sin esto borrarlo entero devolveria el anterior. -->
+            <label>
+              <span>{t('studio.navTitle')}</span>
+              <input
+                maxlength="120"
+                value={content().navTitle || ''}
+                placeholder={t('documents.contentsMenu')}
+                oninput={(event) => { content().navTitle = event.currentTarget.value; touch(); }}
+              />
+            </label>
+            {#key activePageID}
+              <label>
+                <span>{t('studio.pageTitle')}</span>
+                <input
+                  maxlength="240"
+                  value={activePage()?.title || ''}
+                  placeholder={t('studio.pageTitle')}
+                  oninput={(event) => renamePage(activePageID, event.currentTarget.value)}
+                />
+              </label>
+              <label>
+                <span>{t('studio.pageSection')}</span>
+                <input
+                  maxlength="120"
+                  value={activePage()?.section || ''}
+                  placeholder={t('studio.pageSectionPlaceholder')}
+                  oninput={(event) => setPageSection(event.currentTarget.value)}
+                />
+              </label>
+            {/key}
+          {/if}
+        </div>
+
+        <!-- El mismo indice que vera el lector, mientras escribes: asi se ve la
+             navegacion real del documento y no se edita a ciegas. -->
+        <div class="canvas-layout" class:has-info-card={infoCardVisible()} class:has-nav={studioPages(selected).length > 1}>
+          {#if studioPages(selected).length > 1}
+            <DocumentContentsMenu
+              pages={studioPages(selected)}
+              activePageID={activePageID}
+              title={content().navTitle || ''}
+              onSelect={selectPage}
+            />
+          {/if}
           <article
             class="document-canvas"
             class:wide={content().presentation?.contentWidth === 'wide'}
@@ -1500,26 +1580,6 @@
             class:sans={content().presentation?.fontPreset === 'sans'}
             data-studio-section="structure"
           >
-          <div class="canvas-title selected">
-            <h1
-              style:font-size={`${pageTextSize('titleFontSize', 34)}px`}
-              style:text-align={content().presentation?.titleTextAlign || 'left'}
-              contenteditable="true"
-              use:plainText={selected.title}
-              onfocus={() => (selectedBlockID = '@title')}
-              oninput={(event) => { selected.title = event.currentTarget.innerText; touch(); }}
-            ></h1>
-          </div>
-          <div class="canvas-summary">
-            <p
-              style:font-size={`${pageTextSize('summaryFontSize', 17)}px`}
-              style:text-align={content().presentation?.summaryTextAlign || 'left'}
-              contenteditable="true"
-              use:plainText={selected.summary || t('studio.summaryPlaceholder')}
-              onfocus={() => (selectedBlockID = '@summary')}
-              oninput={(event) => { selected.summary = event.currentTarget.innerText; touch(); }}
-            ></p>
-          </div>
 
           <!-- Dentro del lienzo y flotadas: se editan en el mismo sitio en el
                que se publican. Cada ficha se emite junto al bloque en el que
@@ -1658,6 +1718,16 @@
   .canvas-column{width:100%;max-width:760px;min-width:0;margin:0 auto;transition:max-width .2s}
   .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:620px}
   .canvas-layout{min-width:0}
+  /* Indice y lienzo como una sola banda, igual que en la pagina publicada. */
+  .canvas-layout.has-nav{display:flex;align-items:flex-start;justify-content:center;gap:clamp(14px,2vw,30px)}
+  .canvas-layout.has-nav>:global(.page-nav){width:184px;flex:none;margin-top:14px}
+  /* Mismo motivo que en la pagina publicada: el lienzo lleva margin:0 auto y en
+     flex los margenes automaticos se comen el espacio libre. */
+  .canvas-layout.has-nav>.document-canvas{flex:1 1 auto;min-width:0;margin:0}
+  @media(max-width:900px){
+    .canvas-layout.has-nav{display:block}
+    .canvas-layout.has-nav>:global(.page-nav){width:auto}
+  }
   /* La ficha flota dentro del lienzo, igual que en la página publicada: no es
      una columna hermana, así que el lienzo vuelve a ser una sola caja. */
   /* z-index alto a propósito: los bloques son position:relative, así que se
@@ -1681,10 +1751,13 @@
      agente de usuario que Chrome aplica a los contenteditable. */
   .document-canvas{width:100%;min-height:470px;margin:0 auto;padding:36px clamp(28px,4vw,56px);border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--shadow-soft);font-family:var(--font-read);transition:padding .2s;overflow-wrap:break-word}
   .document-canvas.compact{padding-inline:44px}.document-canvas.sans{font-family:var(--font)}
-  .canvas-title,.canvas-summary{margin:2px -9px;padding:7px 9px;border:1px solid transparent;border-radius:var(--r-sm)}
-  .canvas-title:hover,.canvas-title:focus-within,.canvas-summary:hover,.canvas-summary:focus-within{border-color:var(--accent-line);background:color-mix(in srgb,var(--accent) 5%,transparent)}
-  .canvas-title h1{margin:0;outline:0;color:var(--ink);line-height:1.1;letter-spacing:-.03em}
-  .canvas-summary p{min-height:28px;margin:0;outline:0;color:var(--muted);line-height:1.5}
+  /* Metadatos del documento: se ven como formulario del editor, no como parte
+     de la pagina, para que quede claro que no se publican tal cual. */
+  .canvas-meta{width:100%;max-width:1052px;box-sizing:border-box;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:0 auto 12px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--panel)}
+  .canvas-meta label{min-width:0;display:grid;gap:3px}
+  .canvas-meta span{color:var(--faint);font:9px var(--font);letter-spacing:.08em;text-transform:uppercase}
+  .canvas-meta input{min-width:0;width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font:12px var(--font);outline:0}
+  .canvas-meta input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
   .add-any{clear:both;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:11px;border:1px dashed var(--border);border-radius:var(--r-md);background:transparent;color:var(--faint);font-size:12px}
   .add-any:hover{border-color:var(--accent-line);color:var(--ink)}.add-any b{width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r-sm);background:var(--accent-weak);color:var(--accent-2)}
   .preview-mode{height:100%;overflow:auto;padding:28px clamp(18px,5vw,70px) 70px;background:var(--panel-2)}

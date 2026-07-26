@@ -1,4 +1,5 @@
 <script>
+  import DocumentContentsMenu from './DocumentContentsMenu.svelte';
   import StudioBlockView from './StudioBlockView.svelte';
   import StudioImage from './StudioImage.svelte';
   import StudioInfoCard from './StudioInfoCard.svelte';
@@ -6,7 +7,6 @@
     studioDocumentBlocks, studioDocumentHeading, studioPage, studioPages, studioPageInfoCards,
     studioInfoCardHasContent, studioInfoCardsByAnchor,
   } from './studioContent.js';
-  import { t, relTime } from './i18n.svelte.js';
 
   let {
     document, pageId = '', preview = false, expanded = false,
@@ -28,18 +28,6 @@
   const pageBlocks = () => studioDocumentBlocks(document, pageId);
   const cover = () => pageBlocks().find((block) => block?.type === 'image' && block.role === 'cover') || null;
   const bodyBlocks = () => pageBlocks().filter((block) => block?.role !== 'cover');
-
-  function pageTextSize(field) {
-    const value = Number(presentation()[field]);
-    return Number.isInteger(value) && value >= 10 && value <= 96
-      ? `${value}px`
-      : undefined;
-  }
-
-  function pageTextAlign(field) {
-    const value = presentation()[field];
-    return ['left', 'center', 'right'].includes(value) ? value : undefined;
-  }
 
   function collectHeadings(blocks, result = [], depth = 0) {
     if (!Array.isArray(blocks) || depth > 12) return result;
@@ -68,10 +56,19 @@
 <div
   class="document-layout"
   class:has-info-card={hasInfoCard()}
+  class:has-nav={studioPages(document).length > 1}
   class:compact={presentation().contentWidth === 'compact'}
   class:wide={presentation().contentWidth === 'wide'}
   class:editorial={presentation().contentWidth === 'editorial'}
 >
+  {#if studioPages(document).length > 1}
+    <DocumentContentsMenu
+      pages={studioPages(document)}
+      activePageID={activePage()?.id || ''}
+      title={content().navTitle || ''}
+      onSelect={onOpenPage}
+    />
+  {/if}
   <article
     class="page"
     class:preview
@@ -81,16 +78,12 @@
     class:editorial={presentation().contentWidth === 'editorial'}
     class:sans={presentation().fontPreset === 'sans'}
   >
-    <header>
-      <span>{document.classification?.workType || content().classification?.workType || t('documents.article')}</span>
-      <h1 style:font-size={pageTextSize('titleFontSize')} style:text-align={pageTextAlign('titleTextAlign')}>{heading()}</h1>
-      {#if document.summary}<p class="lead" style:font-size={pageTextSize('summaryFontSize')} style:text-align={pageTextAlign('summaryTextAlign')}>{document.summary}</p>{/if}
-      <div class="meta">
-        {document.authorLabel || t('documents.localAuthor')}
-        {#if document.published || document.updated} · {relTime(document.published || document.updated)}{/if}
-      </div>
-    </header>
-
+    <!-- La página no impone nada: ni encabezado, ni entradilla, ni línea de
+         autor. Muestra solo los bloques que puso el autor, porque con este
+         editor se monta lo que uno quiera y no necesariamente un artículo.
+         El título, el resumen y el autor siguen existiendo como metadatos: los
+         usan la biblioteca, la pestaña, el menú de páginas y el buscador, que
+         los indexa del modelo y no de lo que aquí se pinte. -->
     {#if cover()}
       <figure class="cover">
         <StudioImage documentId={document.id} assetId={cover().assetId} alt={cover().alt || heading()} display="poster" />
@@ -134,6 +127,23 @@
 
 <style>
   .document-layout{width:100%}
+  /* Índice y artículo forman una sola banda centrada, como una web de
+     documentación. El artículo conserva su ancho de lectura y el índice se le
+     suma a la izquierda, en vez de vivir pegado al borde de la ventana. */
+  .document-layout.has-nav{display:flex;align-items:flex-start;justify-content:center;gap:clamp(18px,3vw,44px);padding-left:clamp(12px,2vw,28px)}
+  /* Arranca por debajo del titulo, no a la altura del borde superior: pegado
+     arriba competia con el encabezado del articulo. Es un desplazamiento fijo,
+     asi que en una pagina que no empiece por un titulo quedara algo baja. */
+  .document-layout.has-nav>:global(.page-nav){width:196px;flex:none;margin-top:clamp(104px,11vw,176px)}
+  /* margin:0 en la banda: `.page` lleva `margin:0 auto`, y en flex los márgenes
+     automáticos absorben todo el espacio libre, empujando el artículo lejos del
+     índice. Centrar la banda entera es cosa de justify-content, no del margen. */
+  .document-layout.has-nav>.page{flex:0 1 auto;margin:0}
+  @media(max-width:900px){
+    /* En estrecho el índice se apila encima y la banda vuelve a una columna. */
+    .document-layout.has-nav{display:block;padding-left:0}
+    .document-layout.has-nav>:global(.page-nav){width:auto;margin:0 auto;padding:0 clamp(20px,3.2vw,60px)}
+  }
   /* La ficha pertenece al flujo del artículo y envuelve el texto, pero nunca
      cambia el ancho de página elegido por el autor. */
   .info-slot{position:relative;z-index:1;float:right;width:clamp(260px,32%,340px);margin:4px 0 22px clamp(20px,2.4vw,34px)}
@@ -152,17 +162,9 @@
   .page.sans{font-family:var(--font,system-ui,sans-serif)}
   .page.compact{max-width:620px}.page.wide{max-width:980px}.page.editorial{max-width:1180px}
   .page.preview{padding-top:clamp(20px,2.6vw,40px)}
-  header{border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:24px}
-  header>span{font-family:var(--font,system-ui,sans-serif);font-size:10px;color:var(--accent-2);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
-  /* Título de artículo, no de portada: prominente pero proporcionado al texto. */
-  h1{font-size:clamp(28px,3.2vw,40px);line-height:1.12;margin:6px 0 12px}
-  .lead{font-size:18px;color:var(--muted);line-height:1.55}
-  .meta{font-family:var(--font,system-ui,sans-serif);font-size:12px;color:var(--faint)}
   .cover{margin:0 0 38px}.cover :global(img),.cover :global(.placeholder){width:100%;max-height:560px;object-fit:cover;border-radius:var(--r-md)}.cover figcaption{margin-top:8px;color:var(--muted);font:12px var(--font,system-ui,sans-serif);text-align:center}
   footer{clear:both;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:50px;padding-top:22px}
   footer span{font-family:var(--font,system-ui,sans-serif);font-size:11px;padding:4px 9px;border-radius:var(--r-pill);background:var(--raise);color:var(--muted)}
-  .preview header{padding-bottom:20px;margin-bottom:26px}
-  .preview h1{font-size:30px}
   @media(max-width:820px){
     /* Sin sitio para envolver: la ficha deja de flotar y ocupa el ancho de la
        página, pero sigue dentro del artículo. */

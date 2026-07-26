@@ -8,7 +8,6 @@
   import Moments from './Moments.svelte';
   import Documents from './Documents.svelte';
   import DocumentPage from './DocumentPage.svelte';
-  import DocumentContentsMenu from './DocumentContentsMenu.svelte';
   import ItemPage from './ItemPage.svelte';
   import MomentsWatch from './MomentsWatch.svelte';
   import Icon from './Icon.svelte';
@@ -249,13 +248,9 @@
     {#if tab.open?.provider === 'moments'}
       <MomentsWatch {tab} {onOpenItem} {onOpenView} />
     {:else if tab.open?.provider === 'studio'}
-      {#if documentPages.length > 1}
-        <DocumentContentsMenu
-          pages={documentPages}
-          activePageID={activeDocumentPageID}
-          onSelect={onOpenDocumentPage}
-        />
-      {/if}
+      <!-- El menú de páginas ya no vive aquí: se pinta dentro de la banda del
+           documento, en StudioDocumentView, para que se lea como parte de la
+           página y no como una columna del navegador. -->
       <DocumentPage
         {tab}
         {onOpenItem}

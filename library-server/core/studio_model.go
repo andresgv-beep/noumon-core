@@ -84,6 +84,8 @@ type StudioContent struct {
 	InfoCard       *StudioInfoCard      `json:"infoCard,omitempty"`
 	Blocks         []json.RawMessage    `json:"blocks,omitempty"`
 	Pages          []StudioPage         `json:"pages,omitempty"`
+	// Titulo del menu de contenidos. Vacio = el nombre por defecto del cliente.
+	NavTitle       string               `json:"navTitle,omitempty"`
 }
 
 type StudioInfoCard struct {
@@ -118,6 +120,8 @@ type StudioPage struct {
 	ID     string            `json:"id"`
 	Title  string            `json:"title"`
 	Blocks []json.RawMessage `json:"blocks"`
+	// Seccion del menu: una pagina estrena grupo cuando difiere de la anterior.
+	Section string           `json:"section,omitempty"`
 	// Las fichas son de la página, no del documento: cada página tiene las
 	// suyas y una página nueva nace sin ninguna.
 	InfoCards []StudioInfoCard `json:"infoCards,omitempty"`
@@ -299,6 +303,10 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 		brokenPageLinks: map[string]bool{},
 	}
 	validatedPages := []studioValidatedPage{}
+	content.NavTitle = strings.TrimSpace(content.NavTitle)
+	if utf8.RuneCountInString(content.NavTitle) > 120 {
+		return studioValidatedInput{}, fmt.Errorf("navTitle: too long")
+	}
 	if content.SchemaVersion == studioSchemaVersion {
 		if len(content.Pages) < 1 || len(content.Pages) > studioMaxPages {
 			return studioValidatedInput{}, fmt.Errorf("pages: one to %d pages required", studioMaxPages)
@@ -315,6 +323,16 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 			}
 			if page.Title == "" || utf8.RuneCountInString(page.Title) > 240 {
 				return studioValidatedInput{}, fmt.Errorf("page.title: required or too long")
+			}
+			// La seccion es opcional y agrupa paginas en el menu; vacia significa
+			// que la pagina sigue en el grupo anterior.
+			page.Section = strings.TrimSpace(page.Section)
+			if utf8.RuneCountInString(page.Section) > 120 {
+				return studioValidatedInput{}, fmt.Errorf("page.section: too long")
+			}
+			if page.Section != "" {
+				state.runes += utf8.RuneCountInString(page.Section)
+				state.plain = append(state.plain, page.Section)
 			}
 			state.pageIDs[page.ID] = true
 		}

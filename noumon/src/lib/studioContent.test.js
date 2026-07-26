@@ -13,6 +13,7 @@ import {
   studioDocumentBlocks,
   studioDocumentHeading,
   studioInfoCardsByAnchor,
+  studioNavGroups,
   studioPage,
   studioPageInfoCards,
 } from './studioContent.js';
@@ -330,4 +331,23 @@ test('sin título de documento, el encabezado cae al de la página', () => {
   });
 
   assert.equal(studioDocumentHeading(document, 'p1'), 'Capítulo uno');
+});
+
+test('groups pages into menu sections without ever dropping one', () => {
+  const pages = [
+    { id: 'p1', title: 'Portada', section: '' },
+    { id: 'p2', title: 'Instalación', section: 'Documentos' },
+    { id: 'p3', title: 'Uso diario', section: 'Documentos' },
+    { id: 'p4', title: 'Capturas', section: 'Fotos' },
+    { id: 'p5', title: 'Sin grupo otra vez', section: '' },
+  ];
+  const groups = studioNavGroups(pages);
+
+  assert.deepEqual(groups.map((group) => group.section), ['', 'Documentos', 'Fotos', '']);
+  assert.deepEqual(groups.map((group) => group.pages.length), [1, 2, 1, 1]);
+  // La garantía que sostiene todo el menú: agrupar no puede perder páginas.
+  assert.deepEqual(
+    groups.flatMap((group) => group.pages.map((page) => page.id)),
+    pages.map((page) => page.id),
+  );
 });
