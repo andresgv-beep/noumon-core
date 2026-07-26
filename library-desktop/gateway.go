@@ -221,7 +221,13 @@ func (s *shell) installProxy(target *url.URL) {
 // assetserver.isRuntimeInjectionMatch: si Wails cambiara ese criterio, este
 // sería el sitio donde volver a alinearlo.
 func isIndexNavigation(r *http.Request) bool {
-	if r == nil || !strings.Contains(r.Header.Get("Accept"), "text/html") {
+	// Solo GET: el assetserver deriva cualquier otro método directo al handler
+	// sin mirar el cuerpo, así que ahí no hay nada que adelantarse a arreglar —
+	// y colarle un cuerpo a un HEAD sería inventarse una respuesta.
+	if r == nil || r.Method != http.MethodGet {
+		return false
+	}
+	if !strings.Contains(r.Header.Get("Accept"), "text/html") {
 		return false
 	}
 	path := r.URL.Path
@@ -257,6 +263,12 @@ func rewriteNavigationError(response *http.Response) error {
 		body = noumonErrorPage(response.StatusCode, request.URL.Path,
 			isAppEntry(request.URL.Path), textsFor(request))
 		response.Header.Set("Content-Type", "text/html; charset=utf-8")
+		// El Director borra el Accept-Encoding, así que el cuerpo debería llegar
+		// sin comprimir. Pero este arreglo existe precisamente porque un servidor
+		// se comportó de forma inesperada: si además viniera comprimido, dejar el
+		// Content-Encoding puesto haría que el webview intentara descomprimir un
+		// HTML plano y pintara basura — otra vez código en la ventana.
+		response.Header.Del("Content-Encoding")
 	}
 	response.StatusCode = http.StatusOK
 	response.Status = http.StatusText(http.StatusOK)

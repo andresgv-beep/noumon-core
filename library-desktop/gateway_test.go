@@ -464,6 +464,52 @@ func TestGatewayNoDejaAlWebviewPintarSuPantallaDeDepuracion(t *testing.T) {
 	}
 }
 
+func TestSustitucionSoloEnGetYSinContentEncodingHeredado(t *testing.T) {
+	t.Parallel()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Un servidor que comprime aunque le hayamos quitado el Accept-Encoding.
+		// Tiene que ser una codificación que el transporte de Go NO deshaga por
+		// su cuenta: con gzip descomprime y borra la cabecera él solo, así que
+		// ese caso no llega hasta aquí; con br, la cabecera sobrevive. Como el
+		// cuerpo lo sustituimos nosotros, heredarla haría que el webview
+		// intentara descomprimir un HTML plano.
+		w.Header().Set("Content-Encoding", "br")
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("404 page not found"))
+	}))
+	defer upstream.Close()
+	server := shellTo(t, upstream)
+
+	request, _ := http.NewRequest(http.MethodGet, server.URL+"/", nil)
+	request.Header.Set("Accept", "text/html")
+	response, err := http.DefaultTransport.RoundTrip(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if got := response.Header.Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q; con cuerpo propio no puede heredarse", got)
+	}
+	if !strings.Contains(string(body), "sirviendo la interfaz") {
+		t.Fatalf("no se sustituyo el cuerpo: %.200s", body)
+	}
+
+	// HEAD no lo toca el assetserver, así que no hay nada que adelantarse a
+	// arreglar y menos aun inventarle un cuerpo.
+	request, _ = http.NewRequest(http.MethodHead, server.URL+"/", nil)
+	request.Header.Set("Accept", "text/html")
+	response, err = http.DefaultTransport.RoundTrip(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("HEAD: status = %d; se esperaba el 404 intacto", response.StatusCode)
+	}
+}
+
 func TestGatewayConservaLaPaginaDeErrorDelServidor(t *testing.T) {
 	// Si el servidor se explica en HTML, dice más que cualquier sustituto
 	// nuestro: solo se normaliza el código para que el webview no la tire.

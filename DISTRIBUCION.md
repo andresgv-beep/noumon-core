@@ -312,6 +312,19 @@ Reglas que ya nos han mordido:
   Software/PackageKit) falla con deps alternativas (`… | …t64`), marca
   "instalado" sin actualizar y cachea; si se quiere doble clic, instalar
   `gdebi` y abrir con él.
+- **Ventana con "index.html not found", o ruta de la biblioteca bloqueada en
+  el Panel = puerto 8090 ocupado.** Los dos síntomas son el mismo fallo y
+  ninguno menciona el puerto. Si otro proceso escucha en `127.0.0.1:8090`, el
+  Core del servicio no arranca (`bind: Only one usage of each socket
+  address...`, salida 1, reintento cada 30 s) y la ventana acaba hablando con
+  el intruso: como no tiene `www-client` al lado, `/` da 404 y el webview
+  pinta su pantalla interna; y como ese proceso no recibió
+  `NOUMON_LIBRARY_CONFIG`, el Panel enseña *su* pool y oculta "Cambiar
+  ubicación". Antes de tocar nada, mirar
+  `C:\ProgramData\Noumon\logs\supervisor.log` (buscar `core termino (codigo=1`)
+  y `netstat -ano | findstr :8090`. Desde 2026-07-26 la ventana lo explica en
+  vez de enseñar la pantalla de Wails, y se recupera sola al liberarse el
+  puerto — pero el servicio sigue sin poder arrancar hasta que se libere.
 - Los tres scripts versionan con **fecha.hora** (`2026.07.19.2304`): dos
   builds del mismo día nunca chocan y `apt` siempre ve la nueva como upgrade.
 - `noumon-panel` no lleva `.desktop` propio: la entrada de menú la pone el
