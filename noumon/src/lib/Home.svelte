@@ -157,7 +157,7 @@
   let pageResults = $derived(normalizeResults(s.results || []));
 </script>
 
-<div class="home scroll">
+<div class="home scroll" class:ambient={!activeView}>
   <div class="top" class:compact={activeView}>
     {#if !activeView}
       <div class="brand">
@@ -281,13 +281,45 @@
 </div>
 
 <style>
-  .home{background:var(--ground);min-height:100%}
+  .home{position:relative;isolation:isolate;background:var(--ground);min-height:100%;overflow-x:hidden}
+  .home.ambient::before{
+    content:"";position:absolute;z-index:0;inset:0;pointer-events:none;
+    background:url('/backgrounds/home-aurora-dark.webp') center top/cover no-repeat;
+    opacity:.72;
+  }
+  :global(:root[data-theme="light"]) .home.ambient::before{
+    display:block;
+    background-image:url('/backgrounds/home-aurora-light.webp');
+    opacity:.78;
+  }
+  :global(:root[data-skin="retro"]) .home.ambient::before{display:none}
+  .home.ambient>.top,.home.ambient>.browse{position:relative;z-index:1}
   .top{display:flex;flex-direction:column;align-items:center;padding:54px 24px 10px;transition:padding .2s ease}
   .top.compact{padding:26px 24px 8px;position:sticky;top:0;background:linear-gradient(var(--ground) 78%,transparent);z-index:5}
   .brand{text-align:center;margin-bottom:28px;display:flex;flex-direction:column;align-items:center}
   .lockup{display:flex;flex-direction:column;align-items:center;gap:13px}
+  :global(:root[data-theme="light"]:not([data-skin="retro"])) .lockup :global(.wordmark){
+    color:color-mix(in srgb,var(--ink) 76%,var(--accent));
+  }
   @media (max-width:560px){.top{padding-top:40px}.lockup{gap:11px}}
   .bigsearch{display:flex;align-items:center;gap:10px;width:100%;max-width:600px;height:46px;padding:0 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);transition:border-color .12s}
+  .home.ambient .bigsearch{
+    background:color-mix(in srgb,var(--card) 72%,transparent);
+    border-color:color-mix(in srgb,var(--accent) 24%,var(--border));
+    box-shadow:
+      0 18px 52px color-mix(in srgb,var(--ground) 58%,transparent),
+      0 0 38px color-mix(in srgb,var(--accent) 10%,transparent),
+      inset 0 1px color-mix(in srgb,var(--ink) 7%,transparent);
+    backdrop-filter:blur(18px) saturate(125%);
+  }
+  :global(:root[data-theme="light"]) .home.ambient .bigsearch{
+    background:color-mix(in srgb,var(--card) 46%,transparent);
+    border-color:color-mix(in srgb,var(--accent) 20%,transparent);
+    box-shadow:
+      0 12px 34px color-mix(in srgb,var(--accent) 10%,transparent),
+      inset 0 1px rgba(255,255,255,.62);
+    backdrop-filter:blur(22px) saturate(118%);
+  }
   .bigsearch:focus-within{border-color:color-mix(in srgb,var(--accent) 55%,var(--border))}
   .bigsearch :global(.ic){color:var(--muted)}
   .bigsearch input{flex:1;background:none;border:none;outline:none;color:var(--ink);font-size:15px}
