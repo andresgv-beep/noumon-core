@@ -136,13 +136,20 @@
   /* Índice y artículo forman una sola banda centrada, como una web de
      documentación. El artículo conserva su ancho de lectura y el índice se le
      suma a la izquierda, en vez de vivir pegado al borde de la ventana. */
-  .document-layout.has-nav{display:flex;align-items:flex-start;justify-content:center;gap:clamp(18px,3vw,44px)}
+  .document-layout.has-nav{display:flex;align-items:flex-start;justify-content:center;gap:clamp(10px,1.4vw,20px)}
   /* Arranca por debajo del titulo, no a la altura del borde superior: pegado
      arriba competia con el encabezado del articulo. Es un desplazamiento fijo,
      asi que en una pagina que no empiece por un titulo quedara algo baja. */
   .document-layout.has-nav>:global(.page-nav){width:var(--nav-w,196px);flex:none;margin-top:clamp(104px,11vw,176px)}
+  /* El artículo ya reserva su propio margen de lectura por dentro (su relleno).
+     Sumarle encima la separación de la banda dejaba el índice a más de 100px del
+     primer renglón: se leía como un cajón suelto, no como el índice de al lado.
+     El índice se mete en ese margen, que está vacío, en vez de estrechar el
+     relleno del artículo: tocarlo cambiaría el ancho de línea y la página
+     publicada dejaría de medir lo mismo que el editor. */
+  .document-layout.has-nav>:global(.page-nav){margin-right:calc(-1 * clamp(10px,2.2vw,42px))}
   /* El lado se resuelve con el orden de la banda, no moviendo nada. */
-  .document-layout.has-nav.nav-right>:global(.page-nav){order:2}
+  .document-layout.has-nav.nav-right>:global(.page-nav){order:2;margin-right:0;margin-left:calc(-1 * clamp(10px,2.2vw,42px))}
   /* margin:0 en la banda: `.page` lleva `margin:0 auto`, y en flex los márgenes
      automáticos absorben todo el espacio libre, empujando el artículo lejos del
      índice. Centrar la banda entera es cosa de justify-content, no del margen. */
