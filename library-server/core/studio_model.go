@@ -56,7 +56,7 @@ var studioTemplates = map[string]string{
 var studioBlockTypes = map[string]bool{
 	"paragraph": true, "heading": true, "bulletList": true, "orderedList": true,
 	"quote": true, "image": true, "table": true, "code": true, "callout": true,
-	"divider": true, "columns": true, "itemRef": true,
+	"divider": true, "columns": true, "itemRef": true, "spacer": true,
 }
 
 type StudioClassification struct {
@@ -743,6 +743,13 @@ func (s *studioBlockValidation) validate(raw json.RawMessage, depth int) error {
 		var level int
 		if err := json.Unmarshal(obj["level"], &level); err != nil || level < 1 || level > 3 {
 			return fmt.Errorf("heading.level: invalid")
+		}
+	}
+	// El espaciador solo lleva altura: es un hueco, no admite texto.
+	if field, ok := obj["space"]; ok {
+		var space int
+		if err := json.Unmarshal(field, &space); err != nil || space < 8 || space > 400 {
+			return fmt.Errorf("block.space: invalid")
 		}
 	}
 	if field, ok := obj["fontSize"]; ok {

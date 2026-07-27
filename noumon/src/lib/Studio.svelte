@@ -35,6 +35,8 @@
   let selectedBlockID = $state('');
   let draggingBlockID = $state('');
   let draggingCardID = $state('');
+  // Senal de arrastre sobre el boton final: soltar ahi manda el bloque al final.
+  let dropAtEnd = $state(false);
   let loading = $state(true);
   let saving = $state(false);
   let saved = $state(false);
@@ -687,14 +689,25 @@
       );
     }
     else if (type === 'divider') {}
+    // Espaciador: un hueco de altura ajustable. Sin texto y sin nada que
+    // editar, para dar aire entre bloques sin recurrir a parrafos vacios.
+    else if (type === 'spacer') block.space = 48;
     else block.text = '';
     return block;
   }
 
-  function addBlock(type, options = {}) {
-    const block = createBlock(type, options);
+  // Los bloques nuevos van al final. Se probo a insertarlos junto al bloque
+  // seleccionado y resulto peor: la seleccion no se ve, se queda pegada de una
+  // interaccion anterior, y el bloque aparecia en mitad del documento sin que
+  // el autor supiera por que. Al final es predecible.
+  function insertBlock(block) {
     activeBlocks().push(block);
+    selectedBlockID = block.id;
     touch();
+  }
+
+  function addBlock(type, options = {}) {
+    insertBlock(createBlock(type, options));
   }
 
   function toggleLinkPicker() {
@@ -810,14 +823,13 @@
 
   function insertItemReference(item) {
     if (!selected || !item?.itemId) return;
-    activeBlocks().push({
+    insertBlock({
       id: nextBlockId(),
       type: 'itemRef',
       itemId: item.itemId,
       titleSnapshot: item.title || item.itemId,
       kindSnapshot: item.kind || 'item',
     });
-    touch();
     closeLinkPicker();
   }
 
@@ -957,12 +969,13 @@
         ? findBlockByID(targetColumn.blockID)
         : null;
       if (target?.type === 'columns' && target.columns?.[targetColumn.columnIndex]) {
+        // Con columna de destino explicita manda ella, no la seleccion.
         target.columns[targetColumn.columnIndex].push(imageBlock);
+        selectedBlockID = imageBlock.id;
+        touch();
       } else {
-        activeBlocks().push(imageBlock);
+        insertBlock(imageBlock);
       }
-      selectedBlockID = imageBlock.id;
-      touch();
     } catch (e) {
       error = e.code || e.message;
     } finally {
@@ -1633,8 +1646,10 @@
           {/each}
           <button
             class="add-any"
-            ondragover={(event) => event.preventDefault()}
-            ondrop={(event) => { event.preventDefault(); dropAtRootEnd(); }}
+            class:drop-target={dropAtEnd}
+            ondragover={(event) => { event.preventDefault(); dropAtEnd = true; }}
+            ondragleave={() => (dropAtEnd = false)}
+            ondrop={(event) => { event.preventDefault(); dropAtEnd = false; dropAtRootEnd(); }}
             onclick={() => addBlock('paragraph')}
           ><b>＋</b>{t('studio.addAnyBlock')}</button>
           </article>
@@ -1752,6 +1767,7 @@
   .canvas-meta input{min-width:0;width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font:12px var(--font);outline:0}
   .canvas-meta input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
   .add-any{clear:both;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:11px;border:1px dashed var(--border);border-radius:var(--r-md);background:transparent;color:var(--faint);font-size:12px}
+  .add-any.drop-target{border-style:solid;border-color:var(--accent);color:var(--ink);background:var(--accent-weak)}
   .add-any:hover{border-color:var(--accent-line);color:var(--ink)}.add-any b{width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r-sm);background:var(--accent-weak);color:var(--accent-2)}
   .preview-mode{height:100%;overflow:auto;padding:28px clamp(18px,5vw,70px) 70px;background:var(--panel-2)}
   .publication-workspace{height:100%;overflow:auto;padding:34px clamp(22px,6vw,80px) 70px}

@@ -26,6 +26,15 @@
     pageIDs = [],
   } = $props();
 
+  // Se arrastraba a ciegas: no habia ninguna senal de donde iba a caer el
+  // bloque. Esto enciende la linea de insercion del bloque que estas señalando.
+  let dropTarget = $state(false);
+
+  function spacerHeight() {
+    const value = Number(block.space);
+    return Number.isFinite(value) ? Math.min(400, Math.max(8, Math.round(value))) : 48;
+  }
+
   function rich(value) {
     return { text: value || '', pageIDs };
   }
@@ -178,10 +187,17 @@
   aria-label={t(`studio.block.${block.type}`)}
   onclick={select}
   onfocusin={select}
-  ondragover={(event) => event.preventDefault()}
+  class:drop-target={dropTarget}
+  ondragover={(event) => { event.preventDefault(); dropTarget = true; }}
+  ondragleave={(event) => {
+    // dragleave tambien salta al pasar a un hijo: solo se apaga si el puntero
+    // ha salido del bloque de verdad.
+    if (!event.currentTarget.contains(event.relatedTarget)) dropTarget = false;
+  }}
   ondrop={(event) => {
     event.preventDefault();
     event.stopPropagation();
+    dropTarget = false;
     onDrop?.(block.id);
   }}
 >
@@ -428,6 +444,20 @@
     />
   {:else if block.type === 'divider'}
     <hr />
+  {:else if block.type === 'spacer'}
+    <!-- Hueco puro: nada editable dentro. Solo se ajusta su altura, y el
+         rayado deja ver cuánto ocupa mientras editas. En la página publicada
+         es un espacio en blanco y nada más. -->
+    <div class="spacer" style:height={`${spacerHeight()}px`} aria-hidden="true"></div>
+    <div class="spacer-tools">
+      <span>{t('studio.spacerHeight')}</span>
+      <input
+        type="range" min="8" max="400" step="4"
+        value={spacerHeight()}
+        oninput={(event) => { block.space = Number(event.currentTarget.value); onChange?.(); }}
+      />
+      <small>{spacerHeight()} px</small>
+    </div>
   {/if}
 </div>
 
@@ -442,6 +472,9 @@
      que a diferencia de overflow:hidden no recorta el asa (left:-25px). */
   .canvas-block:not([data-type="paragraph"]):not([data-type="heading"]){display:flow-root}
   .canvas-block:not(.nested):hover,.canvas-block.selected{border-color:var(--accent-line);background:color-mix(in srgb,var(--accent) 5%,transparent)}
+  /* Linea de insercion: el bloque soltado cae ANTES del que estas señalando,
+     asi que la marca va arriba. Sin esto arrastrabas sin saber donde caia. */
+  .canvas-block.drop-target::after{content:"";position:absolute;z-index:3;left:0;right:0;top:-2px;height:2px;border-radius:2px;background:var(--accent)}
   .canvas-block.nested{margin:2px 0;padding:7px 9px}
   [contenteditable="true"]{outline:0}
   [contenteditable="true"]:empty::before{content:attr(data-placeholder);color:var(--faint)}
@@ -511,7 +544,18 @@
   th:first-child,td:first-child{border-left:0}th:last-child,td:last-child{border-right:0}tr:last-child td{border-bottom:0}
   th{background:color-mix(in srgb,var(--accent) 7%,var(--raise));color:var(--ink)}td{color:var(--ink-dim)}
   th:focus,td:focus{background:var(--accent-weak);box-shadow:inset 0 0 0 1px var(--accent-line)}
-  hr{border:0;border-top:1px solid var(--border)}
+  /* 25px y no 32 como en la pagina publicada porque el bloque del lienzo ya
+     aporta 7px de relleno arriba y abajo: asi el separador se ve igual de
+     aireado en los dos sitios. Sin margen salia pegado al texto y no parecia
+     un separador, que es lo que empujaba a meter bloques vacios para dar aire. */
+  hr{border:0;border-top:1px solid var(--border);margin:25px 0}
+  /* El rayado solo existe en el editor: marca el hueco sin ocuparlo. */
+  .spacer{width:100%;border-radius:var(--r-sm);background:repeating-linear-gradient(135deg,transparent,transparent 6px,color-mix(in srgb,var(--accent) 9%,transparent) 6px,color-mix(in srgb,var(--accent) 9%,transparent) 12px)}
+  .spacer-tools{display:flex;align-items:center;gap:8px;margin-top:6px;opacity:0;transition:opacity .12s}
+  .canvas-block:hover .spacer-tools,.canvas-block.selected .spacer-tools{opacity:1}
+  .spacer-tools span{color:var(--faint);font:9px var(--font);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+  .spacer-tools input{flex:1;min-width:0;padding:0;accent-color:var(--accent)}
+  .spacer-tools small{color:var(--muted);font-size:10px;white-space:nowrap}
   @media(max-width:700px){
     .columns,.columns.single,.columns.single.half-left,.columns.single.half-right,.columns.three,.columns.lead-left,.columns.lead-right{grid-template-columns:1fr;justify-content:stretch}
     .handle,.actions{display:none}

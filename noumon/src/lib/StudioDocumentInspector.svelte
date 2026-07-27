@@ -98,6 +98,7 @@
           <button onclick={() => state.addBlock?.('code')}><b>&lt;/&gt;</b>{t('studio.block.code')}</button>
           <button onclick={() => state.addBlock?.('bulletList')}><b>≔</b>{t('studio.block.bulletList')}</button>
           <button onclick={() => state.addBlock?.('divider')}><b>—</b>{t('studio.block.divider')}</button>
+          <button onclick={() => state.addBlock?.('spacer')}><b>↕</b>{t('studio.block.spacer')}</button>
         </div>
 
         <h3>{t('studio.internalLink')}</h3>
