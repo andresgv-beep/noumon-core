@@ -1326,6 +1326,7 @@
       { key: 'insert', icon: 'plus', label: t('studio.insertBlock') },
       { key: 'design', icon: 'edit', label: t('studio.section.design') },
       { key: 'metadata', icon: 'tag', label: t('studio.section.metadata') },
+      { key: 'nav', icon: 'book', label: t('studio.section.nav') },
       { key: 'cover', icon: 'image', label: t('studio.section.cover') },
       { key: 'cards', icon: 'list', label: t('studio.infoCards') },
     ];
@@ -1593,7 +1594,13 @@
 
         <!-- El mismo indice que vera el lector, mientras escribes: asi se ve la
              navegacion real del documento y no se edita a ciegas. -->
-        <div class="canvas-layout" class:has-info-card={infoCardVisible()} class:has-nav={studioPages(selected).length > 1}>
+        <div
+          class="canvas-layout"
+          class:has-info-card={infoCardVisible()}
+          class:has-nav={studioPages(selected).length > 1}
+          class:nav-right={content().presentation?.navSide === 'right'}
+          style:--nav-w={`${Math.min(320, Math.max(150, Number(content().presentation?.navWidth) || 196))}px`}
+        >
           {#if studioPages(selected).length > 1}
             <DocumentContentsMenu
               pages={studioPages(selected)}
@@ -1601,6 +1608,8 @@
               title={content().navTitle || ''}
               frame={content().presentation?.navFrame || 'none'}
               fontSize={content().presentation?.navFontSize || 0}
+              numbers={content().presentation?.navNumbers !== false}
+              count={content().presentation?.navCount !== false}
               onSelect={selectPage}
             />
           {/if}
@@ -1759,7 +1768,8 @@
   .canvas-layout{min-width:0}
   /* Indice y lienzo como una sola banda, igual que en la pagina publicada. */
   .canvas-layout.has-nav{display:flex;align-items:flex-start;justify-content:center;gap:clamp(14px,2vw,30px)}
-  .canvas-layout.has-nav>:global(.page-nav){width:184px;flex:none;margin-top:14px}
+  .canvas-layout.has-nav>:global(.page-nav){width:var(--nav-w,196px);flex:none;margin-top:14px}
+  .canvas-layout.has-nav.nav-right>:global(.page-nav){order:2}
   /* Mismo motivo que en la pagina publicada: el lienzo lleva margin:0 auto y en
      flex los margenes automaticos se comen el espacio libre. */
   .canvas-layout.has-nav>.document-canvas{flex:0 1 var(--page-w);min-width:0;margin:0}

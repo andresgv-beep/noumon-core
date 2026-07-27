@@ -2,7 +2,10 @@
   import { studioNavGroups } from './studioContent.js';
   import { t } from './i18n.svelte.js';
 
-  let { pages = [], activePageID = '', title = '', frame = 'none', fontSize = 0, onSelect } = $props();
+  let {
+    pages = [], activePageID = '', title = '', frame = 'none', fontSize = 0,
+    numbers = true, count = true, onSelect,
+  } = $props();
 
   let groups = $derived(studioNavGroups(pages));
   // La numeración es del documento, no del grupo: la página 4 sigue siendo la 4
@@ -21,11 +24,12 @@
   class:framed={frame === 'framed'}
   class:rounded={frame === 'rounded'}
   style:--nav-font={Number(fontSize) >= 9 && Number(fontSize) <= 24 ? `${Math.round(fontSize)}px` : null}
+  style:--nav-cols={numbers ? null : 'minmax(0,1fr)'}
   aria-label={title || t('documents.contentsMenu')}
 >
   <div class="nav-head">
     <b>{title || t('documents.contentsMenu')}</b>
-    <small>{t('documents.contentsCount', { count: pages.length })}</small>
+    {#if count}<small>{t('documents.contentsCount', { count: pages.length })}</small>{/if}
   </div>
   {#each groups as group, groupIndex (group.section + groupIndex)}
     {#if group.section}
@@ -39,7 +43,7 @@
         aria-current={page.id === activePageID ? 'page' : undefined}
         onclick={() => onSelect?.(page.id)}
       >
-        <span>{numberOf.get(page.id)}</span>
+        {#if numbers}<span>{numberOf.get(page.id)}</span>{/if}
         <b>{page.title}</b>
       </button>
     {/each}
@@ -62,7 +66,7 @@
      primera no necesita separarse de nada. */
   .nav-section{margin:14px 0 4px;padding:10px 9px 0;border-top:1px solid var(--border);color:var(--muted);font-size:.79em;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
   .nav-section.first{margin-top:0;padding-top:0;border-top:0}
-  .page-link{width:100%;min-width:0;display:grid;grid-template-columns:16px minmax(0,1fr);align-items:start;gap:8px;padding:7px 9px;border:0;border-left:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);text-align:left}
+  .page-link{width:100%;min-width:0;display:grid;grid-template-columns:var(--nav-cols,16px minmax(0,1fr));align-items:start;gap:8px;padding:7px 9px;border:0;border-left:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);text-align:left}
   .page-link:hover{color:var(--ink);background:color-mix(in srgb,var(--ink) 4%,transparent)}
   .page-link.active{border-left-color:var(--accent);color:var(--ink)}
   .page-link span{padding-top:1px;color:var(--faint);font-size:.79em;text-align:right}

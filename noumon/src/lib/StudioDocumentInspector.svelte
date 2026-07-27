@@ -151,13 +151,45 @@
           {/each}
         </div>
 
+        <h3>{t('studio.typography')}</h3>
+        <div class="style-options">
+          <button class:active={presentation().fontPreset !== 'sans'} onclick={() => setPresentation('fontPreset', 'editorial')}>
+            <span>{t('studio.fontEditorial')}</span><small>Serif</small>
+          </button>
+          <button class:active={presentation().fontPreset === 'sans'} onclick={() => setPresentation('fontPreset', 'sans')}>
+            <span>{t('studio.fontSans')}</span><small>Sans</small>
+          </button>
+        </div>
+      </section>
+    {:else if state.activeSection === 'nav'}
+      <!-- El menu de contenidos tiene seccion propia: sus ajustes no son del
+           diseño de la pagina sino de como se navega el documento. -->
+      <section class="panel">
+        <h3>{t('studio.section.nav')}</h3>
+        <small class="link-hint">{t('studio.navHint')}</small>
+        <label class="field">
+          <span>{t('studio.navTitle')}</span>
+          <input
+            maxlength="120"
+            value={document().content.navTitle || ''}
+            placeholder={t('documents.contentsMenu')}
+            oninput={(event) => { document().content.navTitle = event.currentTarget.value; state.changeDocument?.(); }}
+          />
+        </label>
+
+        <h3>{t('studio.navSide')}</h3>
+        <div class="style-options">
+          {#each [['left', t('studio.navSide.left')], ['right', t('studio.navSide.right')]] as option}
+            <button
+              class:active={(presentation().navSide || 'left') === option[0]}
+              onclick={() => setPresentation('navSide', option[0])}
+            ><span>{option[1]}</span></button>
+          {/each}
+        </div>
+
         <h3>{t('studio.navFrame')}</h3>
         <div class="style-options">
-          {#each [
-            ['none', t('studio.frameNone')],
-            ['framed', t('studio.frameSquare')],
-            ['rounded', t('studio.frameRounded')],
-          ] as option}
+          {#each [['none', t('studio.frameNone')], ['framed', t('studio.frameSquare')], ['rounded', t('studio.frameRounded')]] as option}
             <button
               class:active={(presentation().navFrame || 'none') === option[0]}
               onclick={() => setPresentation('navFrame', option[0])}
@@ -165,9 +197,18 @@
           {/each}
         </div>
 
-        <!-- Una sola medida para todo el menú: los tamaños interiores van en em,
-             así los números y los encabezados escalan con los títulos y no se
-             descuadra la columna. -->
+        <label class="size-row">
+          <span>{t('studio.navWidth')}</span>
+          <input
+            type="range" min="150" max="320" step="2"
+            value={presentation().navWidth || 196}
+            oninput={(event) => setPresentation('navWidth', Number(event.currentTarget.value))}
+          />
+          <small>{presentation().navWidth || 196} px</small>
+        </label>
+
+        <!-- Una sola medida para todo el menu: los tamaños interiores van en em,
+             asi que numeros y encabezados escalan con los titulos. -->
         <label class="size-row">
           <span>{t('studio.navFontSize')}</span>
           <input
@@ -178,15 +219,23 @@
           <small>{presentation().navFontSize || 12} px</small>
         </label>
 
-        <h3>{t('studio.typography')}</h3>
-        <div class="style-options">
-          <button class:active={presentation().fontPreset !== 'sans'} onclick={() => setPresentation('fontPreset', 'editorial')}>
-            <span>{t('studio.fontEditorial')}</span><small>Serif</small>
-          </button>
-          <button class:active={presentation().fontPreset === 'sans'} onclick={() => setPresentation('fontPreset', 'sans')}>
-            <span>{t('studio.fontSans')}</span><small>Sans</small>
-          </button>
-        </div>
+        <h3>{t('studio.navShow')}</h3>
+        <label class="toggle">
+          <input
+            type="checkbox"
+            checked={presentation().navNumbers !== false}
+            onchange={(event) => setPresentation('navNumbers', event.currentTarget.checked)}
+          />
+          <span>{t('studio.navNumbers')}</span>
+        </label>
+        <label class="toggle">
+          <input
+            type="checkbox"
+            checked={presentation().navCount !== false}
+            onchange={(event) => setPresentation('navCount', event.currentTarget.checked)}
+          />
+          <span>{t('studio.navCount')}</span>
+        </label>
       </section>
     {:else if state.activeSection === 'metadata'}
       <section class="panel">
@@ -282,6 +331,12 @@
   .cover-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .cover-actions button{min-width:0;padding:7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:11.5px}
   .cover-actions button:hover{border-color:var(--accent-line);color:var(--ink)}.cover-actions .remove{color:#df7474}
+  .field{display:grid;gap:4px;margin-bottom:14px}
+  .field span{color:var(--faint);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+  .field input{width:100%;min-width:0;box-sizing:border-box;padding:7px 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font:12.5px var(--font);outline:0}
+  .field input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
+  .toggle{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--ink-dim);font-size:12px}
+  .toggle input{width:15px;height:15px;accent-color:var(--accent)}
   .size-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 8px;margin-bottom:14px}
   .size-row span{color:var(--faint);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
   .size-row small{color:var(--muted);font-size:11.5px;text-align:right}

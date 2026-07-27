@@ -55,6 +55,8 @@
   class="document-layout"
   class:has-info-card={hasInfoCard()}
   class:has-nav={studioPages(document).length > 1}
+  class:nav-right={presentation().navSide === 'right'}
+  style:--nav-w={`${Math.min(320, Math.max(150, Number(presentation().navWidth) || 196))}px`}
   class:compact={presentation().contentWidth === 'compact'}
   class:wide={presentation().contentWidth === 'wide'}
   class:editorial={presentation().contentWidth === 'editorial'}
@@ -66,6 +68,8 @@
       title={content().navTitle || ''}
       frame={presentation().navFrame || 'none'}
       fontSize={presentation().navFontSize || 0}
+      numbers={presentation().navNumbers !== false}
+      count={presentation().navCount !== false}
       onSelect={onOpenPage}
     />
   {/if}
@@ -127,7 +131,9 @@
   /* Arranca por debajo del titulo, no a la altura del borde superior: pegado
      arriba competia con el encabezado del articulo. Es un desplazamiento fijo,
      asi que en una pagina que no empiece por un titulo quedara algo baja. */
-  .document-layout.has-nav>:global(.page-nav){width:196px;flex:none;margin-top:clamp(104px,11vw,176px)}
+  .document-layout.has-nav>:global(.page-nav){width:var(--nav-w,196px);flex:none;margin-top:clamp(104px,11vw,176px)}
+  /* El lado se resuelve con el orden de la banda, no moviendo nada. */
+  .document-layout.has-nav.nav-right>:global(.page-nav){order:2}
   /* margin:0 en la banda: `.page` lleva `margin:0 auto`, y en flex los márgenes
      automáticos absorben todo el espacio libre, empujando el artículo lejos del
      índice. Centrar la banda entera es cosa de justify-content, no del margen. */

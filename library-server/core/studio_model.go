@@ -74,7 +74,13 @@ type StudioPresentation struct {
 	// recto, "rounded" con esquinas redondeadas.
 	NavFrame string `json:"navFrame,omitempty"`
 	// Tamano del texto del menu en px; 0 = el valor por defecto del cliente.
-	NavFontSize      int    `json:"navFontSize,omitempty"`
+	NavFontSize int `json:"navFontSize,omitempty"`
+	// Lado del menu, su ancho en px y que partes muestra. Los booleanos son
+	// punteros porque "no mostrar" es false y hay que distinguirlo de "sin fijar".
+	NavSide          string `json:"navSide,omitempty"`
+	NavWidth         int    `json:"navWidth,omitempty"`
+	NavNumbers       *bool  `json:"navNumbers,omitempty"`
+	NavCount         *bool  `json:"navCount,omitempty"`
 	FontPreset       string `json:"fontPreset,omitempty"`
 	TitleFontSize    int    `json:"titleFontSize,omitempty"`
 	SummaryFontSize  int    `json:"summaryFontSize,omitempty"`
@@ -281,6 +287,14 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	case "", "reading", "wide", "compact", "editorial":
 	default:
 		return studioValidatedInput{}, fmt.Errorf("presentation.contentWidth: invalid")
+	}
+	switch content.Presentation.NavSide {
+	case "", "left", "right":
+	default:
+		return studioValidatedInput{}, fmt.Errorf("presentation.navSide: invalid")
+	}
+	if w := content.Presentation.NavWidth; w != 0 && (w < 150 || w > 320) {
+		return studioValidatedInput{}, fmt.Errorf("presentation.navWidth: invalid")
 	}
 	switch content.Presentation.NavFrame {
 	case "", "none", "framed", "rounded":
