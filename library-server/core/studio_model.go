@@ -39,6 +39,7 @@ var (
 	studioSlugRE       = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$`)
 	studioIDRE         = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 	studioInlineLinkRE = regexp.MustCompile(`\[\[(page|item):([A-Za-z0-9][A-Za-z0-9._:-]{0,127})\|([^\]\r\n]+)\]\]`)
+	studioColorRE      = regexp.MustCompile("^#[0-9a-fA-F]{6}$")
 )
 
 var studioTemplates = map[string]string{
@@ -77,10 +78,17 @@ type StudioPresentation struct {
 	NavFontSize int `json:"navFontSize,omitempty"`
 	// Lado del menu, su ancho en px y que partes muestra. Los booleanos son
 	// punteros porque "no mostrar" es false y hay que distinguirlo de "sin fijar".
-	NavSide          string `json:"navSide,omitempty"`
-	NavWidth         int    `json:"navWidth,omitempty"`
-	NavNumbers       *bool  `json:"navNumbers,omitempty"`
-	NavCount         *bool  `json:"navCount,omitempty"`
+	NavSide    string `json:"navSide,omitempty"`
+	NavWidth   int    `json:"navWidth,omitempty"`
+	NavNumbers *bool  `json:"navNumbers,omitempty"`
+	NavCount   *bool  `json:"navCount,omitempty"`
+	// NavHidden esconde el menu aunque el documento tenga varias paginas: es una
+	// eleccion del autor. Un color vacio significa "el de la paleta".
+	NavHidden        *bool  `json:"navHidden,omitempty"`
+	NavBorderWidth   *int   `json:"navBorderWidth,omitempty"`
+	NavTitleSize     int    `json:"navTitleSize,omitempty"`
+	NavTitleColor    string `json:"navTitleColor,omitempty"`
+	NavTextColor     string `json:"navTextColor,omitempty"`
 	FontPreset       string `json:"fontPreset,omitempty"`
 	TitleFontSize    int    `json:"titleFontSize,omitempty"`
 	SummaryFontSize  int    `json:"summaryFontSize,omitempty"`
@@ -287,6 +295,21 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	case "", "reading", "wide", "compact", "editorial":
 	default:
 		return studioValidatedInput{}, fmt.Errorf("presentation.contentWidth: invalid")
+	}
+	if w := content.Presentation.NavBorderWidth; w != nil && (*w < 0 || *w > 6) {
+		return studioValidatedInput{}, fmt.Errorf("presentation.navBorderWidth: invalid")
+	}
+	if size := content.Presentation.NavTitleSize; size != 0 && (size < 8 || size > 24) {
+		return studioValidatedInput{}, fmt.Errorf("presentation.navTitleSize: invalid")
+	}
+	for _, color := range []*string{
+		&content.Presentation.NavTitleColor,
+		&content.Presentation.NavTextColor,
+	} {
+		*color = strings.TrimSpace(*color)
+		if *color != "" && !studioColorRE.MatchString(*color) {
+			return studioValidatedInput{}, fmt.Errorf("presentation.navColor: invalid")
+		}
 	}
 	switch content.Presentation.NavSide {
 	case "", "left", "right":

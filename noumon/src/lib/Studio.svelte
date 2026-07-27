@@ -102,6 +102,7 @@
   const activePage = () => studioPage(selected, activePageID);
   const infoCards = () => activePage()?.infoCards || [];
   const infoCardVisible = () => infoCards().length > 0;
+  const showNav = () => studioPages(selected).length > 1 && content().presentation?.navHidden !== true;
   const cardSlots = () => studioInfoCardsByAnchor(infoCards(), documentBlocks());
   // La portada identifica la publicacion en la coleccion; no se pinta sobre la
   // pagina. Vive en el contenido, no como bloque, para que no estorbe al leer ni
@@ -1499,7 +1500,7 @@
       <div
         class="canvas-column"
         class:has-info-card={infoCardVisible()}
-        class:has-nav={studioPages(selected).length > 1}
+        class:has-nav={showNav()}
         class:wide={content().presentation?.contentWidth === 'wide'}
         class:editorial={content().presentation?.contentWidth === 'editorial'}
         class:compact={content().presentation?.contentWidth === 'compact'}
@@ -1601,7 +1602,7 @@
           class:nav-right={content().presentation?.navSide === 'right'}
           style:--nav-w={`${Math.min(320, Math.max(150, Number(content().presentation?.navWidth) || 196))}px`}
         >
-          {#if studioPages(selected).length > 1}
+          {#if showNav()}
             <DocumentContentsMenu
               pages={studioPages(selected)}
               activePageID={activePageID}
@@ -1610,6 +1611,10 @@
               fontSize={content().presentation?.navFontSize || 0}
               numbers={content().presentation?.navNumbers !== false}
               count={content().presentation?.navCount !== false}
+              borderWidth={content().presentation?.navBorderWidth ?? 1}
+              titleSize={content().presentation?.navTitleSize || 0}
+              titleColor={content().presentation?.navTitleColor || ''}
+              textColor={content().presentation?.navTextColor || ''}
               onSelect={selectPage}
             />
           {/if}

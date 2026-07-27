@@ -219,7 +219,56 @@
           <small>{presentation().navFontSize || 12} px</small>
         </label>
 
+        <label class="size-row">
+          <span>{t('studio.navBorderWidth')}</span>
+          <input
+            type="range" min="0" max="6" step="1"
+            disabled={(presentation().navFrame || 'none') === 'none'}
+            value={presentation().navBorderWidth ?? 1}
+            oninput={(event) => setPresentation('navBorderWidth', Number(event.currentTarget.value))}
+          />
+          <small>{presentation().navBorderWidth ?? 1} px</small>
+        </label>
+
+        <label class="size-row">
+          <span>{t('studio.navTitleSize')}</span>
+          <input
+            type="range" min="8" max="24" step="1"
+            value={presentation().navTitleSize || 10}
+            oninput={(event) => setPresentation('navTitleSize', Number(event.currentTarget.value))}
+          />
+          <small>{presentation().navTitleSize || 10} px</small>
+        </label>
+
+        <h3>{t('studio.navColors')}</h3>
+        <label class="color-row">
+          <span>{t('studio.navTitleColor')}</span>
+          <input
+            type="color"
+            value={presentation().navTitleColor || '#8a8a8a'}
+            oninput={(event) => setPresentation('navTitleColor', event.currentTarget.value)}
+          />
+          <button onclick={() => setPresentation('navTitleColor', '')}>{t('studio.navColorReset')}</button>
+        </label>
+        <label class="color-row">
+          <span>{t('studio.navTextColor')}</span>
+          <input
+            type="color"
+            value={presentation().navTextColor || '#9a9a9a'}
+            oninput={(event) => setPresentation('navTextColor', event.currentTarget.value)}
+          />
+          <button onclick={() => setPresentation('navTextColor', '')}>{t('studio.navColorReset')}</button>
+        </label>
+
         <h3>{t('studio.navShow')}</h3>
+        <label class="toggle">
+          <input
+            type="checkbox"
+            checked={presentation().navHidden === true}
+            onchange={(event) => setPresentation('navHidden', event.currentTarget.checked)}
+          />
+          <span>{t('studio.navHidden')}</span>
+        </label>
         <label class="toggle">
           <input
             type="checkbox"
@@ -335,6 +384,10 @@
   .field span{color:var(--faint);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
   .field input{width:100%;min-width:0;box-sizing:border-box;padding:7px 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font:12.5px var(--font);outline:0}
   .field input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
+  .color-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:8px;margin-bottom:8px}
+  .color-row span{color:var(--faint);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+  .color-row input{width:38px;height:26px;padding:2px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card)}
+  .color-row button{padding:5px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
   .toggle{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--ink-dim);font-size:12px}
   .toggle input{width:15px;height:15px;accent-color:var(--accent)}
   .size-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 8px;margin-bottom:14px}

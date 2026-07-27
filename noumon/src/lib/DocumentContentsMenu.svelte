@@ -4,7 +4,8 @@
 
   let {
     pages = [], activePageID = '', title = '', frame = 'none', fontSize = 0,
-    numbers = true, count = true, onSelect,
+    numbers = true, count = true, borderWidth = 1, titleSize = 0,
+    titleColor = '', textColor = '', onSelect,
   } = $props();
 
   let groups = $derived(studioNavGroups(pages));
@@ -25,6 +26,10 @@
   class:rounded={frame === 'rounded'}
   style:--nav-font={Number(fontSize) >= 9 && Number(fontSize) <= 24 ? `${Math.round(fontSize)}px` : null}
   style:--nav-cols={numbers ? null : 'minmax(0,1fr)'}
+  style:--nav-border={`${Math.min(6, Math.max(0, Number(borderWidth) ?? 1))}px`}
+  style:--nav-title-size={Number(titleSize) >= 8 && Number(titleSize) <= 24 ? `${Math.round(titleSize)}px` : null}
+  style:--nav-title-color={titleColor || null}
+  style:--nav-text-color={textColor || null}
   aria-label={title || t('documents.contentsMenu')}
 >
   <div class="nav-head">
@@ -56,17 +61,17 @@
      documento y no una caja aparte. Sólo el borde, sin fondo ni sombra: así el
      índice sigue sobre la página en vez de convertirse en una tarjeta. Con
      marco necesita su propio relleno. */
-  .page-nav.framed,.page-nav.rounded{padding:14px 6px;border:1px solid var(--border)}
+  .page-nav.framed,.page-nav.rounded{padding:14px 6px;border:var(--nav-border,1px) solid var(--border)}
   .page-nav.rounded{border-radius:var(--r-lg)}
   :global(:root[data-skin="retro"]) .page-nav.rounded{border-radius:0}
   .nav-head{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;padding:0 9px 8px;border-bottom:1px solid var(--border)}
-  .nav-head b{overflow-wrap:break-word;color:var(--faint);font-size:.79em;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+  .nav-head b{overflow-wrap:break-word;color:var(--nav-title-color,var(--faint));font-size:var(--nav-title-size,.79em);font-weight:700;letter-spacing:.1em;text-transform:uppercase}
   .nav-head small{color:var(--faint);font-size:.79em}
   /* La sección abre grupo: su propio título y una separación por encima. La
      primera no necesita separarse de nada. */
   .nav-section{margin:14px 0 4px;padding:10px 9px 0;border-top:1px solid var(--border);color:var(--muted);font-size:.79em;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
   .nav-section.first{margin-top:0;padding-top:0;border-top:0}
-  .page-link{width:100%;min-width:0;display:grid;grid-template-columns:var(--nav-cols,16px minmax(0,1fr));align-items:start;gap:8px;padding:7px 9px;border:0;border-left:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);text-align:left}
+  .page-link{width:100%;min-width:0;display:grid;grid-template-columns:var(--nav-cols,16px minmax(0,1fr));align-items:start;gap:8px;padding:7px 9px;border:0;border-left:2px solid transparent;border-radius:0;background:transparent;color:var(--nav-text-color,var(--muted));text-align:left}
   .page-link:hover{color:var(--ink);background:color-mix(in srgb,var(--ink) 4%,transparent)}
   .page-link.active{border-left-color:var(--accent);color:var(--ink)}
   .page-link span{padding-top:1px;color:var(--faint);font-size:.79em;text-align:right}

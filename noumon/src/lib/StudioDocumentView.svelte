@@ -23,6 +23,9 @@
   // editor siga visible para poder rellenarla.
   const infoCards = () => studioPageInfoCards(document, pageId).filter(studioInfoCardHasContent);
   const hasInfoCard = () => infoCards().length > 0;
+  // El menu se puede ocultar aunque el documento tenga varias paginas: es una
+  // eleccion del autor, no solo consecuencia de cuantas paginas hay.
+  const showNav = () => studioPages(document).length > 1 && presentation().navHidden !== true;
   const cardSlots = () => studioInfoCardsByAnchor(infoCards(), bodyBlocks());
   const pageBlocks = () => studioDocumentBlocks(document, pageId);
   const bodyBlocks = () => pageBlocks();
@@ -54,14 +57,14 @@
 <div
   class="document-layout"
   class:has-info-card={hasInfoCard()}
-  class:has-nav={studioPages(document).length > 1}
+  class:has-nav={showNav()}
   class:nav-right={presentation().navSide === 'right'}
   style:--nav-w={`${Math.min(320, Math.max(150, Number(presentation().navWidth) || 196))}px`}
   class:compact={presentation().contentWidth === 'compact'}
   class:wide={presentation().contentWidth === 'wide'}
   class:editorial={presentation().contentWidth === 'editorial'}
 >
-  {#if studioPages(document).length > 1}
+  {#if showNav()}
     <DocumentContentsMenu
       pages={studioPages(document)}
       activePageID={activePage()?.id || ''}
@@ -70,6 +73,10 @@
       fontSize={presentation().navFontSize || 0}
       numbers={presentation().navNumbers !== false}
       count={presentation().navCount !== false}
+      borderWidth={presentation().navBorderWidth ?? 1}
+      titleSize={presentation().navTitleSize || 0}
+      titleColor={presentation().navTitleColor || ''}
+      textColor={presentation().navTextColor || ''}
       onSelect={onOpenPage}
     />
   {/if}
