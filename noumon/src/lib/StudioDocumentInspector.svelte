@@ -259,6 +259,24 @@
           />
           <button onclick={() => setPresentation('navTextColor', '')}>{t('studio.navColorReset')}</button>
         </label>
+        <label class="color-row">
+          <span>{t('studio.navTitleBg')}</span>
+          <input
+            type="color"
+            value={presentation().navTitleBg || '#1e1e26'}
+            oninput={(event) => setPresentation('navTitleBg', event.currentTarget.value)}
+          />
+          <button onclick={() => setPresentation('navTitleBg', '')}>{t('studio.navColorReset')}</button>
+        </label>
+        <label class="color-row">
+          <span>{t('studio.navBg')}</span>
+          <input
+            type="color"
+            value={presentation().navBg || '#16161c'}
+            oninput={(event) => setPresentation('navBg', event.currentTarget.value)}
+          />
+          <button onclick={() => setPresentation('navBg', '')}>{t('studio.navColorReset')}</button>
+        </label>
 
         <h3>{t('studio.navShow')}</h3>
         <label class="toggle">

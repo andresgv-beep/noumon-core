@@ -77,6 +77,8 @@
       titleSize={presentation().navTitleSize || 0}
       titleColor={presentation().navTitleColor || ''}
       textColor={presentation().navTextColor || ''}
+      titleBg={presentation().navTitleBg || ''}
+      bg={presentation().navBg || ''}
       onSelect={onOpenPage}
     />
   {/if}

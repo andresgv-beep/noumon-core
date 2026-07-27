@@ -1615,6 +1615,8 @@
               titleSize={content().presentation?.navTitleSize || 0}
               titleColor={content().presentation?.navTitleColor || ''}
               textColor={content().presentation?.navTextColor || ''}
+              titleBg={content().presentation?.navTitleBg || ''}
+              bg={content().presentation?.navBg || ''}
               onSelect={selectPage}
             />
           {/if}

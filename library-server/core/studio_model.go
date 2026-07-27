@@ -89,6 +89,8 @@ type StudioPresentation struct {
 	NavTitleSize     int    `json:"navTitleSize,omitempty"`
 	NavTitleColor    string `json:"navTitleColor,omitempty"`
 	NavTextColor     string `json:"navTextColor,omitempty"`
+	NavTitleBg       string `json:"navTitleBg,omitempty"`
+	NavBg            string `json:"navBg,omitempty"`
 	FontPreset       string `json:"fontPreset,omitempty"`
 	TitleFontSize    int    `json:"titleFontSize,omitempty"`
 	SummaryFontSize  int    `json:"summaryFontSize,omitempty"`
@@ -305,6 +307,8 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	for _, color := range []*string{
 		&content.Presentation.NavTitleColor,
 		&content.Presentation.NavTextColor,
+		&content.Presentation.NavTitleBg,
+		&content.Presentation.NavBg,
 	} {
 		*color = strings.TrimSpace(*color)
 		if *color != "" && !studioColorRE.MatchString(*color) {
