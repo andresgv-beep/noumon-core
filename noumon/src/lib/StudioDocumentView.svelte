@@ -23,7 +23,7 @@
   // editor siga visible para poder rellenarla.
   const infoCards = () => studioPageInfoCards(document, pageId).filter(studioInfoCardHasContent);
   const hasInfoCard = () => infoCards().length > 0;
-  const cardSlots = () => studioInfoCardsByAnchor(infoCards(), bodyBlocks().length);
+  const cardSlots = () => studioInfoCardsByAnchor(infoCards(), bodyBlocks());
   const pageBlocks = () => studioDocumentBlocks(document, pageId);
   const bodyBlocks = () => pageBlocks();
 
@@ -98,7 +98,7 @@
     {/if}
 
     {#each bodyBlocks() as block, index (block.id)}
-      {#each cardSlots().get(index) || [] as card (card.id)}
+      {#each cardSlots().get(block.id) || [] as card (card.id)}
         <aside class="info-slot" class:left={card.side === 'left'}>
           <StudioInfoCard documentId={document.id} {card} compact={preview} />
         </aside>

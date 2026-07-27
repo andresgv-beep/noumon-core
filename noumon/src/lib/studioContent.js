@@ -127,6 +127,11 @@ export function normalizeStudioInfoCard(infoCard, index = 0) {
     // Posición dentro de la página: índice del bloque junto al que empieza a
     // flotar. 0 es arriba del todo. Un flotado arranca donde aparece en el
     // flujo, así que esto es lo que permite bajar la ficha por el artículo.
+    // Anclaje por IDENTIDAD del bloque, no por indice. Con indices, mover o
+    // insertar bloques desplazaba la ficha a otro sitio, porque las posiciones
+    // cambian y el numero guardado no. `anchor` se conserva solo para migrar
+    // los documentos que se guardaron con el modelo viejo.
+    anchorId: String(source.anchorId || ''),
     anchor: Math.max(0, Math.round(Number(source.anchor)) || 0),
     assetId: String(source.assetId || ''),
     caption: String(source.caption || ''),
@@ -250,24 +255,29 @@ export function removeStudioInfoCard(page, cardId) {
 }
 
 /** Sube o baja la ficha por la página moviendo su anclaje un bloque. */
-export function moveStudioInfoCard(page, cardId, delta, blockCount) {
+export function moveStudioInfoCard(page, cardId, delta, blocks) {
+  const list = Array.isArray(blocks) ? blocks : [];
   const card = (page?.infoCards || []).find((candidate) => candidate.id === cardId);
-  if (!card) return false;
-  const current = studioInfoCardAnchor(card, blockCount);
-  const next = clampAnchor(current + Math.sign(Number(delta) || 0), blockCount);
+  if (!card || !list.length) return false;
+  const current = list.findIndex((block) => block.id === studioInfoCardAnchor(card, list));
+  const next = Math.min(list.length - 1, Math.max(0, current + Math.sign(Number(delta) || 0)));
   if (next === current) return false;
-  card.anchor = next;
+  card.anchorId = list[next].id;
   return true;
 }
 
-function clampAnchor(anchor, blockCount) {
-  const last = Math.max(0, (Number(blockCount) || 0) - 1);
-  return Math.min(Math.max(0, Math.round(Number(anchor)) || 0), last);
-}
-
-/** Anclaje efectivo: si el bloque de referencia ya no existe, acompaña al último. */
-export function studioInfoCardAnchor(card, blockCount) {
-  return clampAnchor(card?.anchor, blockCount);
+/**
+ * Identidad del bloque junto al que flota la ficha. Si ese bloque ya no existe
+ * —lo borraste—, cae al que ocupa ahora su antiguo indice, y si tampoco, al
+ * primero: la ficha nunca desaparece de la pagina.
+ */
+export function studioInfoCardAnchor(card, blocks) {
+  const list = Array.isArray(blocks) ? blocks : [];
+  if (!list.length) return '';
+  const wanted = String(card?.anchorId || '');
+  if (wanted && list.some((block) => block.id === wanted)) return wanted;
+  const index = Math.min(list.length - 1, Math.max(0, Math.round(Number(card?.anchor)) || 0));
+  return list[index].id;
 }
 
 /**
@@ -275,10 +285,10 @@ export function studioInfoCardAnchor(card, blockCount) {
  * que empiezan a flotar ahí. Las de la izquierda van primero para que floten en
  * su orden. Lo usan por igual el editor y la página publicada.
  */
-export function studioInfoCardsByAnchor(cards, blockCount) {
+export function studioInfoCardsByAnchor(cards, blocks) {
   const slots = new Map();
   for (const card of cards) {
-    const at = studioInfoCardAnchor(card, blockCount);
+    const at = studioInfoCardAnchor(card, blocks);
     if (!slots.has(at)) slots.set(at, []);
     slots.get(at).push(card);
   }

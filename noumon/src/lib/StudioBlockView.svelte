@@ -21,6 +21,13 @@
     else if (kind === 'item') onOpenItem?.(id);
   }
 
+  // Misma acotacion que el editor y que el servidor (8-400 px), para que lo
+  // que se ve al editar sea exactamente lo que se publica.
+  function spacerHeight() {
+    const value = Number(block.space);
+    return Number.isFinite(value) ? Math.min(400, Math.max(8, Math.round(value))) : 48;
+  }
+
   function headingId() {
     return `studio-section-${documentId}-${block.id}`;
   }
@@ -126,6 +133,10 @@
   />
 {:else if block.type === 'divider'}
   <hr />
+{:else if block.type === 'spacer'}
+  <!-- Aquí el hueco es hueco de verdad: sin rayado ni controles, solo el aire
+       que pidió el autor. El rayado del editor es únicamente para verlo. -->
+  <div class="spacer" style:height={`${spacerHeight()}px`} aria-hidden="true"></div>
 {/if}
 </div>
 
@@ -136,7 +147,7 @@
   h3{font-size:19px;margin:30px 0 7px}
   p{white-space:pre-wrap}
   blockquote{margin:28px 0;border-left:3px solid var(--accent);padding:10px 20px;background:var(--raise);color:var(--ink-dim)}
-  figure{margin:30px 0}
+  figure{margin:30px 0;min-width:0}
   .image-layout{width:100%}
   .image-layout.image-medium{width:min(72%,760px)}.image-layout.image-small{width:min(40%,420px)}
   .image-layout.image-poster,.image-layout.image-original{width:100%}
@@ -147,7 +158,7 @@
   .image-layout.with-side-text.align-right figure{order:2}
   .image-layout.with-side-text figure{margin-top:30px;margin-bottom:30px}
   .image-side-text{flex:1;min-width:0;overflow-wrap:anywhere;margin:30px 0;color:var(--ink-dim);line-height:1.75;white-space:pre-wrap}
-  figcaption{margin-top:8px;text-align:center;color:var(--muted);font-family:var(--font,system-ui,sans-serif);font-size:12px}
+  figcaption{margin-top:8px;overflow-wrap:anywhere;text-align:center;color:var(--muted);font-family:var(--font,system-ui,sans-serif);font-size:12px}
   .table-scroll{overflow:auto;margin:24px 0}
   table{width:100%;border-collapse:collapse;font-family:var(--font,system-ui,sans-serif);font-size:14px}
   th,td{border:1px solid var(--border);padding:9px;text-align:left}
@@ -164,6 +175,7 @@
   .columns.lead-left{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
   .columns.lead-right{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
   hr{border:0;border-top:1px solid var(--border);margin:32px 0}
+  .spacer{width:100%}
   :global(.studio-inline-link){color:var(--accent-2);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;cursor:pointer}
   :global(.studio-inline-link:hover){color:var(--ink)}
   :global(.studio-inline-link.is-broken){color:#df7474;text-decoration-style:wavy}

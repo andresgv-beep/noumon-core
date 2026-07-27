@@ -228,25 +228,25 @@
   .info-card-editor{display:grid;gap:8px;padding-top:9px;border-top:1px solid var(--border)}
   header{display:flex;align-items:center;justify-content:space-between;gap:8px}
   header>span{display:flex;flex-direction:column;gap:2px}
-  header b,.rows-heading b,.card-head b{color:var(--ink);font-size:10.5px}
-  header small,.rows-heading small{color:var(--faint);font-size:8.5px;line-height:1.35}
-  .no-cards{margin:0;padding:9px;border:1px dashed var(--border);border-radius:var(--r-sm);color:var(--faint);font-size:9px;text-align:center}
+  header b,.rows-heading b,.card-head b{color:var(--ink);font-size:12.5px}
+  header small,.rows-heading small{color:var(--faint);font-size:10.5px;line-height:1.35}
+  .no-cards{margin:0;padding:9px;border:1px dashed var(--border);border-radius:var(--r-sm);color:var(--faint);font-size:11px;text-align:center}
   .card-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
-  .card-tabs button{min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 3px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10px}
-  .card-tabs button small{max-width:100%;overflow:hidden;color:var(--faint);font-size:7.5px;text-overflow:ellipsis;white-space:nowrap}
+  .card-tabs button{min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 3px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:11.5px}
+  .card-tabs button small{max-width:100%;overflow:hidden;color:var(--faint);font-size:9.5px;text-overflow:ellipsis;white-space:nowrap}
   .card-tabs button:hover,.card-tabs button.active{border-color:var(--accent-line);color:var(--ink)}
   .card-tabs button.active{background:var(--accent-weak)}
   .card{display:grid;gap:7px;padding:8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--panel-2,var(--card))}
   .card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .card-actions{display:flex;gap:2px}
-  .card-actions button{width:22px;height:20px;display:grid;place-items:center;border:0;border-radius:3px;background:var(--card);color:var(--faint);font-size:10px}
+  .card-actions button{width:22px;height:20px;display:grid;place-items:center;border:0;border-radius:3px;background:var(--card);color:var(--faint);font-size:11.5px}
   .card-actions button:hover:not(:disabled){color:var(--ink)}
   .sides{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .sides>div{display:flex;gap:3px}
-  .sides button{padding:4px 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:8.5px}
+  .sides button{padding:4px 9px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
   .sides button:hover:not(:disabled),.ratios button:hover:not(:disabled){border-color:var(--accent-line);color:var(--ink)}
   .sides button.active,.ratios button.active{border-color:var(--accent-line);background:var(--accent-weak);color:var(--accent-2)}
-  .card-image{width:100%;min-height:90px;display:grid;place-items:center;gap:6px;overflow:hidden;border:1px dashed var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:9.5px}
+  .card-image{width:100%;min-height:90px;display:grid;place-items:center;gap:6px;overflow:hidden;border:1px dashed var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:11.5px}
   .card-image:hover{border-color:var(--accent-line);color:var(--ink)}.card-image.ready{border-style:solid}
   /* La previsualización usa el mismo encuadre y punto focal que la ficha
      publicada, para que lo que se ajusta aquí sea lo que se ve allí. */
@@ -254,30 +254,30 @@
   .frame :global(img),.frame :global(.placeholder){display:block;width:100%;height:auto;max-height:220px;min-height:70px;border-radius:0;object-fit:contain;object-position:var(--info-focus,50% 50%)}
   .frame.cropped :global(img),.frame.cropped :global(.placeholder){height:100%;max-height:none;min-height:0;object-fit:cover}
   .image-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px}
-  .image-actions button,.rows-heading button,header>button{min-width:0;padding:6px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:9px}
+  .image-actions button,.rows-heading button,header>button{min-width:0;padding:6px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:11px}
   .image-actions button:hover,.rows-heading button:hover,header>button:hover:not(:disabled){border-color:var(--accent-line);color:var(--ink)}
   header>button,.rows-heading button{display:flex;align-items:center;gap:4px}
   .image-frame{display:grid;gap:6px;padding:7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--raise)}
-  .control-label{color:var(--faint);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase}
+  .control-label{color:var(--faint);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
   .ratios{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
-  .ratios button{min-width:0;padding:5px 2px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:8.5px}
+  .ratios button{min-width:0;padding:5px 2px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
   .focus{display:grid;gap:3px}
   .focus.disabled{opacity:.4}
   .focus label{display:grid;grid-template-columns:14px minmax(0,1fr);align-items:center;gap:6px}
-  .focus small{color:var(--faint);font-size:8.5px}
+  .focus small{color:var(--faint);font-size:10.5px}
   .focus input[type="range"]{width:100%;min-width:0;padding:0;accent-color:var(--accent)}
-  .focus .reset{justify-self:end;padding:3px 7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:8.5px}
+  .focus .reset{justify-self:end;padding:3px 7px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--muted);font-size:10.5px}
   .focus .reset:hover:not(:disabled){border-color:var(--accent-line);color:var(--ink)}
-  label{display:grid;gap:4px;color:var(--muted);font-size:9.5px}
-  textarea,input{width:100%;min-width:0;box-sizing:border-box;padding:7px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font:10.5px/1.4 var(--font);outline:0;resize:vertical}
+  label{display:grid;gap:4px;color:var(--muted);font-size:11.5px}
+  textarea,input{width:100%;min-width:0;box-sizing:border-box;padding:7px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font:12.5px/1.4 var(--font);outline:0;resize:vertical}
   textarea:focus,input:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-weak)}
   .rows-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .rows-heading>span{display:flex;align-items:baseline;gap:5px}
   .rows{display:grid;gap:6px;max-height:280px;overflow:auto;padding-right:2px}
-  .rows>p{margin:0;padding:9px;border:1px dashed var(--border);border-radius:var(--r-sm);color:var(--faint);font-size:9px;text-align:center}
+  .rows>p{margin:0;padding:9px;border:1px dashed var(--border);border-radius:var(--r-sm);color:var(--faint);font-size:11px;text-align:center}
   .row{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1fr);gap:5px;padding:6px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--raise)}
   .row textarea{min-height:34px}.row-actions{grid-column:1/-1;display:flex;justify-content:flex-end;gap:2px}
-  .row-actions button{width:22px;height:20px;display:grid;place-items:center;border:0;border-radius:3px;background:var(--card);color:var(--faint);font-size:10px}
+  .row-actions button{width:22px;height:20px;display:grid;place-items:center;border:0;border-radius:3px;background:var(--card);color:var(--faint);font-size:11.5px}
   .row-actions button:hover:not(:disabled){color:var(--ink)}button.danger{color:#df7474}
   button:disabled{cursor:not-allowed;opacity:.35}
   :global(:root[data-skin="retro"]) :is(.card,.card-image,textarea,input,.row,.rows>p,.no-cards,.image-actions button,.rows-heading button,header>button){border-radius:0}

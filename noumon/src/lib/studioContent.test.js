@@ -12,6 +12,7 @@ import {
   renameStudioPage,
   studioDocumentBlocks,
   studioDocumentHeading,
+  studioInfoCardAnchor,
   studioInfoCardsByAnchor,
   studioNavGroups,
   studioPage,
@@ -41,42 +42,32 @@ test('keeps side cards on their own page and creates new pages clean', () => {
   assert.notEqual(right.id, left.id);
 });
 
-test('anchors side cards to a block so they can move down the page', () => {
-  const document = normalizeStudioDocument({
-    templateKey: 'document',
-    title: 'Archivo local',
-    metadata: {},
-    content: {
-      schemaVersion: 2,
-      pages: [{
-        id: 'p1',
-        title: 'Inicio',
-        blocks: [{ id: 'a', type: 'paragraph' }, { id: 'b', type: 'paragraph' }, { id: 'c', type: 'paragraph' }],
-      }],
-    },
-  });
-  const page = studioPage(document, 'p1');
+test('anchors side cards to a block by identity, surviving reorders', () => {
+  const blocks = [
+    { id: 'a', type: 'paragraph' },
+    { id: 'b', type: 'paragraph' },
+    { id: 'c', type: 'paragraph' },
+  ];
+  const page = { id: 'p1', title: 'Inicio', blocks, infoCards: [] };
   const card = createStudioInfoCard(page);
-  assert.equal(card.anchor, 0);
 
-  assert.equal(moveStudioInfoCard(page, card.id, 1, 3), true);
-  assert.equal(card.anchor, 1);
-  assert.equal(studioInfoCardsByAnchor([card], 3).get(1)[0].id, card.id);
+  assert.equal(moveStudioInfoCard(page, card.id, 1, blocks), true);
+  assert.equal(card.anchorId, 'b');
 
-  // No baja más allá del último bloque ni sube por encima del primero.
-  moveStudioInfoCard(page, card.id, 1, 3);
-  assert.equal(moveStudioInfoCard(page, card.id, 1, 3), false);
-  assert.equal(card.anchor, 2);
-  moveStudioInfoCard(page, card.id, -1, 3);
-  moveStudioInfoCard(page, card.id, -1, 3);
-  assert.equal(moveStudioInfoCard(page, card.id, -1, 3), false);
-  assert.equal(card.anchor, 0);
+  // La razón de ser del cambio: reordenar bloques ya no mueve la ficha, porque
+  // el anclaje apunta al bloque y no a la posición que ocupaba.
+  blocks.unshift(blocks.pop());
+  assert.equal(studioInfoCardAnchor(card, blocks), 'b');
+  assert.equal(studioInfoCardsByAnchor([card], blocks).get('b')[0].id, card.id);
 
-  // Un anclaje que apunta más allá del final acompaña al último bloque en vez
-  // de desaparecer de la página.
-  card.anchor = 99;
-  assert.equal(studioInfoCardsByAnchor([card], 3).get(2)[0].id, card.id);
+  // Si borras el bloque anclado, la ficha sigue en la página en vez de perderse.
+  const withoutB = blocks.filter((block) => block.id !== 'b');
+  assert.ok(withoutB.some((block) => block.id === studioInfoCardAnchor(card, withoutB)));
+
+  // Y un documento guardado con el modelo viejo (índice) se sigue entendiendo.
+  assert.equal(studioInfoCardAnchor({ anchor: 2 }, blocks), blocks[2].id);
 });
+
 
 test('shows a pre-migration info card on the first page without normalizing', () => {
   // El lector publicado no normaliza el contenido: tiene que resolver por su
@@ -163,6 +154,7 @@ test('adopts the legacy document info card as the first card of the first page',
   assert.deepEqual(document.content.pages[0].infoCards, [{
     id: 'card-1',
     side: 'right',
+    anchorId: '',
     anchor: 0,
     assetId: 'asset-card',
     caption: 'Retrato',

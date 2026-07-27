@@ -100,11 +100,14 @@ type StudioContent struct {
 type StudioInfoCard struct {
 	// Identidad dentro de la página, lado del artículo al que se pega y bloque
 	// junto al que empieza a flotar (0 = arriba del todo).
-	ID      string `json:"id,omitempty"`
-	Side    string `json:"side,omitempty"`
-	Anchor  int    `json:"anchor,omitempty"`
-	AssetID string `json:"assetId,omitempty"`
-	Caption string `json:"caption,omitempty"`
+	ID   string `json:"id,omitempty"`
+	Side string `json:"side,omitempty"`
+	// AnchorID ancla la ficha al bloque por identidad: con indices, mover o
+	// insertar bloques desplazaba la ficha. Anchor se conserva para migrar.
+	AnchorID string `json:"anchorId,omitempty"`
+	Anchor   int    `json:"anchor,omitempty"`
+	AssetID  string `json:"assetId,omitempty"`
+	Caption  string `json:"caption,omitempty"`
 	// Encuadre de la imagen: vacío o "natural" respeta la forma original; el
 	// resto recorta a una proporción fija. ImageFocus* (0-100) es el punto de
 	// la imagen que se conserva al recortar.

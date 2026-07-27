@@ -102,7 +102,7 @@
   const activePage = () => studioPage(selected, activePageID);
   const infoCards = () => activePage()?.infoCards || [];
   const infoCardVisible = () => infoCards().length > 0;
-  const cardSlots = () => studioInfoCardsByAnchor(infoCards(), documentBlocks().length);
+  const cardSlots = () => studioInfoCardsByAnchor(infoCards(), documentBlocks());
   // La portada identifica la publicacion en la coleccion; no se pinta sobre la
   // pagina. Vive en el contenido, no como bloque, para que no estorbe al leer ni
   // quede invisible al editar.
@@ -793,6 +793,30 @@
     rememberedPageTextSelection = null;
   }
 
+  // Quitar el enlace: se podia crear pero no deshacer, asi que la unica salida
+  // era borrar el texto y reescribirlo. Basta con poner el cursor dentro del
+  // enlace (o seleccionarlo) y pulsar: el <a> se sustituye por su propio texto.
+  function removePageLinkAtCursor() {
+    const selection = globalThis.getSelection?.();
+    const node = selection?.rangeCount ? selection.getRangeAt(0).startContainer : null;
+    const from = node?.nodeType === 1 ? node : node?.parentElement;
+    const anchor = from?.closest?.('[data-studio-link-kind]');
+    const editable = anchor?.closest?.('[contenteditable="true"]');
+    if (!anchor || !editable?.closest?.('[data-studio-block-id]')) {
+      pageLinkMessage = 'studio.pageLinkNoneHere';
+      activeSection = 'insert';
+      return;
+    }
+    anchor.replaceWith(globalThis.document.createTextNode(anchor.textContent || ''));
+    // Sin este input el modelo se queda con la sintaxis [[page:...]] del enlace
+    // y volveria a pintarse en cuanto se refresque el bloque.
+    editable.dispatchEvent(new Event('input', { bubbles: true }));
+    editable.focus();
+    pageLinkSelection = null;
+    pageLinkMessage = '';
+    rememberedPageTextSelection = null;
+  }
+
   function searchLinkTargets(value) {
     linkQuery = value;
     clearTimeout(linkSearchTimer);
@@ -875,7 +899,7 @@
   }
 
   function moveInfoCard(cardId, delta) {
-    if (!moveStudioInfoCard(activePage(), cardId, delta, documentBlocks().length)) return;
+    if (!moveStudioInfoCard(activePage(), cardId, delta, documentBlocks())) return;
     selectedBlockID = cardId;
     activeSection = 'cards';
     touch();
@@ -916,11 +940,11 @@
 
   // Soltar una ficha sobre un bloque la ancla ahí. Sólo vale para bloques del
   // cuerpo: los anidados (dentro de columnas) no son posiciones de anclaje.
-  function anchorInfoCardAt(index) {
+  function anchorInfoCardAt(blockID) {
     const card = findInfoCard(draggingCardID);
     draggingCardID = '';
-    if (!card || index < 0) return true;
-    card.anchor = index;
+    if (!card || !blockID) return true;
+    card.anchorId = blockID;
     touch();
     return true;
   }
@@ -1193,7 +1217,7 @@
 
   function dropBeforeBlock(targetBlockID) {
     if (draggingCardID) {
-      anchorInfoCardAt(documentBlocks().findIndex((block) => block.id === targetBlockID));
+      anchorInfoCardAt(targetBlockID);
       return;
     }
     const block = takeDraggedBlock(targetBlockID);
@@ -1209,7 +1233,7 @@
   function dropIntoColumn(columnsBlockID, columnIndex) {
     // Una ficha no cabe dentro de una columna: se ancla al bloque de columnas.
     if (draggingCardID) {
-      anchorInfoCardAt(documentBlocks().findIndex((block) => block.id === columnsBlockID));
+      anchorInfoCardAt(columnsBlockID);
       return;
     }
     const destinationBeforeMove = findBlockByID(columnsBlockID);
@@ -1229,7 +1253,7 @@
 
   function dropAtRootEnd() {
     if (draggingCardID) {
-      anchorInfoCardAt(documentBlocks().length - 1);
+      anchorInfoCardAt(documentBlocks().at(-1)?.id || '');
       return;
     }
     const block = takeDraggedBlock();
@@ -1400,6 +1424,7 @@
       capturePageLinkSelection,
       applyPageLink,
       cancelPageLink,
+      removePageLinkAtCursor,
       setTags,
       changeDocument: touch,
       toggleRevisions,
@@ -1473,6 +1498,7 @@
       <div
         class="canvas-column"
         class:has-info-card={infoCardVisible()}
+        class:has-nav={studioPages(selected).length > 1}
         class:wide={content().presentation?.contentWidth === 'wide'}
         class:editorial={content().presentation?.contentWidth === 'editorial'}
         class:compact={content().presentation?.contentWidth === 'compact'}
@@ -1623,7 +1649,7 @@
           {/if}
 
           {#each documentBlocks() as block, blockIndex (block.id)}
-            {#each cardSlots().get(blockIndex) || [] as card (card.id)}{@render canvasInfoCard(card)}{/each}
+            {#each cardSlots().get(block.id) || [] as card (card.id)}{@render canvasInfoCard(card)}{/each}
             <StudioCanvasBlock
               {block}
               documentId={selected.id}
@@ -1723,15 +1749,20 @@
   .studio-error{margin:12px 0;padding:9px 11px;border-left:3px solid #df7474;background:color-mix(in srgb,#df7474 9%,var(--panel));color:#df8585;font-size:12px}
 
   .document-workspace{height:100%;overflow:auto;display:block;padding:22px clamp(12px,2.5vw,40px) 70px}
-  .canvas-column{width:100%;max-width:760px;min-width:0;margin:0 auto;transition:max-width .2s}
-  .canvas-column.wide{max-width:980px}.canvas-column.editorial{max-width:1180px}.canvas-column.compact{max-width:620px}
+  /* --page-w es el ancho de pagina elegido por el autor, el mismo numero que
+     usa la pagina publicada. El lienzo se ciñe a el y el menu de contenidos se
+     suma FUERA: antes el menu le restaba ~214px al lienzo, asi que el editor
+     mostraba una columna de texto mas estrecha que lo publicado. */
+  .canvas-column{--page-w:760px;width:100%;max-width:var(--page-w);min-width:0;margin:0 auto;transition:max-width .2s}
+  .canvas-column.wide{--page-w:980px}.canvas-column.editorial{--page-w:1180px}.canvas-column.compact{--page-w:620px}
+  .canvas-column.has-nav{max-width:calc(var(--page-w) + 214px)}
   .canvas-layout{min-width:0}
   /* Indice y lienzo como una sola banda, igual que en la pagina publicada. */
   .canvas-layout.has-nav{display:flex;align-items:flex-start;justify-content:center;gap:clamp(14px,2vw,30px)}
   .canvas-layout.has-nav>:global(.page-nav){width:184px;flex:none;margin-top:14px}
   /* Mismo motivo que en la pagina publicada: el lienzo lleva margin:0 auto y en
      flex los margenes automaticos se comen el espacio libre. */
-  .canvas-layout.has-nav>.document-canvas{flex:1 1 auto;min-width:0;margin:0}
+  .canvas-layout.has-nav>.document-canvas{flex:0 1 var(--page-w);min-width:0;margin:0}
   @media(max-width:900px){
     .canvas-layout.has-nav{display:block}
     .canvas-layout.has-nav>:global(.page-nav){width:auto}
@@ -1746,9 +1777,13 @@
   .canvas-info-card.left{float:left;margin:2px clamp(16px,2vw,28px) 18px 0}
   .canvas-info-card:hover{outline-color:var(--accent-line)}
   .canvas-info-card.selected{outline-color:var(--accent)}
-  .card-tools{position:absolute;z-index:1;right:4px;top:-25px;display:flex;gap:2px;padding:3px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--raise);opacity:0;transition:opacity .12s}
+  /* DENTRO de la ficha, no encima. La barra del bloque vive en top:-24px
+     right:5px y esta estaba en top:-25px right:4px: el mismo punto, asi que
+     se pisaban en cuanto un bloque tenia ficha. El z-index alto la deja
+     encima si alguna vez llegan a rozarse. */
+  .card-tools{position:absolute;z-index:6;right:6px;top:6px;display:flex;gap:2px;padding:3px;border:1px solid var(--border);border-radius:var(--r-sm);background:color-mix(in srgb,var(--raise) 92%,transparent);box-shadow:var(--shadow-soft);opacity:0;transition:opacity .12s}
   .canvas-info-card:hover .card-tools,.canvas-info-card.selected .card-tools{opacity:1}
-  .card-tools button{width:22px;height:20px;display:grid;place-items:center;border:0;border-radius:3px;background:transparent;color:var(--muted);font-size:11px}
+  .card-tools button{width:24px;height:22px;display:grid;place-items:center;border:0;border-radius:3px;background:transparent;color:var(--muted);font-size:11px}
   .card-tools button:hover{color:var(--ink);background:var(--card)}
   .card-tools .grip{cursor:grab}
   .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
@@ -1757,7 +1792,7 @@
   .revision-row>span{min-width:0;display:flex;flex-direction:column}.revision-row b{font-size:11px}.revision-row small{color:var(--faint);font-size:9px}.revision-row button{padding:5px 8px;font-size:10px}
   /* Mismo corte de palabra que la página publicada, sin depender de la regla de
      agente de usuario que Chrome aplica a los contenteditable. */
-  .document-canvas{width:100%;min-height:470px;margin:0 auto;padding:36px clamp(28px,4vw,56px);border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--shadow-soft);font-family:var(--font-read);transition:padding .2s;overflow-wrap:break-word}
+  .document-canvas{width:100%;min-height:470px;margin:0 auto;padding:36px clamp(20px,3.2vw,60px);border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--shadow-soft);font-family:var(--font-read);transition:padding .2s;overflow-wrap:break-word}
   .document-canvas.compact{padding-inline:44px}.document-canvas.sans{font-family:var(--font)}
   /* Metadatos del documento: se ven como formulario del editor, no como parte
      de la pagina, para que quede claro que no se publican tal cual. */

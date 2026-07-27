@@ -478,8 +478,13 @@
   .canvas-block.nested{margin:2px 0;padding:7px 9px}
   [contenteditable="true"]{outline:0}
   [contenteditable="true"]:empty::before{content:attr(data-placeholder);color:var(--faint)}
-  .handle{position:absolute;left:-25px;top:9px;width:22px;height:24px;color:var(--faint);font-size:12px;opacity:0;cursor:grab}
-  .nested>.handle{left:-17px;width:18px}
+  /* Era de 22x24 con los puntos a 12px y en el color mas apagado de la paleta:
+     costaba verla y mas aun acertarle. Ahora es mayor, con mas contraste y con
+     fondo al pasar por encima para que se lea como un asa. */
+  .handle{position:absolute;left:-32px;top:5px;width:28px;height:30px;display:grid;place-items:center;border-radius:var(--r-sm);color:var(--muted);font-size:17px;line-height:1;opacity:0;cursor:grab;transition:background .12s,color .12s}
+  .handle:hover{background:var(--raise);color:var(--ink)}
+  .handle:active{cursor:grabbing}
+  .nested>.handle{left:-24px;width:22px;font-size:15px}
   .actions{position:absolute;z-index:2;right:5px;top:-24px;display:flex;gap:2px;padding:3px;border-radius:var(--r-sm);background:var(--raise);border:1px solid var(--border);opacity:0}
   .actions button{padding:1px 5px;color:var(--muted);font-size:11px}.actions button:hover{color:var(--ink)}
   .canvas-block:hover>.handle,.canvas-block:hover>.actions,.canvas-block.selected>.handle,.canvas-block.selected>.actions{opacity:1}
@@ -492,7 +497,12 @@
   .callout{padding:14px 16px;border-left:3px solid var(--accent);background:var(--raise);color:var(--muted);line-height:1.55}
   .callout strong{display:block;color:var(--ink);margin-bottom:3px}.callout p{margin:0;font-size:inherit}
   pre{padding:13px 15px;overflow:auto;background:var(--ground);color:var(--link);font:12px/1.6 var(--mono);white-space:pre-wrap}
-  figure{margin:0}figcaption{margin-top:7px;text-align:center;color:var(--muted);font:11px var(--font)}
+  figure{margin:0;min-width:0}
+  /* anywhere y no break-word: break-word parte la palabra al pintarla pero no
+     reduce el ancho minimo que el navegador atribuye al contenido, asi que una
+     cadena sin espacios seguia estirando la maquetacion. Mismo caso que el
+     texto lateral. */
+  figcaption{margin-top:7px;overflow-wrap:anywhere;text-align:center;color:var(--muted);font:11px var(--font)}
   .image-editor{display:grid;gap:9px}
   .image-tools{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px;padding:7px 9px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--raise);font-family:var(--font)}
   .image-tools>div{display:flex;align-items:center;flex-wrap:wrap;gap:3px}
