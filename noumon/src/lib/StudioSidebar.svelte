@@ -70,7 +70,7 @@
     {/if}
     <footer class="side-footer">
       <button class="side-item nav-item" class:active={state.revisionsOpen} onclick={() => state.toggleRevisions?.()}>
-        <Icon name="history" size={15} />{t('studio.revisions')}<span class="badge">{state.revisionCount || 0}</span>
+        <Icon name="history" size={14} />{t('studio.revisions')}<span class="badge">{state.revisionCount || 0}</span>
       </button>
       <div class="publication-summary">
         <span><Icon name="storage" size={14} />{state.destination || t('studio.destinationDocuments')}</span>
@@ -123,19 +123,25 @@
   .editor-nav button.active{background:var(--accent-weak);color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent-line)}
   .inspector-scroll{min-height:0;flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 2px 12px 0}
   .side-spacer{min-height:0;flex:1}
-  .side-footer{flex:none;display:grid;gap:4px;padding-top:8px;border-top:1px solid var(--border)}
-  .publication-summary{display:grid;grid-template-columns:1fr 1fr;gap:4px}
-  .publication-summary span{min-width:0;display:flex;align-items:center;gap:5px;padding:4px 6px;color:var(--faint);font-size:8.5px}
-  /* Quién verá lo publicado es una frase, no un dato suelto: ocupa la fila entera
-     y se lee un punto más grande que el destino y la cuota, porque es lo que hay
-     que entender antes de pulsar Publicar. */
-  .publication-summary .scope{grid-column:1/-1;color:var(--muted);font-size:10px}
+  .side-footer{flex:none;display:grid;gap:2px;padding-top:8px;border-top:1px solid var(--border)}
+  /* Una sola columna. Con dos, el destino y el límite caían en celdas sueltas y
+     la frase de visibilidad se llevaba la fila entera: quedaban huecos entre
+     medias y tres tamaños distintos en cuatro líneas seguidas. */
+  .publication-summary{display:grid;gap:1px}
+  /* Mismo sangrado y misma separación del icono que el botón de revisiones y que
+     las acciones de abajo: así los iconos caen en una columna y el texto arranca
+     siempre en el mismo sitio. */
+  .publication-summary span{min-width:0;display:flex;align-items:center;gap:9px;padding:6px 10px;color:var(--muted);font-size:11.5px}
+  /* Quién verá lo publicado es lo que hay que entender antes de pulsar Publicar,
+     así que destaca por color y no por tamaño: cambiar el cuerpo de letra dentro
+     de la misma lista es lo que la descuadraba. */
+  .publication-summary .scope{color:var(--ink-dim)}
   .document-actions{display:flex;align-items:center;gap:3px;flex-wrap:wrap}
-  .archive,.purge{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-md);color:#df7474;font-size:11px}
+  .archive,.purge{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-md);color:#df7474;font-size:12px}
   .purge{color:#f06f6f}
   .archive:hover{background:color-mix(in srgb,#df7474 9%,var(--raise))}
   .purge:hover{background:color-mix(in srgb,#df7474 14%,var(--raise))}
-  .unpublish{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-md);color:var(--muted);font-size:11px}
+  .unpublish{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-md);color:var(--muted);font-size:12px}
   .unpublish:hover{background:var(--raise);color:var(--ink)}
   .empty{padding:10px;color:var(--faint);font-size:11px}
 </style>
