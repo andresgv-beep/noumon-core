@@ -1146,6 +1146,9 @@
       linkResults,
       linkLoading,
       pages: studioPages(selected),
+      // Si el menú de contenidos no está en la página, la barra superior ofrece
+      // el salto entre páginas; con el menú a la vista sería lo mismo dos veces.
+      navVisible: showNav(),
       pageLinkSelection: pageLinkSelection ? { label: pageLinkSelection.label } : null,
       pageLinkMessage,
       brokenPageLinks: unresolvedPageLinks,
@@ -1347,6 +1350,22 @@
           style:--nav-w={`${Math.min(320, Math.max(150, Number(content().presentation?.navWidth) || 196))}px`}
         >
           {#if showNav()}
+            <!-- El menú se configura donde se ve, igual que las fichas: se marca
+                 al pasar por encima y al pulsarlo abre su apartado. Un clic en un
+                 enlace de página sigue navegando: eso es lo que hace el menú, y
+                 llevar a los ajustes cada vez que quieres cambiar de página
+                 sería insufrible. -->
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="canvas-nav"
+              class:selected={activeSection === 'nav' && !showRevisions}
+              title={t('studio.navConfigure')}
+              onclick={(event) => {
+                if (event.target.closest('.page-link')) return;
+                openSection('nav');
+              }}
+            >
             <DocumentContentsMenu
               pages={studioPages(selected)}
               activePageID={activePageID}
@@ -1363,6 +1382,7 @@
               bg={content().presentation?.navBg || ''}
               onSelect={selectPage}
             />
+            </div>
           {/if}
           <article
             class="document-canvas"
@@ -1493,14 +1513,23 @@
   .canvas-layout{min-width:0}
   /* Indice y lienzo como una sola banda, igual que en la pagina publicada. */
   .canvas-layout.has-nav{display:flex;align-items:flex-start;justify-content:center;gap:clamp(14px,2vw,30px)}
-  .canvas-layout.has-nav>:global(.page-nav){width:var(--nav-w,196px);flex:none;margin-top:14px}
-  .canvas-layout.has-nav.nav-right>:global(.page-nav){order:2}
+  /* La medida de la banda la lleva ahora el envoltorio, que es el hijo directo:
+     el menú de dentro se estira hasta llenarlo. */
+  .canvas-layout.has-nav>.canvas-nav{width:var(--nav-w,196px);flex:none;margin-top:14px}
+  .canvas-layout.has-nav.nav-right>.canvas-nav{order:2}
+  /* Se marca como las fichas: filo tenue al pasar, filo pleno cuando su apartado
+     está abierto. El relleno del filo va por fuera para no mover el menú. */
+  .canvas-nav{min-width:0;border-radius:var(--r-md);outline:1px solid transparent;outline-offset:4px;cursor:pointer}
+  .canvas-nav:hover{outline-color:var(--accent-line)}
+  .canvas-nav.selected{outline-color:var(--accent)}
+  /* Los enlaces de página conservan su cursor: ahí sí se navega. */
+  .canvas-nav :global(.page-link){cursor:pointer}
   /* Mismo motivo que en la pagina publicada: el lienzo lleva margin:0 auto y en
      flex los margenes automaticos se comen el espacio libre. */
   .canvas-layout.has-nav>.document-canvas{flex:0 1 var(--page-w);min-width:0;margin:0}
   @media(max-width:900px){
     .canvas-layout.has-nav{display:block}
-    .canvas-layout.has-nav>:global(.page-nav){width:auto}
+    .canvas-layout.has-nav>.canvas-nav{width:auto}
   }
   /* La ficha flota dentro del lienzo, igual que en la página publicada: no es
      una columna hermana, así que el lienzo vuelve a ser una sola caja. */

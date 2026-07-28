@@ -22,6 +22,23 @@
     state.addInfoCard?.();
     event.currentTarget.closest('details')?.removeAttribute('open');
   }
+
+  function choosePage(event, pageId) {
+    state.selectPage?.(pageId);
+    event.currentTarget.closest('details')?.removeAttribute('open');
+  }
+
+  function createPage(event) {
+    state.addPage?.();
+    event.currentTarget.closest('details')?.removeAttribute('open');
+  }
+
+  // Solo cuando el menú de contenidos no está en la página. Con el menú a la
+  // vista sería el mismo listado dos veces; sin él, sin esto no hay forma de
+  // saltar de página sin abrir el apartado de Páginas.
+  const showPageJump = () => state.mode === 'editor'
+    && state.sections?.some((section) => section.key === 'pages')
+    && !state.navVisible;
 </script>
 
 <div class="studio-nav">
@@ -48,6 +65,36 @@
       </span>
     {/if}
   </div>
+
+  {#if showPageJump()}
+    <details class="card-jump">
+      <summary title={t('studio.pages')}>
+        <Icon name="book" size={14} />
+        <span>{t('studio.pages')}</span>
+        <b>{state.pages?.length || 0}</b>
+        <Icon name="chevron" size={12} />
+      </summary>
+      <div class="card-menu">
+        <header>
+          <b>{t('studio.pages')}</b>
+          <small>{t('studio.pageJumpDesc')}</small>
+        </header>
+        {#each state.pages || [] as page, index (page.id)}
+          <button
+            class:active={state.activePageID === page.id}
+            onclick={(event) => choosePage(event, page.id)}
+          >
+            <span>{index + 1}</span>
+            <b>{page.title || t('studio.untitled')}</b>
+            {#if page.section}<small>{page.section}</small>{/if}
+          </button>
+        {/each}
+        <button class="new-card" onclick={createPage}>
+          <Icon name="plus" size={13} />{t('studio.addPage')}
+        </button>
+      </div>
+    </details>
+  {/if}
 
   {#if state.mode === 'editor' && state.sections?.some((section) => section.key === 'cards')}
     <details class="card-jump">
