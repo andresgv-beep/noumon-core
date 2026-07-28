@@ -147,6 +147,46 @@
   const canManage = $derived(zim?.canManage ?? false)
   const unindexedCount = $derived(registered.filter((z) => !z.indexed && z.present).length)
 
+  // ── Ediciones repetidas del mismo ZIM ──────────────────────────────────────
+  // Los ZIM se nombran <base>_<AAAA-MM>. Al descargar una edición nueva se añade
+  // junto a la anterior en vez de sustituirla, y como las dos se llaman igual en
+  // el catálogo, el buscador recorre ambas y CADA artículo sale por duplicado.
+  // El sitio de resolverlo es aquí: en el buscador sería tapar el síntoma y de
+  // paso escondería artículos homónimos de colecciones distintas, que sí son
+  // resultados legítimos.
+  function zimEdition(file) {
+    const name = String(file || '').replace(/\.zim$/i, '');
+    const m = name.match(/^(.*)_(\d{4}-\d{2}(?:-\d{2})?)$/);
+    return m ? { base: m[1], date: m[2] } : null;
+  }
+  // Solo agrupa lo que lleva fecha en el nombre: sin ella no hay forma de saber
+  // cuál es más nueva, y adivinarlo sería proponer borrar a ciegas.
+  const duplicateGroups = $derived.by(() => {
+    const groups = new Map();
+    for (const z of registered) {
+      const edition = zimEdition(z.file);
+      if (!edition) continue;
+      if (!groups.has(edition.base)) groups.set(edition.base, []);
+      groups.get(edition.base).push({ ...z, edition: edition.date });
+    }
+    return [...groups.values()]
+      .filter((list) => list.length > 1)
+      .map((list) => {
+        const sorted = [...list].sort((a, b) => b.edition.localeCompare(a.edition));
+        return { keep: sorted[0], older: sorted.slice(1) };
+      });
+  });
+  const olderDuplicates = $derived(duplicateGroups.flatMap((g) => g.older));
+
+  // Quita del catálogo las ediciones viejas. El fichero .zim NO se borra: se
+  // queda en el pool y puede volver a registrarse. Por eso esto se puede pulsar
+  // sin miedo, y por eso el aviso lo dice.
+  async function removeOlderEditions() {
+    if (!olderDuplicates.length) return;
+    if (!confirm(t('dup.confirm', { n: olderDuplicates.length }))) return;
+    for (const z of olderDuplicates) await doUnregister(z, true);
+  }
+
   // ── Filtrado + paginación (cliente) ────────────────────────────────────────
   const languages = $derived([...new Set(registered.map((z) => z.language).filter(Boolean))].sort())
   const filtered = $derived(registered.filter((z) => {
@@ -261,6 +301,25 @@
     <div class="idx-head"><b>{t('idx.banner', { name: indexJob.name })}</b><small>{t('idx.meta', { n: num(indexJob.indexed), p: pct(indexJob) })}</small></div>
     <div class="bar" style="margin-top:0"><i style="width:{pct(indexJob)}%"></i></div>
     <button class="btn" onclick={doCancelIndex}>{t('common.cancel')}</button>
+  </div>
+{/if}
+
+{#if olderDuplicates.length}
+  <div class="dup-banner">
+    <div class="dup-head">
+      <b>{t('dup.title', { n: olderDuplicates.length })}</b>
+      <small>{t('dup.desc')}</small>
+    </div>
+    <ul class="dup-list">
+      {#each duplicateGroups as g (g.keep.id)}
+        <li>
+          <span class="dup-name">{g.keep.title || g.keep.file}</span>
+          <span class="dup-keep">{t('dup.keep', { edition: g.keep.edition })}</span>
+          <span class="dup-drop">{t('dup.drop', { editions: g.older.map((z) => z.edition).join(', ') })}</span>
+        </li>
+      {/each}
+    </ul>
+    <button class="btn" onclick={removeOlderEditions}>{t('dup.action', { n: olderDuplicates.length })}</button>
   </div>
 {/if}
 
@@ -469,4 +528,15 @@
   .idx-head small { color: var(--ink-faint); font-size: 11px; }
   .idx-banner .bar { flex: 1; }
   .idx-banner .bar i { background: var(--warn); }
+  /* Mismo registro que el aviso de indexado: informa, no alarma. Quitar una
+     edición vieja no borra nada del disco. */
+  .dup-banner { display: flex; flex-direction: column; gap: 10px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--warn-border); border-radius: 5px; background: var(--canvas); }
+  .dup-head { display: flex; flex-direction: column; gap: 3px; }
+  .dup-head small { color: var(--ink-faint); font-size: 11px; }
+  .dup-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+  .dup-list li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .dup-name { font-weight: 600; }
+  .dup-keep { color: var(--ink-mute); }
+  .dup-drop { color: var(--ink-faint); }
+  .dup-banner .btn { align-self: flex-start; }
 </style>
