@@ -314,8 +314,8 @@
       {#each duplicateGroups as g (g.keep.id)}
         <li>
           <span class="dup-name">{g.keep.title || g.keep.file}</span>
-          <span class="dup-keep">{t('dup.keep', { edition: g.keep.edition })}</span>
-          <span class="dup-drop">{t('dup.drop', { editions: g.older.map((z) => z.edition).join(', ') })}</span>
+          <span class="dup-keep">· {t('dup.keep', { edition: g.keep.edition })}</span>
+          <span class="dup-drop">· {t('dup.drop', { editions: g.older.map((z) => z.edition).join(', ') })}</span>
         </li>
       {/each}
     </ul>
