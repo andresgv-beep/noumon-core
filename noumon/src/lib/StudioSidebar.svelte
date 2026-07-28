@@ -1,6 +1,7 @@
 <script>
   import Icon from './Icon.svelte';
   import StudioDocumentInspector from './StudioDocumentInspector.svelte';
+  import StudioRevisions from './StudioRevisions.svelte';
   import { t, relTime } from './i18n.svelte.js';
 
   let { state = {} } = $props();
@@ -39,17 +40,31 @@
       <span class="glyph">{state.kindGlyph || '✎'}</span>
       <span><b>{state.kindLabel || t('studio.createDocument')}</b><small>{state.kindHint || t('studio.blockEditor')}</small></span>
     </div>
+    <!-- El historial ocupa la zona de herramientas mientras esté abierto: es una
+         herramienta más, y así la página se sigue viendo al recorrerlo. Las
+         secciones siguen a la vista: elegir cualquiera lo cierra, que si no la
+         única salida era volver al botón del pie. -->
     {#if state.sections?.length}
       <nav class="editor-nav" aria-label={t('studio.editing')}>
         {#each state.sections as section (section.key)}
-          <button class:active={state.activeSection === section.key} onclick={() => state.openSection?.(section.key)}>
+          <button
+            class:active={state.activeSection === section.key && !state.revisionsOpen}
+            onclick={() => state.openSection?.(section.key)}
+          >
             <Icon name={section.icon || 'list'} size={14} /><span>{section.label}</span>
           </button>
         {/each}
       </nav>
       <div class="inspector-scroll scroll thin">
-        <StudioDocumentInspector {state} />
+        {#if state.revisionsOpen}
+          <StudioRevisions {state} />
+        {:else}
+          <StudioDocumentInspector {state} />
+        {/if}
       </div>
+    {:else if state.revisionsOpen}
+      <!-- Cabinet y Moments no tienen inspector por secciones, pero sí historial. -->
+      <div class="inspector-scroll scroll thin"><StudioRevisions {state} /></div>
     {:else}
       <div class="side-spacer"></div>
     {/if}
