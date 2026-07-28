@@ -310,12 +310,14 @@
       <b>{t('dup.title', { n: olderDuplicates.length })}</b>
       <small>{t('dup.desc')}</small>
     </div>
+    <div class="label">{t('dup.listLabel')}</div>
     <ul class="dup-list">
       {#each duplicateGroups as g (g.keep.id)}
         <li>
+          <!-- Solo la edición que sobra: es la que se va al pulsar. Cuál se queda
+               se deduce sola y decirlo era una palabra de más. -->
           <span class="dup-name">{g.keep.title || g.keep.file}</span>
-          <span class="dup-keep">· {t('dup.keep', { edition: g.keep.edition })}</span>
-          <span class="dup-drop">· {t('dup.drop', { editions: g.older.map((z) => z.edition).join(', ') })}</span>
+          <span class="dup-drop">{g.older.map((z) => z.edition).join(', ')}</span>
         </li>
       {/each}
     </ul>
@@ -536,7 +538,6 @@
   .dup-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
   .dup-list li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   .dup-name { font-weight: 600; }
-  .dup-keep { color: var(--ink-mute); }
   .dup-drop { color: var(--ink-faint); }
   .dup-banner .btn { align-self: flex-start; }
 </style>
