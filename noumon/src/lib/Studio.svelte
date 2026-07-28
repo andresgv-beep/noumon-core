@@ -11,6 +11,12 @@
   } from './studioRecovery.js';
   import { createStudioSaver, mergeStudioEnvelope } from './studioSaver.js';
   import {
+    studioBlockByID, studioBlockContains, removeStudioBlock, duplicateStudioBlock,
+    moveStudioBlockBefore, moveStudioBlockIntoColumn, moveStudioBlockToEnd,
+    moveStudioBlockToRoot, appendStudioBlockToColumn,
+    studioTextControl, clampStudioTextSize,
+  } from './studioBlocks.js';
+  import {
     normalizeStudioDocument, studioDocumentBlocks, studioPage, studioPages,
     createStudioPage, renameStudioPage, moveStudioPage, removeStudioPage,
     createStudioInfoCard, removeStudioInfoCard, moveStudioInfoCard,
@@ -175,58 +181,18 @@
     touch();
   }
 
-  function pageTextSize(field, fallback) {
-    const value = Number(content().presentation?.[field]);
-    return Number.isInteger(value) && value >= 10 && value <= 96 ? value : fallback;
-  }
-
   function setPageTextSize(field, value, fallback) {
     content().presentation ||= {};
-    content().presentation[field] = Math.max(10, Math.min(96, Math.round(Number(value) || fallback)));
+    content().presentation[field] = clampStudioTextSize(value, fallback);
     touch();
   }
 
-  function blockDefaultTextSize(block) {
-    if (block?.type === 'heading') return ({ 1: 42, 2: 25, 3: 18 })[block.level || 2];
-    if (block?.type === 'quote') return 17;
-    if (block?.type === 'code' || block?.type === 'table' || block?.type === 'callout') return 13;
-    if (block?.type === 'image') return 15;
-    return 15;
-  }
-
   function selectedTextControl() {
-    if (selectedBlockID === '@title') {
-      return {
-        size: pageTextSize('titleFontSize', 34),
-        align: content().presentation?.titleTextAlign || 'left',
-        canAlign: true,
-      };
-    }
-    if (selectedBlockID === '@summary') {
-      return {
-        size: pageTextSize('summaryFontSize', 17),
-        align: content().presentation?.summaryTextAlign || 'left',
-        canAlign: true,
-      };
-    }
-    const block = findBlockByID(selectedBlockID);
-    const supported = ['heading', 'paragraph', 'quote', 'bulletList', 'orderedList', 'code', 'callout', 'table'].includes(block?.type)
-      || (block?.type === 'image'
-        && ['medium', 'small'].includes(block.imageSize)
-        && ['left', 'right'].includes(block.imageAlign));
-    if (!supported) return null;
-    const value = Number(block.fontSize);
-    return {
-      size: Number.isInteger(value) && value >= 10 && value <= 96
-        ? value
-        : blockDefaultTextSize(block),
-      align: ['left', 'center', 'right'].includes(block.textAlign) ? block.textAlign : 'left',
-      canAlign: block.type !== 'table',
-    };
+    return studioTextControl(activeBlocks(), selectedBlockID, content().presentation);
   }
 
   function setSelectedTextSize(value) {
-    const next = Math.max(10, Math.min(96, Math.round(Number(value) || 15)));
+    const next = clampStudioTextSize(value, 15);
     if (selectedBlockID === '@title') {
       setPageTextSize('titleFontSize', next, 34);
       return;
@@ -875,47 +841,17 @@
     error = cause?.code || cause?.message || 'studio.internal';
   }
 
-  function findBlockLocationIn(blockID, blocks) {
-    for (let index = 0; index < (blocks || []).length; index++) {
-      const block = blocks[index];
-      if (block.id === blockID) return { block, container: blocks, index };
-      for (const column of block.columns || []) {
-        const nested = findBlockLocationIn(blockID, column);
-        if (nested) return nested;
-      }
-      for (const children of [block.children, block.blocks]) {
-        const nested = findBlockLocationIn(blockID, children);
-        if (nested) return nested;
-      }
-    }
-    return null;
-  }
-
-  function findBlockLocation(blockID) {
-    return findBlockLocationIn(blockID, activeBlocks());
-  }
-
   function findBlockByID(blockID) {
-    return findBlockLocation(blockID)?.block || null;
-  }
-
-  function blockContainsID(block, blockID) {
-    if (!block) return false;
-    if (block.id === blockID) return true;
-    for (const column of block.columns || []) {
-      if (column.some((child) => blockContainsID(child, blockID))) return true;
-    }
-    for (const children of [block.children, block.blocks]) {
-      if ((children || []).some((child) => blockContainsID(child, blockID))) return true;
-    }
-    return false;
+    return studioBlockByID(activeBlocks(), blockID);
   }
 
   function removeBlock(blockID) {
-    const location = findBlockLocation(blockID);
-    if (!location) return;
-    if (blockContainsID(location.block, selectedBlockID)) selectedBlockID = '';
-    location.container.splice(location.index, 1);
+    const block = findBlockByID(blockID);
+    if (!block) return;
+    // Si lo seleccionado estaba dentro de lo que se va, la selección se suelta:
+    // apuntaría a un bloque que ya no existe.
+    if (studioBlockContains(block, selectedBlockID)) selectedBlockID = '';
+    removeStudioBlock(activeBlocks(), blockID);
     touch();
   }
 
@@ -1022,18 +958,8 @@
   }
 
   function duplicateBlock(blockID) {
-    const location = findBlockLocation(blockID);
-    if (!location) return;
-    const copy = JSON.parse(JSON.stringify(location.block));
-    const renewIDs = (block) => {
-      block.id = nextBlockId();
-      for (const child of block.children || block.blocks || []) renewIDs(child);
-      for (const column of block.columns || []) {
-        for (const child of column) renewIDs(child);
-      }
-    };
-    renewIDs(copy);
-    location.container.splice(location.index + 1, 0, copy);
+    const copy = duplicateStudioBlock(activeBlocks(), blockID, nextBlockId);
+    if (!copy) return;
     selectedBlockID = copy.id;
     touch();
   }
@@ -1049,12 +975,14 @@
     draggingCardID = '';
   }
 
-  function takeDraggedBlock(destinationBlockID = '') {
-    if (!draggingBlockID || draggingBlockID === destinationBlockID) return null;
-    const location = findBlockLocation(draggingBlockID);
-    if (!location || blockContainsID(location.block, destinationBlockID)) return null;
-    const [block] = location.container.splice(location.index, 1);
-    return block;
+  // Todo lo que se suelta acaba aquí: el movimiento lo resuelve studioBlocks y
+  // esto sólo se ocupa de lo que es de la vista (qué se arrastra, qué queda
+  // seleccionado) y de avisar de que hay cambios.
+  function blockDropped(block) {
+    if (!block) return;
+    draggingBlockID = '';
+    selectedBlockID = block.id;
+    touch();
   }
 
   function dropBeforeBlock(targetBlockID) {
@@ -1062,14 +990,7 @@
       anchorInfoCardAt(targetBlockID);
       return;
     }
-    const block = takeDraggedBlock(targetBlockID);
-    if (!block) return;
-    const target = findBlockLocation(targetBlockID);
-    if (!target) return;
-    target.container.splice(target.index, 0, block);
-    draggingBlockID = '';
-    selectedBlockID = block.id;
-    touch();
+    blockDropped(moveStudioBlockBefore(activeBlocks(), draggingBlockID, targetBlockID));
   }
 
   function dropIntoColumn(columnsBlockID, columnIndex) {
@@ -1078,19 +999,7 @@
       anchorInfoCardAt(columnsBlockID);
       return;
     }
-    const destinationBeforeMove = findBlockByID(columnsBlockID);
-    if (!destinationBeforeMove || blockContainsID(findBlockByID(draggingBlockID), columnsBlockID)) return;
-    const block = takeDraggedBlock(columnsBlockID);
-    if (!block) return;
-    const destination = findBlockByID(columnsBlockID);
-    if (!destination?.columns?.[columnIndex]) {
-      activeBlocks().push(block);
-      return;
-    }
-    destination.columns[columnIndex].push(block);
-    draggingBlockID = '';
-    selectedBlockID = block.id;
-    touch();
+    blockDropped(moveStudioBlockIntoColumn(activeBlocks(), draggingBlockID, columnsBlockID, columnIndex));
   }
 
   function dropAtRootEnd() {
@@ -1098,29 +1007,19 @@
       anchorInfoCardAt(documentBlocks().at(-1)?.id || '');
       return;
     }
-    const block = takeDraggedBlock();
-    if (!block) return;
-    activeBlocks().push(block);
-    draggingBlockID = '';
-    selectedBlockID = block.id;
-    touch();
+    blockDropped(moveStudioBlockToEnd(activeBlocks(), draggingBlockID));
   }
 
   function addToColumn(columnsBlockID, columnIndex, type) {
-    const destination = findBlockByID(columnsBlockID);
-    if (!destination?.columns?.[columnIndex]) return;
     const block = createBlock(type);
-    destination.columns[columnIndex].push(block);
+    if (!appendStudioBlockToColumn(activeBlocks(), columnsBlockID, columnIndex, block)) return;
     selectedBlockID = block.id;
     touch();
   }
 
   function moveBlockToRoot(blockID) {
-    const location = findBlockLocation(blockID);
-    const blocks = activeBlocks();
-    if (!location || location.container === blocks) return;
-    const [block] = location.container.splice(location.index, 1);
-    blocks.push(block);
+    const block = moveStudioBlockToRoot(activeBlocks(), blockID);
+    if (!block) return;
     selectedBlockID = block.id;
     touch();
   }

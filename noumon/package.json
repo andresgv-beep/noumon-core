@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test:studio-content": "node --test src/lib/studioContent.test.js src/lib/studioSaver.test.js src/lib/studioEditable.test.js src/lib/libraryAddress.test.js src/lib/messages.test.js",
+    "test:studio-content": "node --test src/lib/studioContent.test.js src/lib/studioBlocks.test.js src/lib/studioSaver.test.js src/lib/studioEditable.test.js src/lib/libraryAddress.test.js src/lib/messages.test.js",
     "preview": "vite preview"
   },
   "devDependencies": {
