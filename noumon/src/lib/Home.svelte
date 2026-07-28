@@ -10,7 +10,7 @@
   import { t, tn, i18n } from './i18n.svelte.js';
   import { theme } from './theme.svelte.js';
 
-  let { tab, libraries = [], favorites = [], onNavigate, onOpenItem, onOpenView, onToggleHome } = $props();
+  let { tab, libraries = [], favorites = [], onNavigate, onOpenItem, onOpenView, onOpenMapAt, onToggleHome } = $props();
   const bookName = (id) => libraries.find((l) => l.id === id)?.name || id;
   const iconOf = (id) => libraries.find((l) => l.id === id)?.icon;
   const TYPE_KEY = { article: 'tab.article', video: 'cabinet.kind.video', pdf: 'cabinet.kind.text', document: 'cabinet.kind.text', image: 'cabinet.kind.image', audio: 'cabinet.kind.audio' };
@@ -249,7 +249,7 @@
     {/if}
   {:else}
     {#if s.location?.result}
-      <LocationSearchResult locationState={s.location} onRadiusChange={changeRadius} />
+      <LocationSearchResult locationState={s.location} onRadiusChange={changeRadius} onOpenMap={onOpenMapAt} />
     {/if}
     {#if s.searched && pageResults.length}
       <div class="results">

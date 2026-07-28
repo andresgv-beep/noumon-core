@@ -222,6 +222,27 @@
     tabs.push(tab);
     activeId = tab.id;
   }
+  // Abre Maps en una pestaña NUEVA centrado en un punto. Deliberadamente no pasa
+  // por openView ni por setView: son el camino de todas las vistas del sidebar, y
+  // cambiarles la firma para colar un destino ya rompió una vez la apertura de
+  // Mapas, las bibliotecas y el editor. Aquí se arma la pestaña y punto; ninguna
+  // otra parte de la navegación se entera de que mapFocus existe.
+  function openMapAt(focus) {
+    const lat = Number(focus?.lat), lon = Number(focus?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    const tab = makeHome();
+    tab.kind = 'view';
+    tab.view = 'maps';
+    tab.titleKey = viewTitleKey('maps');
+    tab.title = 'maps';
+    tab.mapFocus = {
+      lat, lon,
+      name: String(focus.name || ''),
+      categoryCode: String(focus.categoryCode || ''),
+    };
+    tabs.push(tab);
+    activeId = tab.id;
+  }
   function activate(id) { activeId = id; }
   function closeTab(id) {
     const i = tabs.findIndex((tb) => tb.id === id);
@@ -463,7 +484,7 @@
     {#if active && !studioMode}
       <div class="r-reader">
         <Reader tab={active} {libraries} {favorites} {indexOpen} {notesVersion} {tagsVersion} onNavigate={navigate}
-          onOpenItem={openItemById} onOpenView={openView} onToggleHome={toggleHome} onFrameNav={frameNav}
+          onOpenItem={openItemById} onOpenView={openView} onOpenMapAt={openMapAt} onToggleHome={toggleHome} onFrameNav={frameNav}
           onOpenDocumentPage={openDocumentPage} onResolveDocumentPage={resolveDocumentPage}
           onRemoveFav={removeFav} onOpenNote={openNoteItem} onDeleteNote={deleteNoteItem}
         />

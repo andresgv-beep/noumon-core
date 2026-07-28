@@ -234,8 +234,25 @@
   function focusNearby(p) {
     map.flyTo({ center: [p.lon, p.lat], zoom: Math.min(18, viewerMaxZoom) });
     if (poiMarker) poiMarker.remove();
-    poiMarker = new maplibregl.Marker({ color: '#23b68c', scale: .85 }).setLngLat([p.lon, p.lat]).setPopup(new maplibregl.Popup({ offset: 18 }).setText(p.name + ' · ' + categoryLabel(p))).addTo(map).togglePopup();
+    // Sin nombre o sin categoria el globo no debe quedarse con un ' · ' suelto:
+    // esto tambien entra desde fuera por URL, donde pueden faltar.
+    const label = [p.name, categoryLabel(p)].filter(Boolean).join(' · ');
+    poiMarker = new maplibregl.Marker({ color: '#23b68c', scale: .85 }).setLngLat([p.lon, p.lat]);
+    if (label) poiMarker.setPopup(new maplibregl.Popup({ offset: 18 }).setText(label));
+    poiMarker.addTo(map);
+    if (label) poiMarker.togglePopup();
   }
+  // Punto de entrada desde fuera: la busqueda del inicio abre esta vista sobre
+  // un lugar concreto (?lat=&lon=&name=&cat=). Se reutiliza focusNearby para que
+  // llegue marcado y con su globo, igual que si lo hubieras pulsado aqui.
+  const focusLat = Number(query.get('lat')), focusLon = Number(query.get('lon'));
+  if (query.has('lat') && Number.isFinite(focusLat) && Number.isFinite(focusLon) &&
+      Math.abs(focusLat) <= 85 && Math.abs(focusLon) <= 180) {
+    const target = { lat: focusLat, lon: focusLon, name: query.get('name') || '', categoryCode: query.get('cat') || '' };
+    if (map.loaded()) focusNearby(target);
+    else map.once('load', () => focusNearby(target));
+  }
+
   function distanceLabel(m) { const value = (m / 1000).toFixed(1); return m < 1000 ? m + ' m' : (lang === 'es' ? value.replace('.', ',') : value) + ' km'; }
   function categoryLabel(p) { return ui.categories[p.categoryCode] || p.category || ''; }
   function categoryIcon(code) { return ({restaurant:'🍴',cafe:'☕',bar:'●',fuel:'⛽',shop:'▣',health:'✚',lodging:'⌂',parking:'P',bank:'€',transport:'↔',culture:'★',park:'♧'})[code] || '•'; }

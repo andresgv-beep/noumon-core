@@ -3,7 +3,7 @@
   import MiniMap from './MiniMap.svelte';
   import { t } from './i18n.svelte.js';
 
-  let { locationState, onRadiusChange } = $props();
+  let { locationState, onRadiusChange, onOpenMap } = $props();
   let radiusKm = $state(2.5);
   let selectedPoi = $state(null);
   let radiusTimer;
@@ -39,6 +39,18 @@
   function poiIcon(poi) {
     return POI_ICONS.has(poi.categoryCode) ? `poi-${poi.categoryCode}` : 'pin';
   }
+  // Abre Maps en una pestaña nueva, centrado aquí y con la marca puesta. El
+  // nombre y la categoría viajan para que el globo diga qué es; si no, llegas a
+  // un alfiler sin explicación.
+  function openInMaps(point, categoryCode) {
+    if (!point) return;
+    onOpenMap?.({
+      lat: point.lat,
+      lon: point.lon,
+      name: point.name || '',
+      categoryCode: categoryCode ?? point.categoryCode ?? '',
+    });
+  }
   function categoryLabel(poi) {
     const key = `home.map.category.${poi.categoryCode || 'other'}`;
     const translated = t(key);
@@ -68,6 +80,13 @@
       <h2 id="geo-title">{result.location.name}{result.location.houseNumber ? ` ${result.location.houseNumber}` : ''}</h2>
       {#if result.location.context}<p>{result.location.context}</p>{/if}
       {#if result.location.approximate}<span class="approx">{t('home.map.approximate')}</span>{/if}
+      <!-- El minimapa es una vista fija: para moverse por él o mirar alrededor
+           hace falta Maps, y hasta ahora había que abrirlo y buscar otra vez. -->
+      {#if onOpenMap}
+        <button class="open-map" onclick={() => openInMaps(result.location, '')}>
+          <Icon name="map" size={14} />{t('home.map.openInMaps')}
+        </button>
+      {/if}
       <label class="radius-label" for="library-map-radius">
         <span>{t('home.map.nearby')} <output for="library-map-radius">{radiusLabel(radiusKm)}</output></span>
         <input id="library-map-radius" type="range" min="0" max="5" step="0.5" value={radiusKm}
@@ -89,12 +108,25 @@
         {:else if visiblePois.length}
           <div class="poi-grid">
             {#each visiblePois as poi}
-              <button class="poi" class:selected={selectedPoi === poi} onclick={() => selectedPoi = poi} aria-pressed={selectedPoi === poi}>
-                <span class="poi-icon"><Icon name={poiIcon(poi)} size={15} /></span>
-                <!-- El nombre se recorta con puntos suspensivos si no cabe; el
-                 completo queda al alcance del raton en vez de perderse. -->
-            <span class="poi-copy"><b title={poi.name}>{poi.name}</b><small>{categoryLabel(poi)} · {distanceLabel(poi.distance)}</small></span>
-              </button>
+              <!-- Dos acciones distintas y por eso dos botones hermanos, no uno
+                   dentro de otro: pulsar la fila lo señala en el minimapa de al
+                   lado, y el icono lo abre en Maps para poder moverse por él. -->
+              <div class="poi-row" class:selected={selectedPoi === poi}>
+                <button class="poi" onclick={() => selectedPoi = poi} aria-pressed={selectedPoi === poi}>
+                  <span class="poi-icon"><Icon name={poiIcon(poi)} size={15} /></span>
+                  <!-- El nombre se recorta con puntos suspensivos si no cabe; el
+                       completo queda al alcance del ratón en vez de perderse. -->
+                  <span class="poi-copy"><b title={poi.name}>{poi.name}</b><small>{categoryLabel(poi)} · {distanceLabel(poi.distance)}</small></span>
+                </button>
+                {#if onOpenMap}
+                  <button
+                    class="poi-open"
+                    title={t('home.map.openInMaps')}
+                    aria-label={t('home.map.openPlaceInMaps', { name: poi.name })}
+                    onclick={() => openInMaps(poi)}
+                  ><Icon name="map" size={14} /></button>
+                {/if}
+              </div>
             {/each}
           </div>
         {:else if locationState.status === 'loading'}
@@ -124,6 +156,8 @@
   h2{font-size:26px;line-height:1.2;font-weight:650;color:var(--ink);letter-spacing:-.3px}
   .geo-copy p{color:var(--muted);font-size:13.5px;margin-top:6px}
   .approx{display:inline-block;margin-top:8px;padding:4px 8px;border-radius:var(--r-sm);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent-2);font-size:10.5px}
+  .open-map{display:inline-flex;align-items:center;gap:7px;margin-top:14px;padding:7px 11px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);color:var(--ink-dim);font-size:12px}
+  .open-map:hover{border-color:var(--accent-line);color:var(--accent-2)}
   .radius-label{display:block;max-width:260px;margin-top:24px;color:var(--ink-dim);font-size:12.5px}
   .radius-label>span:first-child{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
   .radius-label output{color:var(--ink);font-weight:600}
@@ -146,8 +180,15 @@
      filas porque la lista va ordenada por distancia: así se lee hacia abajo,
      que es como se lee una lista, en vez de en zigzag. */
   .poi-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(5,auto);grid-auto-columns:minmax(0,1fr);gap:2px 12px}
-  .poi{min-width:0;display:flex;align-items:center;gap:9px;text-align:left;padding:8px;border-radius:var(--r-md);transition:background .12s}
-  .poi:hover,.poi.selected{background:var(--card)}
+  .poi-row{min-width:0;display:flex;align-items:center;border-radius:var(--r-md);transition:background .12s}
+  .poi-row:hover,.poi-row.selected{background:var(--card)}
+  .poi{flex:1;min-width:0;display:flex;align-items:center;gap:9px;text-align:left;padding:8px}
+  /* Presente pero callado: diez filas con su botón a plena luz serían diez
+     llamadas de atención compitiendo con los nombres. Se enciende al pasar por
+     la fila y al llegar con el teclado. */
+  .poi-open{flex:none;display:grid;place-items:center;width:30px;height:30px;margin-right:4px;border-radius:var(--r-sm);color:var(--faint);opacity:.35;transition:opacity .12s,color .12s}
+  .poi-row:hover .poi-open{opacity:1}
+  .poi-open:hover,.poi-open:focus-visible{opacity:1;color:var(--accent-2);background:var(--raise)}
   .poi-icon{display:grid;place-items:center;width:31px;height:31px;flex:none;border-radius:var(--r-md);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent-2)}
   .poi-copy{min-width:0;display:flex;flex-direction:column}
   .poi-copy b,.poi-copy small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

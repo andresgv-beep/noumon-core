@@ -20,7 +20,7 @@
   import { serverUrl } from './connection.js';
 
   let { tab, libraries = [], favorites = [], indexOpen = false, notesVersion = 0, tagsVersion = 0,
-        onNavigate, onOpenItem, onOpenView, onToggleHome, onFrameNav, onRemoveFav, onOpenNote, onDeleteNote,
+        onNavigate, onOpenItem, onOpenView, onOpenMapAt, onToggleHome, onFrameNav, onRemoveFav, onOpenNote, onDeleteNote,
         onOpenDocumentPage, onResolveDocumentPage
       } = $props();
 
@@ -28,6 +28,15 @@
   let toc = $state([]);
   let documentPages = $state([]);
   let activeDocumentPageID = $state('');
+
+  // Punto al que debe abrirse Maps, en forma de query. Vacío cuando la pestaña no
+  // trae destino, que es el caso normal: abrir Mapas desde la barra lateral.
+  function mapFocusQuery(focus) {
+    if (!focus) return '';
+    return `&lat=${focus.lat}&lon=${focus.lon}`
+      + `&name=${encodeURIComponent(focus.name || '')}`
+      + `&cat=${encodeURIComponent(focus.categoryCode || '')}`;
+  }
 
   // ── Traducción in situ (TRANSLATE.md §6) ─────────────────────────────────────
   // El artículo se carga SIEMPRE original; la traducción cae encima cuando está
@@ -229,7 +238,7 @@
        usa esta llave: recarga por su cuenta vía tab.nav. -->
   {#key (tab.rev || 0)}
   {#if tab.kind === 'home'}
-    <div class="reader scroll"><Home {tab} {libraries} {favorites} {onNavigate} {onOpenItem} {onOpenView} {onToggleHome} /></div>
+    <div class="reader scroll"><Home {tab} {libraries} {favorites} {onNavigate} {onOpenItem} {onOpenView} {onOpenMapAt} {onToggleHome} /></div>
   {:else if tab.kind === 'view' && tab.view === 'settings'}
     <div class="reader"><Settings /></div>
   {:else if tab.kind === 'view' && tab.view === 'information'}
@@ -237,7 +246,10 @@
   {:else if tab.kind === 'view' && tab.view === 'tags'}
     <div class="reader"><TagsView {libraries} {tagsVersion} {onNavigate} {onOpenItem} /></div>
   {:else if tab.kind === 'view' && tab.view === 'maps'}
-    <iframe class="pluginframe" title={t('menu.maps')} src={serverUrl(`/maps/?v=compact-panel-3&lang=${encodeURIComponent(i18n.locale)}&skin=${theme.skin}`)}></iframe>
+    <!-- mapFocus solo existe en las pestañas que abre "Ver en el mapa", y esas
+         nacen ya en esta vista: el iframe se monta una vez con el punto puesto y
+         no hay que renavegarlo despues. -->
+    <iframe class="pluginframe" title={t('menu.maps')} src={serverUrl(`/maps/?v=compact-panel-3&lang=${encodeURIComponent(i18n.locale)}&skin=${theme.skin}${mapFocusQuery(tab.mapFocus)}`)}></iframe>
   {:else if tab.kind === 'view' && tab.view === 'cabinet'}
     <Cabinet {onOpenItem} />
   {:else if tab.kind === 'view' && tab.view === 'moments'}
