@@ -1,4 +1,10 @@
-const CACHE = 'noumon-shell-v1';
+// Al cambiar cualquier fichero de SHELL hay que subir esta versión. El
+// 'activate' borra las cachés cuyo nombre NO sea este, así que con el nombre
+// fijo la caché vieja no caduca nunca: el icono de la primera versión siguió
+// apareciendo en la pantalla de inicio del móvil mucho después de cambiarlo,
+// porque el que se servía salía de aquí y no del servidor. Reinstalar la
+// aplicación no lo arregla; la caché sobrevive.
+const CACHE = 'noumon-shell-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/logo.svg', '/logo-maskable.svg', '/favicon.svg'];
 const NEVER_CACHE = ['/api/', '/content/', '/media/', '/maps/', '/mapdata/', '/catalog/'];
 
