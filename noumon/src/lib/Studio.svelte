@@ -1349,7 +1349,11 @@
         {#if error}<div class="studio-error">{t(error)}</div>{/if}
         {#if showRevisions}
           <section class="revision-panel">
-            <header><b>{t('studio.revisions')}</b><span>{revisions.length}</span></header>
+            <header>
+              <b>{t('studio.revisions')}</b>
+              <span>{revisions.length}</span>
+              <button class="close" onclick={toggleRevisions} title={t('common.close')}>✕</button>
+            </header>
             {#if revisionsLoading}
               <div>{t('common.loading')}</div>
             {:else}
@@ -1644,8 +1648,18 @@
   .card-tools button{width:24px;height:22px;display:grid;place-items:center;border:0;border-radius:3px;background:transparent;color:var(--muted);font-size:11px}
   .card-tools button:hover{color:var(--ink);background:var(--card)}
   .card-tools .grip{cursor:grab}
-  .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel)}
-  .revision-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px}.revision-panel header span{color:var(--faint)}
+  /* Las revisiones son una herramienta, no parte del documento. Comparten
+     columna con la franja de metadatos y con el lienzo, y siendo las tres cajas
+     de --panel se leían como una sola pila: parecía que el historial formaba
+     parte de lo que estás editando. El filo de acento las marca como panel
+     abierto a propósito, y se cierra desde su propia cabecera. */
+  .revision-panel{margin:0 auto 12px;width:100%;padding:12px;border:1px solid var(--accent-line);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-soft)}
+  .revision-panel header{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px}
+  .revision-panel header span{flex:1;color:var(--faint)}
+  .revision-panel header .close{width:22px;height:22px;padding:0;display:grid;place-items:center;font-size:11px}
+  /* Con su propio desplazamiento: un documento en uso acumula decenas de
+     revisiones y la lista entera empujaba el editor fuera de la pantalla. */
+  .revision-panel .revision-list{max-height:min(44vh,340px);overflow:auto}
   .revision-list{display:grid;gap:5px}.revision-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:var(--r-sm);background:var(--raise)}
   .revision-row>span{min-width:0;display:flex;flex-direction:column}.revision-row b{font-size:11px}.revision-row small{color:var(--faint);font-size:9px}.revision-row button{padding:5px 8px;font-size:10px}
   /* Mismo corte de palabra que la página publicada, sin depender de la regla de

@@ -634,9 +634,13 @@ func (s *Store) listStudioRevisions(id string, viewer *User) ([]StudioRevision, 
 	if _, err := s.getStudioDocument(id, viewer); err != nil {
 		return nil, err
 	}
+	// Con tope: un documento vivo acumula cientos de revisiones (cada guardado
+	// deja una) y devolverlas todas significaba leer y deserializar megas de
+	// instantaneas para pintar una lista que nadie recorre entera.
 	rows, err := s.db.Query(`
 		SELECT revision, editor_label, snapshot_json, created
-		FROM studio_revisions WHERE document_id=? ORDER BY revision DESC`, id)
+		FROM studio_revisions WHERE document_id=? ORDER BY revision DESC LIMIT ?`,
+		id, studioRevisionListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -650,7 +654,13 @@ func (s *Store) listStudioRevisions(id string, viewer *User) ([]StudioRevision, 
 		); err != nil {
 			return nil, err
 		}
-		var snapshot StudioDocument
+		// De la instantanea solo hacen falta dos campos. Deserializarla entera
+		// obligaba a construir todos los bloques y paginas de cada revision para
+		// luego tirarlos.
+		var snapshot struct {
+			Title  string `json:"title"`
+			Status string `json:"status"`
+		}
 		if err := json.Unmarshal([]byte(snapshotJSON), &snapshot); err != nil {
 			return nil, err
 		}

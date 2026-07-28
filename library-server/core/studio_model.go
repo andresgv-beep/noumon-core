@@ -25,6 +25,10 @@ const (
 	studioMaxPages       = 100
 	studioMaxInfoRows    = 40
 	studioMaxInfoCards   = 4
+	// Revisiones que se listan de una vez. Guardar deja una, asi que un documento
+	// en uso pasa de las trescientas: la lista es para volver atras hace un rato,
+	// no un archivo historico.
+	studioRevisionListLimit = 60
 )
 
 var (

@@ -166,7 +166,14 @@
   .identity strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;font-weight:650}
   .save-state{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px;white-space:nowrap}
   .save-state i{width:7px;height:7px;border-radius:var(--r-round);background:#6fd39a}
-  .save-state[data-state="saving"] i,.save-state[data-state="changes"] i,.save-state[data-state="publication"] i{background:#e9b86b}
+  /* Naranja sólo cuando hay algo sin asegurar: escribiendo o a medio guardar. */
+  .save-state[data-state="saving"] i,.save-state[data-state="changes"] i{background:#e9b86b}
+  /* "Publicación pendiente" NO es un aviso: el borrador está guardado y a salvo,
+     lo único que falta es publicar, y eso lo decide el autor. Con el mismo
+     naranja que "sin guardar" parecía que el guardado no había funcionado, sobre
+     todo en estrecho, donde el texto se oculta y el punto va solo. Anillo, no
+     relleno: hay algo esperando, no algo que vaya mal. */
+  .save-state[data-state="publication"] i{background:transparent;box-shadow:inset 0 0 0 2px var(--accent)}
   .save-state[data-state="error"]{color:#e77d88}.save-state[data-state="error"] i{background:#e77d88}
   .card-jump{position:relative;flex:none}
   .card-jump summary{height:34px;display:flex;align-items:center;gap:6px;padding:0 9px;border:1px solid var(--ui-edge);border-radius:var(--r-md);background:var(--ui-face);color:var(--muted);font-size:10.5px;cursor:pointer;list-style:none}
