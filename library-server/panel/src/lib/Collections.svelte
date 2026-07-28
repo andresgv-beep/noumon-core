@@ -310,7 +310,6 @@
       <b>{t('dup.title', { n: olderDuplicates.length })}</b>
       <small>{t('dup.desc')}</small>
     </div>
-    <div class="label">{t('dup.listLabel')}</div>
     <ul class="dup-list">
       {#each duplicateGroups as g (g.keep.id)}
         <li>
