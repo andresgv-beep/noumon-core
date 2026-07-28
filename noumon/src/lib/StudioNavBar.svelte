@@ -175,6 +175,8 @@
     <div class="context-tools" aria-label={t('studio.contextTools')}>
       {#each state.tools as tool (tool.key)}
         <button
+          class:active={tool.active}
+          aria-pressed={tool.active === undefined ? undefined : tool.active}
           title={tool.label}
           aria-label={tool.label}
           onclick={() => state.runTool?.(tool.key)}
@@ -240,6 +242,12 @@
   .context-tools{display:flex;align-items:center;gap:2px;padding:4px;border-radius:var(--r-md);background:var(--ui-face);border:1px solid var(--ui-edge)}
   .context-tools button{min-width:27px;height:26px;padding:0 6px;border-radius:var(--r-sm);color:var(--muted);font-size:11px}
   .context-tools button:hover{background:var(--raise);color:var(--ink)}
+  /* Negrita y cursiva son interruptores y hasta ahora no se veia si estaban
+     puestos. Fondo y filo de acento, no solo color de texto: un icono de un
+     caracter cambiando de gris a blanco no se distingue de estar por encima con
+     el raton. */
+  .context-tools button.active{background:var(--accent-weak);color:var(--accent-2);box-shadow:inset 0 0 0 1px var(--accent-line)}
+  .context-tools button.active:hover{color:var(--ink)}
   .text-context{display:flex;align-items:center;gap:2px;height:36px;padding:4px;border:1px solid var(--ui-edge);border-radius:var(--r-md);background:var(--ui-face)}
   .text-context>button{min-width:25px;height:26px;padding:0 5px;border-radius:var(--r-sm);color:var(--muted);font-size:12px}
   .text-context>button:hover,.text-context>button.active{background:var(--raise);color:var(--ink)}

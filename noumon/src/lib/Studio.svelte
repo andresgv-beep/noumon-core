@@ -55,6 +55,10 @@
   // documento: se enseña para que publicar no sea un salto a ciegas.
   let publishAccess = $state('');
   let publishMinAge = $state(0);
+  // Negrita y cursiva puestas en lo que hay seleccionado. Lo dice el navegador,
+  // no nosotros: ver el boton apagado con el texto en negrita es peor que no
+  // tener aviso.
+  const activeFormats = $state({ bold: false, italic: false });
   let creatingTemplate = $state('');
   let uploadingImage = $state(false);
   let showRevisions = $state(false);
@@ -246,6 +250,7 @@
     const selectionChange = () => {
       const snapshot = currentPageTextSelection();
       if (snapshot) rememberedPageTextSelection = snapshot;
+      refreshActiveFormats();
     };
     window.addEventListener('beforeunload', beforeUnload);
     window.addEventListener('keydown', keydown);
@@ -1030,9 +1035,39 @@
     touch();
   }
 
+  // Si negrita o cursiva estan puestas no lo decide una bandera nuestra: lo sabe
+  // el navegador, que es quien aplica el formato. Preguntarselo evita que el
+  // boton y el texto digan cosas distintas al mover el cursor.
+  function refreshActiveFormats() {
+    const doc = globalThis.document;
+    if (!doc?.queryCommandState || !currentEditableSelection()) {
+      activeFormats.bold = false;
+      activeFormats.italic = false;
+      return;
+    }
+    try {
+      activeFormats.bold = doc.queryCommandState('bold');
+      activeFormats.italic = doc.queryCommandState('italic');
+    } catch {
+      activeFormats.bold = false;
+      activeFormats.italic = false;
+    }
+  }
+
+  // ¿El cursor esta dentro de un bloque editable? Fuera de ahi la barra no manda
+  // sobre nada y marcar los botones seria mentir.
+  function currentEditableSelection() {
+    const selection = globalThis.getSelection?.();
+    if (!selection?.rangeCount) return false;
+    const node = selection.getRangeAt(0).startContainer;
+    const element = node?.nodeType === 1 ? node : node?.parentElement;
+    return !!element?.closest?.('[data-studio-block-id] [contenteditable="true"]');
+  }
+
   function runTool(key) {
     if (key === 'bold' || key === 'italic') {
       globalThis.document?.execCommand?.(key);
+      refreshActiveFormats();
       return;
     }
     if (key === 'image') {
@@ -1092,8 +1127,10 @@
   function shellTools() {
     if (surfaceOf() !== 'document') return [];
     return [
-      { key: 'bold', short: 'B', label: t('studio.tool.bold') },
-      { key: 'italic', short: 'I', label: t('studio.tool.italic') },
+      // active se marca solo donde significa algo: los demas insertan bloques y
+      // no tienen estado que encender.
+      { key: 'bold', short: 'B', label: t('studio.tool.bold'), active: activeFormats.bold },
+      { key: 'italic', short: 'I', label: t('studio.tool.italic'), active: activeFormats.italic },
       { key: 'pageLink', short: '↗', label: t('studio.pageLink') },
       { key: 'heading', short: 'H₁', label: t('studio.block.heading') },
       { key: 'list', short: '≔', label: t('studio.block.bulletList') },
