@@ -9,6 +9,7 @@
   import {
     saveStudioRecovery, loadStudioRecovery, clearStudioRecovery,
   } from './studioRecovery.js';
+  import { createStudioSaver, mergeStudioEnvelope } from './studioSaver.js';
   import {
     normalizeStudioDocument, studioDocumentBlocks, studioPage, studioPages,
     createStudioPage, renameStudioPage, moveStudioPage, removeStudioPage,
@@ -38,11 +39,10 @@
   // Senal de arrastre sobre el boton final: soltar ahi manda el bloque al final.
   let dropAtEnd = $state(false);
   let loading = $state(true);
-  let saving = $state(false);
-  let saved = $state(false);
-  let offline = $state(false);
+  // Las cuatro banderas del guardado van juntas porque se leen juntas y el motor
+  // las escribe todas: sueltas, cualquiera podía quedarse desparejada.
+  const saveStatus = $state({ dirty: false, saving: false, saved: false, offline: false });
   let error = $state('');
-  let dirty = $state(false);
   let canPublish = $state(false);
   let quotaBytes = $state(0);
   let creatingTemplate = $state('');
@@ -59,14 +59,6 @@
   let pageLinkMessage = $state('');
   let imageInput = $state(null);
   let imageTargetColumn = $state(null);
-  let saveTimer;
-  let savedTimer;
-  let recoveryTimer;
-  let retryTimer;
-  let savePromise = null;
-  let changeVersion = 0;
-  let retryAttempt = 0;
-  let studioActive = false;
   let openingSequence = 0;
   let linkSearchTimer;
   let linkAbort;
@@ -265,10 +257,9 @@
   }
 
   onMount(() => {
-    studioActive = true;
     load();
     const beforeUnload = (event) => {
-      if (!dirty) return;
+      if (!saveStatus.dirty) return;
       event.preventDefault();
       event.returnValue = '';
     };
@@ -279,9 +270,8 @@
       }
     };
     const online = () => {
-      if (!dirty || !offline) return;
-      retryAttempt = 0;
-      scheduleRetry(0);
+      if (!saveStatus.dirty || !saveStatus.offline) return;
+      saver.retryNow();
     };
     const selectionChange = () => {
       const snapshot = currentPageTextSelection();
@@ -292,10 +282,7 @@
     window.addEventListener('online', online);
     globalThis.document.addEventListener('selectionchange', selectionChange);
     return () => {
-      studioActive = false;
-      clearTimeout(saveTimer);
-      clearTimeout(savedTimer);
-      clearTimeout(retryTimer);
+      saver.stop();
       clearTimeout(linkSearchTimer);
       linkAbort?.abort();
       // La copia local se encola primero; si el flush al servidor termina bien,
@@ -405,9 +392,7 @@
       mode = 'editor';
       activeSection = defaultSection(doc);
       selectedBlockID = firstEditableBlockID(doc);
-      dirty = false;
-      offline = false;
-      changeVersion = 0;
+      saver.markClean();
       revisions = [];
       closeLinkPicker();
       if (showRevisions) loadRevisions(doc.id);
@@ -431,9 +416,7 @@
       mode = 'editor';
       activeSection = defaultSection(doc);
       selectedBlockID = firstEditableBlockID(doc);
-      dirty = false;
-      offline = false;
-      changeVersion = 0;
+      saver.markClean();
       revisions = [];
       closeLinkPicker();
       const recovery = await loadStudioRecovery(id);
@@ -442,61 +425,15 @@
         selected = normalizeDocument(recovery.document);
         selected.revision = doc.revision;
         selectInitialPage(selected);
-        dirty = true;
-        changeVersion++;
+        // El borrador recuperado ya está a salvo en disco: ensucia y pide
+        // guardado, pero no reescribe la copia local que se acaba de leer.
+        saver.markDirty();
         error = 'studio.recovered';
-        scheduleSave();
       }
       if (showRevisions) loadRevisions(id);
     } catch (e) {
       error = e.code || e.message;
     }
-  }
-
-  function touch() {
-    if (!selected || selected.status === 'archived') return;
-    dirty = true;
-    saved = false;
-    changeVersion++;
-    scheduleRecovery();
-    scheduleSave();
-  }
-
-  function scheduleRecovery(delay = 300) {
-    clearTimeout(recoveryTimer);
-    recoveryTimer = setTimeout(() => {
-      recoveryTimer = null;
-      if (selected && dirty) void saveStudioRecovery(selected);
-    }, delay);
-  }
-
-  async function persistRecoveryNow() {
-    clearTimeout(recoveryTimer);
-    recoveryTimer = null;
-    if (selected && dirty) await saveStudioRecovery(selected);
-  }
-
-  function scheduleSave(delay = 1200) {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveNow, delay);
-  }
-
-  function clearRetry() {
-    clearTimeout(retryTimer);
-    retryTimer = null;
-    retryAttempt = 0;
-  }
-
-  function scheduleRetry(delay) {
-    if (!studioActive || !dirty || !offline) return;
-    clearTimeout(retryTimer);
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-    const wait = delay ?? Math.min(30000, 1000 * (2 ** retryAttempt));
-    retryAttempt = Math.min(retryAttempt + 1, 5);
-    retryTimer = setTimeout(() => {
-      retryTimer = null;
-      if (studioActive && dirty && offline) void saveNow();
-    }, wait);
   }
 
   function documentInput(document) {
@@ -513,92 +450,23 @@
     };
   }
 
-  function mergeSavedEnvelope(document, updated) {
-    // El cuerpo y los metadatos que está editando el usuario deben conservar
-    // su identidad. Reemplazarlos por la respuesta del servidor desmonta los
-    // contenteditable, pierde el foco y puede devolver el lienzo hacia arriba.
-    for (const field of [
-      'revision',
-      'status',
-      'updated',
-      'publishedRevision',
-      'publicationKind',
-      'publicationTarget',
-      'published',
-      'coverAssetId',
-    ]) {
-      document[field] = updated[field];
-    }
-  }
-
-  async function saveNow() {
-    clearTimeout(saveTimer);
-    if (savePromise) {
-      const previousOK = await savePromise;
-      if (previousOK && dirty) return saveNow();
-      return previousOK && !dirty;
-    }
-    if (!selected || !dirty || selected.status === 'archived') return true;
-
-    const documentId = selected.id;
-    const version = changeVersion;
-    const input = JSON.parse(JSON.stringify(documentInput(selected)));
-    saving = true;
-    offline = false;
-    error = '';
-    savePromise = (async () => {
-      try {
-        const updated = normalizeDocument(await updateStudioDocument(documentId, input));
-        clearRetry();
-        offline = false;
-        documents = documents.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
-        if (showRevisions) loadRevisions(documentId);
-        if (selected?.id !== documentId) return true;
-
-        if (changeVersion === version) {
-          mergeSavedEnvelope(selected, updated);
-          dirty = false;
-          saved = true;
-          clearTimeout(recoveryTimer);
-          recoveryTimer = null;
-          await clearStudioRecovery(documentId);
-          clearTimeout(savedTimer);
-          savedTimer = setTimeout(() => { saved = false; }, 1800);
-        } else {
-          // El servidor ha guardado la instantánea enviada, pero el usuario
-          // siguió escribiendo durante la petición. Conservamos esos cambios y
-          // solo adelantamos su baseRevision para el siguiente guardado.
-          mergeSavedEnvelope(selected, updated);
-          dirty = true;
-          scheduleRecovery(0);
-          scheduleSave(0);
-        }
-        return true;
-      } catch (e) {
-        offline = !e.status;
-        if (e.status === 409) error = 'studio.conflict';
-        else if (offline) {
-          error = 'studio.offline';
-          await persistRecoveryNow();
-          scheduleRetry();
-        }
-        else error = e.code || e.message;
-        if (!offline) clearRetry();
-        return false;
-      } finally {
-        saving = false;
-        savePromise = null;
-      }
-    })();
-    return savePromise;
-  }
-
-  async function flushCurrent() {
-    clearTimeout(saveTimer);
-    if (savePromise && !await savePromise) return false;
-    if (!dirty) return true;
-    return saveNow();
-  }
+  // El rebote, los reintentos y las carreras entre teclear y responder viven en
+  // studioSaver.js, fuera del componente, para poder probarlos sin navegador.
+  const saver = createStudioSaver({
+    status: saveStatus,
+    getDocument: () => selected,
+    toInput: documentInput,
+    save: updateStudioDocument,
+    normalize: normalizeDocument,
+    saveRecovery: saveStudioRecovery,
+    clearRecovery: clearStudioRecovery,
+    onSaved: (updated) => {
+      documents = documents.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
+      if (showRevisions) loadRevisions(updated.id);
+    },
+    onError: (code) => { error = code; },
+  });
+  const { touch, saveNow, flushCurrent, flushUntilClean, persistRecoveryNow } = saver;
 
   async function loadRevisions(documentId = selected?.id) {
     if (!documentId) return;
@@ -637,17 +505,8 @@
       // Restaurar significa descartar deliberadamente el borrador local. No se
       // debe intentar validarlo ni guardarlo primero: precisamente una revisión
       // anterior es la vía de salida cuando el borrador actual está dañado.
-      clearTimeout(saveTimer);
-      clearTimeout(recoveryTimer);
-      saveTimer = null;
-      recoveryTimer = null;
-      clearRetry();
-      if (savePromise) await savePromise;
+      await saver.abandon();
       if (selected?.id !== documentId) return;
-      clearTimeout(saveTimer);
-      clearTimeout(recoveryTimer);
-      saveTimer = null;
-      recoveryTimer = null;
       error = '';
       const restored = normalizeDocument(await restoreStudioRevision(
         documentId, revision.revision, selected.revision,
@@ -657,12 +516,7 @@
       selectInitialPage(restored);
       documents = documents.map((item) =>
         item.id === restored.id ? { ...item, ...restored } : item);
-      dirty = false;
-      offline = false;
-      changeVersion = 0;
-      saved = true;
-      clearTimeout(savedTimer);
-      savedTimer = setTimeout(() => { saved = false; }, 1800);
+      saver.markClean({ flash: true });
       await clearStudioRecovery(documentId);
       await loadRevisions(documentId);
     } catch (e) {
@@ -1078,7 +932,7 @@
       selected.status = archived.status;
       selected.revision = archived.revision;
       documents = documents.map((item) => item.id === selected.id ? { ...item, ...archived } : item);
-      dirty = false;
+      saver.markClean();
       await clearStudioRecovery(selected.id);
       if (showRevisions) loadRevisions(selected.id);
     } catch (e) {
@@ -1104,19 +958,6 @@
     }
   }
 
-  // Guardar una vez no basta para dejar el documento limpio: si el usuario sigue
-  // escribiendo durante la petición, saveNow conserva esos cambios, vuelve a
-  // marcar dirty y programa otro guardado. Publicar en ese momento publica la
-  // revisión anterior, y el guardado que viene detrás sube la revisión: la
-  // publicación queda pendiente al instante, justo después de publicar.
-  async function flushUntilClean(attempts = 5) {
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      if (!await flushCurrent()) return false;
-      if (!dirty) return true;
-    }
-    return !dirty;
-  }
-
   async function publishSelected() {
     if (!selected || !canPublish) return;
     if (brokenPageLinks().length) {
@@ -1130,7 +971,7 @@
       // Sólo el sobre (revisión, estado, publicación). Reemplazar el documento
       // entero traería de vuelta el contenido del servidor sin normalizar y
       // desmontaría el lienzo que el usuario está editando.
-      mergeSavedEnvelope(selected, updated);
+      mergeStudioEnvelope(selected, updated);
       documents = documents.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
     } catch (e) {
       error = e.code || e.message;
@@ -1142,7 +983,7 @@
     if (!await flushUntilClean()) return;
     try {
       const updated = await unpublishStudioDocument(selected.id);
-      mergeSavedEnvelope(selected, updated);
+      mergeStudioEnvelope(selected, updated);
       documents = documents.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
     } catch (e) {
       error = e.code || e.message;
@@ -1354,12 +1195,12 @@
     const unresolvedPageLinks = brokenPageLinks();
     const publishDisabled = !selected || selected.status === 'archived' || unresolvedPageLinks.length > 0;
     const publicationPending = !!selected?.publishedRevision &&
-      (dirty || selected.revision !== selected.publishedRevision);
+      (saveStatus.dirty || selected.revision !== selected.publishedRevision);
     onShellChange?.({
       mode,
       title: selected?.title || t('studio.title'),
-      saveState: saving ? 'saving' : offline ? 'error' : dirty ? 'changes' : publicationPending ? 'publication' : 'saved',
-      saveLabel: saving ? t('studio.saving') : offline ? t('studio.offlineShort') : dirty ? t('studio.changesPending') : publicationPending ? t('studio.publicationPending') : t('studio.saved'),
+      saveState: saveStatus.saving ? 'saving' : saveStatus.offline ? 'error' : saveStatus.dirty ? 'changes' : publicationPending ? 'publication' : 'saved',
+      saveLabel: saveStatus.saving ? t('studio.saving') : saveStatus.offline ? t('studio.offlineShort') : saveStatus.dirty ? t('studio.changesPending') : publicationPending ? t('studio.publicationPending') : t('studio.saved'),
       tools: shellTools(),
       textControl: selectedTextControl(),
       canPublish,
