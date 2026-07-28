@@ -30,6 +30,15 @@
   function distanceLabel(meters) {
     return meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1).replace('.', ',')} km`;
   }
+  // Icono propio por categoría, con el alfiler de siempre para lo que no encaje
+  // en ninguna: mejor un alfiler que un hueco.
+  const POI_ICONS = new Set([
+    'restaurant', 'cafe', 'bar', 'fuel', 'shop', 'health',
+    'lodging', 'parking', 'bank', 'transport', 'culture', 'park',
+  ]);
+  function poiIcon(poi) {
+    return POI_ICONS.has(poi.categoryCode) ? `poi-${poi.categoryCode}` : 'pin';
+  }
   function categoryLabel(poi) {
     const key = `home.map.category.${poi.categoryCode || 'other'}`;
     const translated = t(key);
@@ -81,7 +90,7 @@
           <div class="poi-grid">
             {#each visiblePois as poi}
               <button class="poi" class:selected={selectedPoi === poi} onclick={() => selectedPoi = poi} aria-pressed={selectedPoi === poi}>
-                <span class="poi-icon"><Icon name="pin" size={15} /></span>
+                <span class="poi-icon"><Icon name={poiIcon(poi)} size={15} /></span>
                 <!-- El nombre se recorta con puntos suspensivos si no cabe; el
                  completo queda al alcance del raton en vez de perderse. -->
             <span class="poi-copy"><b title={poi.name}>{poi.name}</b><small>{categoryLabel(poi)} · {distanceLabel(poi.distance)}</small></span>

@@ -39,6 +39,22 @@
     map: '<path d="M9 4 3 6.2v13.8l6-2.2 6 2.2 6-2.2V6l-6 2.2z"/><path d="M9 4v13.8M15 6.2V20"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
     contrast: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 000-18z" fill="currentColor" stroke="none"/>',
+
+    // Categorías de los lugares cercanos del mapa. Con un solo alfiler para
+    // todas, una lista con cuatro sitios del mismo nombre no se podía distinguir
+    // de un vistazo; el icono dice de qué es cada uno antes de leer la letra.
+    'poi-restaurant': '<path d="M6 3v6a2.5 2.5 0 005 0V3"/><path d="M8.5 11v10"/><path d="M17.5 3c-1.3 1.4-2 3-2 5s.8 3 2 3v10"/>',
+    'poi-cafe': '<path d="M4 8h12v5a5 5 0 01-5 5H9a5 5 0 01-5-5z"/><path d="M16 9h2a2.5 2.5 0 010 5h-2"/><path d="M4 21h12"/>',
+    'poi-bar': '<path d="M4 4h16l-8 8z"/><path d="M12 12v7"/><path d="M8 21h8"/>',
+    'poi-fuel': '<path d="M4 21V5a2 2 0 012-2h5a2 2 0 012 2v16"/><path d="M3 21h12M6 8h5"/><path d="M13 10h3a2 2 0 012 2v5a1.5 1.5 0 003 0v-8l-2-2"/>',
+    'poi-shop': '<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 016 0v2"/>',
+    'poi-health': '<path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7z"/>',
+    'poi-lodging': '<path d="M3 8v11M3 13h18v6"/><circle cx="7.5" cy="10.5" r="1.8"/><path d="M11 13V9h7a3 3 0 013 3v1"/>',
+    'poi-parking': '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9.5 17V8h3a2.5 2.5 0 010 5h-3"/>',
+    'poi-bank': '<path d="M3 10l9-6 9 6"/><path d="M5 10v8M10 10v8M14 10v8M19 10v8"/><path d="M3 21h18"/>',
+    'poi-transport': '<rect x="4" y="4" width="16" height="12" rx="2"/><path d="M4 11h16"/><circle cx="8" cy="19" r="1.4"/><circle cx="16" cy="19" r="1.4"/>',
+    'poi-culture': '<path d="M3 8a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2a2 2 0 000-4z"/><path d="M14 6v12"/>',
+    'poi-park': '<path d="M12 21v-4"/><path d="M7 12l5-8 5 8z"/><path d="M8.5 17l3.5-5 3.5 5z"/>',
   };
 </script>
 

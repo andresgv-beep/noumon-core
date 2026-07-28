@@ -143,6 +143,15 @@ func (m *mapManager) nearby(ctx context.Context, lat, lon float64, mapFile strin
 		}
 	}
 	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Distance < hits[j].Distance })
+	// Un mismo sitio suele estar en el mapa varias veces: "Creu Gran" son la
+	// plaza y sus tres paradas de bus, cada una un punto propio de OSM a menos de
+	// 200 m. Todas son dato correcto, pero en una lista de diez sitios cercanos
+	// llenaban media lista con el mismo nombre.
+	//
+	// Se agrupa por nombre y categoria, y se conserva el mas cercano. DESPUES de
+	// ordenar, no durante la recogida: las teselas no se recorren por distancia,
+	// asi que deduplicando antes se habria quedado el primero que apareciera.
+	hits = dedupeNearbyByName(hits)
 	if len(hits) > 18 {
 		hits = hits[:18]
 	}
@@ -226,4 +235,22 @@ func nearbyCategoryInfo(kind string) (string, string) {
 	default:
 		return "", ""
 	}
+}
+
+// Espera la lista YA ordenada por distancia y conserva el primero de cada
+// nombre+categoria, que asi es el mas cercano. La categoria entra en la clave
+// porque el mismo nombre en otra categoria si es otro sitio: la plaza "Creu
+// Gran" y la parada "Creu Gran" son cosas distintas y las dos interesan.
+func dedupeNearbyByName(hits []nearbyHit) []nearbyHit {
+	out := hits[:0]
+	seen := make(map[string]bool, len(hits))
+	for _, hit := range hits {
+		key := strings.ToLower(hit.Name) + "|" + hit.CategoryCode
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, hit)
+	}
+	return out
 }
