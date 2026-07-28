@@ -199,12 +199,13 @@
   /* La lista vuelve a una columna antes que el resto: medido, a 1010px de ancho
      las dos columnas quedan en 185px y nombres como "Mad Mad Vegan - Barcelona"
      se cortan. La banda de dos columnas sigue teniendo sentido hasta 980. */
+  /* Un solo corte para las dos cosas, y va aquí por lo que se midió: entre 980 y
+     1200 la banda iba a dos columnas pero la lista seguía en una, así que la
+     columna de texto se estiraba con diez filas, el mapa se quedaba en 453x340 y
+     al lado sobraban 461px de vacío. Encima de 1200, la lista pasa a dos columnas
+     y ese hueco cae a 126. Así que las dos columnas empiezan donde la lista puede
+     acompañarlas, no antes. */
   @media(max-width:1200px){
-    .poi-grid{grid-auto-flow:row;grid-template-rows:none;grid-template-columns:minmax(0,1fr)}
-  }
-  /* Dos columnas solo cuando hay sitio: por debajo de esto quedan dos columnas
-     flacas, el mapa se queda diminuto y los nombres de los sitios se parten. */
-  @media(max-width:980px){
     /* Apilado, y el mapa primero: es el ancla visual, y detrás de una lista de
        seis sitios habría que buscarlo. */
     .geo{width:100%;grid-template-columns:1fr;gap:18px}

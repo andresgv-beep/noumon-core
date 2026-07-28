@@ -70,6 +70,14 @@
   .url:focus{color:var(--ink)}
   .mini{width:26px;height:26px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--muted);flex:none}
   .mini.starred{color:var(--accent-2)}
+  /* En pantalla estrecha el botón del índice se queda con su icono. Lleva
+     flex:none y con la palabra al lado no cabía en la fila: se salía por la
+     derecha y sacaba barra horizontal en TODA la aplicación, no solo aquí.
+     Mismo corte que la barra de Studio, que ya esconde ahí sus etiquetas. */
+  @media(max-width:700px){
+    .idxbtn{padding:0 9px}
+    .idxbtn span{display:none}
+  }
   .mini.starred :global(.ic){fill:var(--accent-2);stroke:var(--accent-2)}
   .mini.noted{color:var(--accent-2)}
   .mini.noted :global(.ic){fill:color-mix(in srgb,var(--accent-2) 22%,transparent)}
