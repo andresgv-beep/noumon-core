@@ -143,7 +143,9 @@
     <button
       class="action primary"
       disabled={!state.canPublish || state.publishDisabled}
-      title={state.publishDisabled ? (state.publishDisabledReason || t('studio.publishUnavailable')) : ''}
+      title={state.publishDisabled
+        ? (state.publishDisabledReason || t('studio.publishUnavailable'))
+        : (state.publishHint || '')}
       onclick={() => state.publish?.()}
     >{state.publishLabel || t('studio.publish')}</button>
   {/if}

@@ -51,6 +51,10 @@
   let error = $state('');
   let canPublish = $state(false);
   let quotaBytes = $state(0);
+  // Quien vera lo publicado. Es la politica de la coleccion, del servidor, no del
+  // documento: se enseña para que publicar no sea un salto a ciegas.
+  let publishAccess = $state('');
+  let publishMinAge = $state(0);
   let creatingTemplate = $state('');
   let uploadingImage = $state(false);
   let showRevisions = $state(false);
@@ -273,6 +277,8 @@
       const capabilities = await getStudioCapabilities();
       canPublish = !!capabilities.canPublish;
       quotaBytes = capabilities.quotaBytes || 0;
+      publishAccess = capabilities.publishAccess || '';
+      publishMinAge = capabilities.publishMinAge || 0;
       documents = await listStudioDocuments('all');
     } catch (e) {
       error = e.code || e.message;
@@ -1054,6 +1060,16 @@
     showRevisions = false;
   }
 
+  // Quien vera lo publicado, en una frase. La edad minima solo se nombra cuando
+  // existe: decir "sin edad minima" seria ruido en el caso normal.
+  function publishScopeLabel() {
+    const age = publishMinAge > 0 ? t('studio.publishScopeAge', { age: publishMinAge }) : '';
+    if (publishAccess === 'open') return t('studio.publishScopeOpen') + age;
+    if (publishAccess === 'login') return t('studio.publishScopeAccounts') + age;
+    if (publishAccess === 'blocked') return t('studio.publishScopeBlocked');
+    return t('studio.publishScopeUnknown');
+  }
+
   function formatQuota(bytes) {
     if (!bytes) return t('studio.quotaUnknown');
     const gb = bytes / (1024 ** 3);
@@ -1111,6 +1127,11 @@
         ? t('studio.pageLinkBrokenPublish')
         : t('studio.publishUnavailable'),
       publishLabel: selected?.publishedRevision ? t('studio.updatePublication') : t('studio.publish'),
+      // El boton no cabe en una frase, pero publicar no puede ser un salto a
+      // ciegas: el destino y quien lo vera van en el pie de herramientas, y la
+      // frase entera en el propio boton al pasar por encima.
+      publishScope: publishScopeLabel(),
+      publishHint: t('studio.publishScopeHint', { scope: publishScopeLabel() }),
       documents,
       selected,
       activePageID,

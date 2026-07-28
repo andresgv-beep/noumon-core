@@ -18,6 +18,12 @@ type StudioCapabilities struct {
 	QuotaBytes       int64 `json:"quotaBytes"`
 	SchemaVersion    int   `json:"schemaVersion"`
 	MaxDocumentBytes int   `json:"maxDocumentBytes"`
+	// Quien vera lo que se publique: "open" cualquiera que entre, "login" solo
+	// cuentas, "blocked" nadie. Es la politica de la coleccion Documentos, no del
+	// documento, y el editor la enseña junto al boton para que publicar no sea un
+	// salto a ciegas. Publicar no manda nada fuera de esta biblioteca.
+	PublishAccess string `json:"publishAccess,omitempty"`
+	PublishMinAge int    `json:"publishMinAge,omitempty"`
 }
 
 type studioTemplateDescriptor struct {
@@ -32,6 +38,23 @@ func (s *Server) studioCapabilities(user *User) StudioCapabilities {
 		Available: true, SchemaVersion: studioSchemaVersion,
 		MaxDocumentBytes: studioMaxRequest, QuotaBytes: 2 << 30,
 	}
+	// La politica de la coleccion Documentos no depende de quien pregunta: es la
+	// misma para todos y el autor necesita verla ANTES de publicar. Al publicar se
+	// crea como "login" si aun no existia, asi que eso es lo que se anuncia
+	// mientras no haya nada publicado.
+	access := s.collectionAccess(studioDocumentsCollectionID)
+	if access.Access == "" || access.Access == "blocked" {
+		var exists int
+		_ = s.store.db.QueryRow(
+			`SELECT COUNT(*) FROM collection_access WHERE collection_id=?`,
+			studioDocumentsCollectionID).Scan(&exists)
+		if exists == 0 {
+			access.Access = "login"
+			access.MinAge = 0
+		}
+	}
+	caps.PublishAccess = access.Access
+	caps.PublishMinAge = access.MinAge
 	if user == nil {
 		return caps
 	}

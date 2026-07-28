@@ -74,6 +74,14 @@
       </button>
       <div class="publication-summary">
         <span><Icon name="storage" size={14} />{state.destination || t('studio.destinationDocuments')}</span>
+        <!-- Publicar no manda nada fuera de esta biblioteca, pero el boton solo
+             dice "Publicar" y ahi caben varias respuestas. Quien lo vera se dice
+             donde ya se dice el destino, que es donde se mira esa pregunta. -->
+        {#if state.publishScope}
+          <span class="scope" title={state.publishHint || ''}>
+            <Icon name="user" size={14} />{state.publishScope}
+          </span>
+        {/if}
         <span><Icon name="download" size={14} />{state.quotaLabel || t('studio.quotaUnknown')}</span>
       </div>
       <div class="document-actions">
@@ -118,6 +126,10 @@
   .side-footer{flex:none;display:grid;gap:4px;padding-top:8px;border-top:1px solid var(--border)}
   .publication-summary{display:grid;grid-template-columns:1fr 1fr;gap:4px}
   .publication-summary span{min-width:0;display:flex;align-items:center;gap:5px;padding:4px 6px;color:var(--faint);font-size:8.5px}
+  /* Quién verá lo publicado es una frase, no un dato suelto: ocupa la fila entera
+     y se lee un punto más grande que el destino y la cuota, porque es lo que hay
+     que entender antes de pulsar Publicar. */
+  .publication-summary .scope{grid-column:1/-1;color:var(--muted);font-size:10px}
   .document-actions{display:flex;align-items:center;gap:3px;flex-wrap:wrap}
   .archive,.purge{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-md);color:#df7474;font-size:11px}
   .purge{color:#f06f6f}
