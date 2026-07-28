@@ -19,6 +19,9 @@ const ENVELOPE_FIELDS = [
   'publicationTarget',
   'published',
   'coverAssetId',
+  // Si esto no viaja en el sobre, tras guardar se sigue viendo el estado de
+  // publicación de antes del guardado, y el aviso llega siempre un paso tarde.
+  'publicationOutdated',
 ];
 
 // Copia sobre el documento SOLO el sobre, mutándolo en el sitio. Reemplazar el

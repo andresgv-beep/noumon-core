@@ -118,6 +118,23 @@ test('solo copia el sobre y deja intacto el cuerpo que el usuario tiene delante'
   assert.equal(document.content.pages[0].infoCards, cards);
 });
 
+test('el sobre trae el estado de publicación, que lo decide el servidor', async () => {
+  const { saver, state } = harness({
+    save: async (id, input) => serverReply(input.baseRevision + 1, {
+      publishedRevision: 3,
+      publicationOutdated: true,
+    }),
+  });
+
+  saver.touch();
+  await saver.saveNow();
+
+  // El cliente no puede deducirlo restando revisiones: guardar sube la revisión
+  // aunque no cambie nada. Si no viaja en el sobre, el aviso llega tarde.
+  assert.equal(state.document.publicationOutdated, true);
+  assert.equal(state.document.publishedRevision, 3);
+});
+
 test('no lanza dos peticiones a la vez: encadena y reenvía con la revisión nueva', async () => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });

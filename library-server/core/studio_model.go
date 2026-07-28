@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -189,9 +190,19 @@ type StudioDocument struct {
 	PublishedRevision *int                 `json:"publishedRevision,omitempty"`
 	PublicationKind   string               `json:"publicationKind,omitempty"`
 	PublicationTarget string               `json:"publicationTarget,omitempty"`
-	Created           int64                `json:"created"`
-	Updated           int64                `json:"updated"`
-	Published         *int64               `json:"published,omitempty"`
+	// Lo que se esta sirviendo publicado no es lo que el autor tiene delante. Lo
+	// calcula el servidor comparando huellas de contenido; el cliente no puede
+	// deducirlo de las revisiones sin equivocarse.
+	PublicationOutdated bool `json:"publicationOutdated,omitempty"`
+	// Huellas de lo publicable, derivadas de sus columnas. Sin exportar a
+	// proposito: no viajan al cliente ni entran en las instantaneas; solo sirven
+	// para recalcular PublicationOutdated cuando el documento se muta en memoria,
+	// que es lo que se devuelve tras guardar o publicar.
+	contentHash          string
+	publishedContentHash string
+	Created              int64  `json:"created"`
+	Updated              int64  `json:"updated"`
+	Published            *int64 `json:"published,omitempty"`
 }
 
 type studioValidatedInput struct {
@@ -935,4 +946,45 @@ func studioPortableSnapshot(doc StudioDocument) StudioPortableSnapshot {
 		Metadata:       append(json.RawMessage(nil), doc.Metadata...),
 		Content:        append(json.RawMessage(nil), doc.Content...),
 	}
+}
+
+// Huella del contenido de un documento. Sirve para responder a la unica pregunta
+// que importa al publicar: lo que hay publicado, ¿es lo que el autor tiene
+// delante? Comparar numeros de revision no vale, porque cada guardado sube uno
+// aunque no cambie nada: un documento publicado quedaba "pendiente" para siempre
+// en cuanto tocabas una coma, y seguia pendiente aunque deshicieras.
+//
+// Se normaliza antes de resumir: el cliente serializa el contenido en cada
+// guardado y el orden de las claves puede variar sin que cambie nada real.
+// Deserializar a map y volver a serializar ordena las claves (encoding/json lo
+// hace por su cuenta con map[string]any), asi que dos contenidos equivalentes
+// dan la misma huella.
+// Cubre todo lo que llega al lector, no solo el cuerpo: el titulo, la entradilla
+// y las etiquetas no se pintan sobre la pagina pero SI identifican la
+// publicacion en la coleccion y en el buscador, asi que cambiarlos deja
+// desactualizado lo publicado igual que cambiar un parrafo.
+func studioPublishableFingerprint(doc StudioDocument) string {
+	var content any
+	if len(doc.Content) > 0 {
+		if err := json.Unmarshal(doc.Content, &content); err != nil {
+			// Contenido ilegible: entra tal cual antes que fingir que no hay nada.
+			content = string(doc.Content)
+		}
+	}
+	payload := map[string]any{
+		"title":          doc.Title,
+		"summary":        doc.Summary,
+		"language":       doc.Language,
+		"authorLabel":    doc.AuthorLabel,
+		"tags":           doc.Tags,
+		"coverAssetId":   doc.CoverAssetID,
+		"classification": doc.Classification,
+		"content":        content,
+	}
+	normalized, err := json.Marshal(payload)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(normalized)
+	return hex.EncodeToString(sum[:])
 }

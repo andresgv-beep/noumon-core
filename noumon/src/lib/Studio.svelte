@@ -1093,8 +1093,11 @@
     const surface = surfaceOf();
     const unresolvedPageLinks = brokenPageLinks();
     const publishDisabled = !selected || selected.status === 'archived' || unresolvedPageLinks.length > 0;
+    // Lo decide el servidor comparando el contenido publicado con el actual. Aquí
+    // se restaban revisiones, y como cada guardado sube una, un documento
+    // publicado quedaba pendiente para siempre en cuanto lo tocabas.
     const publicationPending = !!selected?.publishedRevision &&
-      (saveStatus.dirty || selected.revision !== selected.publishedRevision);
+      (saveStatus.dirty || selected.publicationOutdated === true);
     onShellChange?.({
       mode,
       title: selected?.title || t('studio.title'),

@@ -13,7 +13,8 @@ const studioDocumentColumns = `
 	id, owner_user_id, template_key, status, title, summary, language,
 	author_label, tags_json, classification_json, metadata_json, content_json,
 	cover_asset_id, revision, published_revision, publication_kind,
-	publication_target, created, updated, published`
+	publication_target, created, updated, published,
+	content_hash, published_content_hash`
 
 type StudioDocumentSummary struct {
 	ID                string               `json:"id"`
@@ -47,11 +48,13 @@ func scanStudioDocument(row studioScanner) (StudioDocument, error) {
 	var pubRevision sql.NullInt64
 	var published sql.NullInt64
 	var tagsJSON, classificationJSON, metadataJSON, contentJSON string
+	var contentHash, publishedContentHash string
 	err := row.Scan(
 		&doc.ID, &owner, &doc.TemplateKey, &doc.Status, &doc.Title, &doc.Summary,
 		&doc.Language, &doc.AuthorLabel, &tagsJSON, &classificationJSON,
 		&metadataJSON, &contentJSON, &cover, &doc.Revision, &pubRevision,
 		&pubKind, &pubTarget, &doc.Created, &doc.Updated, &published,
+		&contentHash, &publishedContentHash,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -80,6 +83,12 @@ func scanStudioDocument(row studioScanner) (StudioDocument, error) {
 		v := published.Int64
 		doc.Published = &v
 	}
+	// Lo publicado ya no es lo que hay delante. Lo decide el contenido, no la
+	// revision: guardar sube la revision aunque no cambie una letra, y con eso un
+	// documento publicado quedaba "pendiente" para siempre.
+	doc.contentHash = contentHash
+	doc.publishedContentHash = publishedContentHash
+	doc.PublicationOutdated = pubRevision.Valid && contentHash != publishedContentHash
 	if err := json.Unmarshal([]byte(tagsJSON), &doc.Tags); err != nil {
 		return doc, fmt.Errorf("studio tags: %w", err)
 	}
@@ -158,12 +167,12 @@ func (s *Store) createStudioDocument(owner *User, valid studioValidatedInput) (S
 		INSERT INTO studio_documents (
 			id, owner_user_id, template_key, status, title, summary, language,
 			author_label, tags_json, classification_json, metadata_json,
-			content_json, plain_text, revision, created, updated
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			content_json, plain_text, revision, created, updated, content_hash
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		doc.ID, owner.ID, doc.TemplateKey, doc.Status, doc.Title, doc.Summary,
 		doc.Language, doc.AuthorLabel, string(tagsJSON), string(classificationJSON),
 		string(doc.Metadata), string(doc.Content), valid.PlainText, doc.Revision,
-		doc.Created, doc.Updated)
+		doc.Created, doc.Updated, studioPublishableFingerprint(doc))
 	if err != nil {
 		return StudioDocument{}, err
 	}
@@ -490,6 +499,12 @@ func (s *Store) updateStudioDocument(id string, editor *User, valid studioValida
 	current.Content = valid.Input.Content
 	current.Revision = nextRevision
 	current.Updated = now
+	// La huella se recalcula aqui y no releyendo la fila, porque lo que se
+	// devuelve al cliente es esta copia en memoria: si no, el estado de
+	// publicacion seria el de antes de guardar y llegaria siempre tarde.
+	current.contentHash = studioPublishableFingerprint(current)
+	current.PublicationOutdated = current.PublishedRevision != nil &&
+		current.contentHash != current.publishedContentHash
 	snapshot, err := json.Marshal(current)
 	if err != nil {
 		return StudioDocument{}, 0, err
@@ -506,12 +521,12 @@ func (s *Store) updateStudioDocument(id string, editor *User, valid studioValida
 		UPDATE studio_documents SET
 			template_key=?, title=?, summary=?, language=?, author_label=?,
 			tags_json=?, classification_json=?, metadata_json=?, content_json=?,
-			plain_text=?, revision=?, updated=?
+			plain_text=?, revision=?, updated=?, content_hash=?
 		WHERE id=? AND revision=?`,
 		current.TemplateKey, current.Title, current.Summary, current.Language,
 		current.AuthorLabel, string(tagsJSON), string(classificationJSON),
 		string(current.Metadata), string(current.Content), valid.PlainText,
-		nextRevision, now, id, valid.Input.BaseRevision)
+		nextRevision, now, current.contentHash, id, valid.Input.BaseRevision)
 	if err != nil {
 		return StudioDocument{}, 0, err
 	}
@@ -736,6 +751,15 @@ func (s *Store) restoreStudioRevision(
 		current.PublicationTarget = ""
 		current.Published = nil
 	}
+	// La huella se recalcula aqui y no al releer, porque lo que se devuelve al
+	// cliente es esta copia en memoria: si no, el estado de publicacion seria el
+	// de antes de guardar y el aviso llegaria siempre un guardado tarde.
+	current.contentHash = studioPublishableFingerprint(current)
+	if wasArchived {
+		current.publishedContentHash = ""
+	}
+	current.PublicationOutdated = current.PublishedRevision != nil &&
+		current.contentHash != current.publishedContentHash
 	newSnapshot, err := json.Marshal(current)
 	if err != nil {
 		return StudioDocument{}, baseRevision, err
@@ -765,6 +789,7 @@ func (s *Store) restoreStudioRevision(
 			tags_json=?, classification_json=?, metadata_json=?, content_json=?,
 			plain_text=?, published_revision=?, publication_kind=?,
 			publication_target=?, published=?, revision=?, updated=?,
+			content_hash=?,
 			published_plain_text=CASE WHEN ?=1
 				THEN '' ELSE published_plain_text END
 		WHERE id=? AND revision=?`,
@@ -773,6 +798,7 @@ func (s *Store) restoreStudioRevision(
 		string(classificationJSON), string(current.Metadata), string(current.Content),
 		valid.PlainText, publishedRevision, current.PublicationKind,
 		current.PublicationTarget, published, current.Revision, now,
+		current.contentHash,
 		boolInt(wasArchived), id, baseRevision)
 	if err != nil {
 		return StudioDocument{}, baseRevision, err
@@ -804,4 +830,88 @@ func (s *Store) restoreStudioRevision(
 		return StudioDocument{}, baseRevision, err
 	}
 	return current, current.Revision, nil
+}
+
+// Rellena las huellas de contenido de lo que ya estaba en la base al actualizar.
+// La actual sale del propio contenido; la publicada, del snapshot de la revision
+// que se publico, que es lo que de verdad esta sirviendose. Sin esto, todo lo
+// anterior a la migracion apareceria como "pendiente de publicar" nada mas
+// arrancar, que es justo el fallo que esto viene a quitar.
+func (s *Store) backfillStudioContentHashes() error {
+	type pending struct {
+		id            string
+		snapshot      sql.NullString
+		needContent   bool
+		needPublished bool
+	}
+	rows, err := s.db.Query(`
+		SELECT d.id, r.snapshot_json,
+		       d.content_hash='', d.published_content_hash='' AND d.published_revision IS NOT NULL
+		FROM studio_documents d
+		LEFT JOIN studio_revisions r
+		  ON r.document_id=d.id AND r.revision=d.published_revision
+		WHERE d.content_hash='' OR (d.published_content_hash='' AND d.published_revision IS NOT NULL)
+		ORDER BY d.id`)
+	if err != nil {
+		return err
+	}
+	var items []pending
+	for rows.Next() {
+		var item pending
+		if err := rows.Scan(
+			&item.id, &item.snapshot, &item.needContent, &item.needPublished,
+		); err != nil {
+			rows.Close()
+			return err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, item := range items {
+		if item.needContent {
+			// La huella se saca del documento entero, con la misma funcion que usan
+			// guardar y publicar: leerlo por columnas sueltas aqui acabaria dando una
+			// huella distinta y todo saldria como pendiente.
+			current, err := scanStudioDocument(
+				tx.QueryRow(`SELECT `+studioDocumentColumns+` FROM studio_documents WHERE id=?`, item.id))
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(
+				`UPDATE studio_documents SET content_hash=? WHERE id=?`,
+				studioPublishableFingerprint(current), item.id,
+			); err != nil {
+				return err
+			}
+		}
+		if !item.needPublished || !item.snapshot.Valid {
+			continue
+		}
+		// El snapshot es un documento entero, tal y como se publico.
+		var snapshot StudioDocument
+		if err := json.Unmarshal([]byte(item.snapshot.String), &snapshot); err != nil {
+			continue
+		}
+		if _, err := tx.Exec(
+			`UPDATE studio_documents SET published_content_hash=? WHERE id=?`,
+			studioPublishableFingerprint(snapshot), item.id,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

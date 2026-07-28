@@ -257,7 +257,22 @@ func openStore(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	// Huellas del contenido: la actual y la que se publico. Comparandolas se sabe
+	// si lo publicado sigue siendo lo que el autor tiene delante, que es lo que
+	// los numeros de revision no podian decir.
+	if err := st.ensureColumn("studio_documents", "content_hash", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := st.ensureColumn("studio_documents", "published_content_hash", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := st.migrateStudioPublishedFTS(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := st.backfillStudioContentHashes(); err != nil {
 		db.Close()
 		return nil, err
 	}

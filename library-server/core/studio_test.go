@@ -2531,3 +2531,87 @@ func TestBusquedaOcultaElNombreDeUnaPaginaUnica(t *testing.T) {
 		t.Fatalf("buscar por el nombre de la pagina: hits=%#v err=%v", named, err)
 	}
 }
+
+// El estado "publicacion pendiente" se calcula por contenido, no por revision.
+// Antes se comparaban numeros de revision y, como cada guardado sube uno, un
+// documento publicado quedaba pendiente para siempre en cuanto lo tocabas: aunque
+// guardaras sin cambiar nada, y aunque deshicieras hasta dejarlo como estaba.
+func TestStudioPublicationOutdatedFollowsContentNotRevision(t *testing.T) {
+	s := testAuthServer(t, "")
+	h := studioTestMux(s)
+	cookie := sessionFor(t, s, "autora-pendiente", 30, false)
+	grantStudio(t, s, "autora-pendiente", true)
+
+	created := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodPost,
+		"/api/studio/documents", validStudioDocumentBody("Renacimiento", 0), cookie))
+	if created.PublicationOutdated {
+		t.Fatalf("un borrador sin publicar no puede estar desactualizado")
+	}
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/publish", "", cookie); rec.Code != http.StatusOK {
+		t.Fatalf("publicar: %d %s", rec.Code, rec.Body.String())
+	}
+
+	published := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodGet,
+		"/api/studio/documents/"+created.ID, "", cookie))
+	if published.PublicationOutdated {
+		t.Fatalf("recien publicado no puede estar desactualizado")
+	}
+
+	// Guardar sin cambiar el contenido: sube la revision, pero no hay nada nuevo
+	// que publicar.
+	same := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodPut,
+		"/api/studio/documents/"+created.ID,
+		validStudioDocumentBody("Renacimiento", published.Revision), cookie))
+	if same.Revision <= published.Revision {
+		t.Fatalf("el guardado deberia subir la revision: %d -> %d", published.Revision, same.Revision)
+	}
+	if same.PublicationOutdated {
+		t.Fatalf("guardar sin tocar el contenido no deja nada pendiente de publicar")
+	}
+
+	// Cambiar el contenido de verdad.
+	changed := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodPut,
+		"/api/studio/documents/"+created.ID,
+		validStudioDocumentBody("Renacimiento revisado", same.Revision), cookie))
+	if !changed.PublicationOutdated {
+		t.Fatalf("con el contenido cambiado, lo publicado ya no es lo que hay")
+	}
+
+	// Deshacer hasta dejarlo como se publico: vuelve a estar al dia sin republicar.
+	restored := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodPut,
+		"/api/studio/documents/"+created.ID,
+		validStudioDocumentBody("Renacimiento", changed.Revision), cookie))
+	if restored.PublicationOutdated {
+		t.Fatalf("deshecho el cambio, no queda nada pendiente")
+	}
+
+	// Y republicar tambien lo pone al dia.
+	outdated := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodPut,
+		"/api/studio/documents/"+created.ID,
+		validStudioDocumentBody("Otro titulo distinto", restored.Revision), cookie))
+	if !outdated.PublicationOutdated {
+		t.Fatalf("preparacion: deberia quedar pendiente")
+	}
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/publish", "", cookie); rec.Code != http.StatusOK {
+		t.Fatalf("republicar: %d %s", rec.Code, rec.Body.String())
+	}
+	republished := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodGet,
+		"/api/studio/documents/"+created.ID, "", cookie))
+	if republished.PublicationOutdated {
+		t.Fatalf("republicado deberia estar al dia")
+	}
+
+	// Retirar la publicacion borra la huella publicada: sin nada publicado no
+	// puede haber nada desactualizado.
+	if rec := studioRequest(h, http.MethodPost,
+		"/api/studio/documents/"+created.ID+"/unpublish", "", cookie); rec.Code != http.StatusOK {
+		t.Fatalf("retirar publicacion: %d %s", rec.Code, rec.Body.String())
+	}
+	withdrawn := decodeStudioDocumentResponse(t, studioRequest(h, http.MethodGet,
+		"/api/studio/documents/"+created.ID, "", cookie))
+	if withdrawn.PublicationOutdated {
+		t.Fatalf("retirado no puede estar desactualizado")
+	}
+}

@@ -57,7 +57,8 @@ func (s *Store) publishStudioDocument(id string, editor *User) (StudioDocument, 
 		UPDATE studio_documents SET
 			status='published', published_revision=revision,
 			publication_kind='documents', publication_target=?,
-			published_plain_text=?, published=?, updated=?
+			published_plain_text=?, published=?, updated=?,
+			published_content_hash=content_hash
 		WHERE id=? AND revision=?`,
 		studioDocumentsCollectionID, valid.PlainText, now, now, id, current.Revision)
 	if err != nil {
@@ -99,6 +100,9 @@ func (s *Store) publishStudioDocument(id string, editor *User) (StudioDocument, 
 	current.PublicationTarget = studioDocumentsCollectionID
 	current.Published = &now
 	current.Updated = now
+	// Acaba de publicarse esto mismo: lo servido y lo que hay delante coinciden.
+	current.publishedContentHash = current.contentHash
+	current.PublicationOutdated = false
 	return current, nil
 }
 
@@ -123,7 +127,8 @@ func (s *Store) unpublishStudioDocument(id string, editor *User) (StudioDocument
 	result, err := tx.Exec(`
 		UPDATE studio_documents SET
 			status='draft', published_revision=NULL, publication_kind=NULL,
-			publication_target=NULL, published_plain_text='', published=NULL, updated=?
+			publication_target=NULL, published_plain_text='', published=NULL,
+			published_content_hash='', updated=?
 		WHERE id=? AND revision=?`, now, id, current.Revision)
 	if err != nil {
 		return StudioDocument{}, err
@@ -146,6 +151,9 @@ func (s *Store) unpublishStudioDocument(id string, editor *User) (StudioDocument
 	current.PublicationTarget = ""
 	current.Published = nil
 	current.Updated = now
+	// Sin nada publicado no puede haber nada desactualizado.
+	current.publishedContentHash = ""
+	current.PublicationOutdated = false
 	return current, nil
 }
 
