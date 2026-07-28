@@ -230,7 +230,6 @@
   .pstage::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--a-accent, #e0a867) 62%, transparent); background-clip: padding-box; }
   .pstage::-webkit-scrollbar-corner { background: transparent; }
   .pstage canvas { display: block; box-shadow: 0 18px 46px rgba(0,0,0,.5); background: #fff; border-radius: 2px; }
-  .pstage canvas.hidden { display: none; }
   .pstate { position: absolute; display: flex; align-items: center; gap: 10px; color: #d9d5cc; font-size: 13.5px; margin-top: 60px; }
   .pstate.err { color: #e89; }
   .pspin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); border-top-color: var(--a-accent, #e0a867); animation: pspin .7s linear infinite; }

@@ -40,11 +40,6 @@ export async function getCollections() {
   return data.collections || [];
 }
 
-export async function getCollection(id) {
-  const r = await serverFetch(`/api/collections/${encodeURIComponent(id)}`);
-  return jsonOrError(r);
-}
-
 export async function getCollectionItems(id) {
   const r = await serverFetch(`/api/collections/${encodeURIComponent(id)}/items`);
   const data = await jsonOrError(r);
@@ -88,11 +83,6 @@ export async function openItem(id) {
   return jsonOrError(r);
 }
 
-export async function previewItem(id) {
-  const r = await serverFetch(`/api/items/${encodeURIComponent(id)}/preview`);
-  return jsonOrError(r);
-}
-
 export async function itemSearch(q, { signal } = {}) {
   if (!q || !q.trim()) return [];
   const r = await serverFetch(`/api/items/search?q=${encodeURIComponent(q)}`, { signal });
@@ -114,12 +104,6 @@ export async function suggest(lib, q) {
   return jsonOrError(r);
 }
 
-export async function globalSearch(q, { signal } = {}) {
-  if (!q || !q.trim()) return [];
-  const r = await serverFetch(`/api/search?q=${encodeURIComponent(q)}`, { signal });
-  if (!r.ok) return [];
-  return jsonOrError(r);
-}
 
 export async function globalImages(q, { signal } = {}) {
   if (!q || !q.trim()) return [];
@@ -133,12 +117,6 @@ export async function health() {
   return r.ok ? jsonOrError(r) : { shim: 'down' };
 }
 
-export async function getMedia(collection = '') {
-  const q = collection ? `?collection=${encodeURIComponent(collection)}` : '';
-  const r = await serverFetch(`/api/media${q}`);
-  const data = await jsonOrError(r);
-  return data.items || [];
-}
 
 export function fmtSize(bytes) {
   if (!bytes) return '';

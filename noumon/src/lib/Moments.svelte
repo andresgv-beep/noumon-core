@@ -338,7 +338,6 @@
   .favi { color: #fff; font-weight: 650; font-size: 12px; }
   .favname { font-size: 13px; color: var(--ink-dim); font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .favhint { font-size: 12px; color: var(--muted); line-height: 1.5; padding: 2px 4px 8px; }
-  .favhint .star { color: var(--accent); }
   .clearbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border-radius:var(--r-lg); background: var(--card); border: 1px solid var(--border); color: var(--ink-dim); font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .14s, color .14s; }
   .clearbtn:hover:not(:disabled) { border-color: color-mix(in srgb,#da6b74 50%,var(--border)); color: #da6b74; }
   .clearbtn:disabled { opacity: .5; cursor: default; }

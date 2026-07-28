@@ -19,11 +19,6 @@ export async function getStudioCapabilities() {
   return studioJSON('/api/studio/capabilities');
 }
 
-export async function listStudioTemplates() {
-  const body = await studioJSON('/api/studio/templates');
-  return body.templates || [];
-}
-
 export async function listStudioDocuments(status = 'all') {
   const body = await studioJSON(`/api/studio/documents?status=${encodeURIComponent(status)}`);
   return body.documents || [];
@@ -145,20 +140,6 @@ export async function getStudioAssetBlob(documentId, assetId) {
   );
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.blob();
-}
-
-export async function deleteStudioAsset(documentId, assetId) {
-  const response = await serverFetch(
-    `/api/studio/documents/${encodeURIComponent(documentId)}/assets/${encodeURIComponent(assetId)}`,
-    { method: 'DELETE' },
-  );
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    const error = new Error(body.errorCode || `HTTP ${response.status}`);
-    error.code = body.errorCode || '';
-    error.status = response.status;
-    throw error;
-  }
 }
 
 export async function listPublishedDocuments() {

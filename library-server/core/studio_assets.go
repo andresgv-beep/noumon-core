@@ -273,15 +273,6 @@ func studioMultipartFile(reader *multipart.Reader) (*multipart.Part, string, err
 	}
 }
 
-func studioAllowedImageExtension(extension string) bool {
-	switch extension {
-	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
-		return true
-	default:
-		return false
-	}
-}
-
 func studioAssetPurposeAllowed(template, purpose string) bool {
 	switch purpose {
 	case "image":
