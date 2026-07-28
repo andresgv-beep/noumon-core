@@ -60,43 +60,50 @@
           oninput={onRadiusInput} onchange={onRadiusCommit} />
         <span class="range-ends"><span>0 km</span><span>5 km</span></span>
       </label>
+
+      <!-- Los lugares acompañan al mapa en vez de ir debajo a todo lo ancho. Eran
+           dos bloques apilados y el mapa tenía que estirarse a lo largo para
+           llenar su fila; en columna, el mapa crece de alto y deja de ser una
+           franja. Además la lista y el punto que la representa se miran a la vez. -->
+      <div class="nearby">
+        <div class="nearby-head">
+          <h3 id="nearby-title">{t('home.map.places')}</h3>
+          <span>{#if locationState.status === 'loading'}{t('home.map.updating')}{:else}{t('home.map.placeCount', { n: visiblePois.length, radius: radiusLabel(radiusKm) })}{/if}</span>
+        </div>
+        {#if radiusKm === 0}
+          <p class="nearby-empty">{t('home.map.zeroRadius')}</p>
+        {:else if visiblePois.length}
+          <div class="poi-grid">
+            {#each visiblePois as poi}
+              <button class="poi" class:selected={selectedPoi === poi} onclick={() => selectedPoi = poi} aria-pressed={selectedPoi === poi}>
+                <span class="poi-icon"><Icon name="pin" size={15} /></span>
+                <span class="poi-copy"><b>{poi.name}</b><small>{categoryLabel(poi)} · {distanceLabel(poi.distance)}</small></span>
+              </button>
+            {/each}
+          </div>
+        {:else if locationState.status === 'loading'}
+          <p class="nearby-empty">{t('home.map.updating')}</p>
+        {:else}
+          <p class="nearby-empty">{t('home.map.noPlaces')}</p>
+        {/if}
+        {#if selectedPoi}
+          <p class="selected-info"><Icon name="map" size={14} /> {t('home.map.selected', { name: selectedPoi.name, distance: distanceLabel(selectedPoi.distance) })}</p>
+        {/if}
+      </div>
     </div>
     <div class="map-wrap">
       <MiniMap result={mapResult} {selectedPoi} />
-      <div class="map-fade"></div>
     </div>
-  </section>
-
-  <section class="nearby" aria-labelledby="nearby-title">
-    <div class="nearby-head">
-      <h3 id="nearby-title">{t('home.map.places')}</h3>
-      <span>{#if locationState.status === 'loading'}{t('home.map.updating')}{:else}{t('home.map.placeCount', { n: visiblePois.length, radius: radiusLabel(radiusKm) })}{/if}</span>
-    </div>
-    {#if radiusKm === 0}
-      <p class="nearby-empty">{t('home.map.zeroRadius')}</p>
-    {:else if visiblePois.length}
-      <div class="poi-grid">
-        {#each visiblePois as poi}
-          <button class="poi" class:selected={selectedPoi === poi} onclick={() => selectedPoi = poi} aria-pressed={selectedPoi === poi}>
-            <span class="poi-icon"><Icon name="pin" size={15} /></span>
-            <span class="poi-copy"><b>{poi.name}</b><small>{categoryLabel(poi)} · {distanceLabel(poi.distance)}</small></span>
-          </button>
-        {/each}
-      </div>
-    {:else if locationState.status === 'loading'}
-      <p class="nearby-empty">{t('home.map.updating')}</p>
-    {:else}
-      <p class="nearby-empty">{t('home.map.noPlaces')}</p>
-    {/if}
-    {#if selectedPoi}
-      <p class="selected-info"><Icon name="map" size={14} /> {t('home.map.selected', { name: selectedPoi.name, distance: distanceLabel(selectedPoi.distance) })}</p>
-    {/if}
   </section>
 {/if}
 
 <style>
-  .geo{position:relative;width:calc(100% - 80px);max-width:1300px;min-height:310px;margin:14px auto 0;display:grid;grid-template-columns:minmax(260px,38%) 1fr;overflow:hidden;isolation:isolate}
-  .geo-copy{position:relative;z-index:3;align-self:center;padding:28px 10px 28px 54px}
+  /* Dos columnas de verdad: antes el mapa iba en posición absoluta sobre la
+     sección, así que su alto lo fijaba un min-height y salía siempre apaisado
+     pasara lo que pasara al lado. Como celda de la rejilla crece con la columna
+     de texto y se acerca al cuadrado solo. */
+  .geo{width:calc(100% - 80px);max-width:1300px;margin:14px auto 0;display:grid;grid-template-columns:minmax(290px,1fr) minmax(0,1.05fr);gap:clamp(20px,2.6vw,40px);align-items:stretch}
+  .geo-copy{min-width:0;padding:20px 0 22px 54px}
   .geo-kind{display:flex;align-items:center;gap:7px;color:var(--accent-2);font-size:11px;font-weight:650;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px}
   h2{font-size:26px;line-height:1.2;font-weight:650;color:var(--ink);letter-spacing:-.3px}
   .geo-copy p{color:var(--muted);font-size:13.5px;margin-top:6px}
@@ -106,17 +113,22 @@
   .radius-label output{color:var(--ink);font-weight:600}
   .radius-label input{width:100%;accent-color:var(--accent);cursor:pointer;margin-top:9px}
   .range-ends{display:flex;justify-content:space-between;color:var(--faint);font-size:10.5px;margin-top:1px}
-  .map-wrap{position:absolute;inset:0 0 0 36%;overflow:hidden;border-radius:var(--r-lg);
-    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%),linear-gradient(180deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);
-    -webkit-mask-composite:source-in;
-    mask-image:linear-gradient(90deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%),linear-gradient(180deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);
-    mask-composite:intersect}
-  .map-fade{display:none}
-  .nearby{max-width:1300px;margin:-5px auto 0;padding:0 54px 18px;position:relative;z-index:2}
+  /* Sin el degradado de los cuatro bordes. Se comía diez píxeles de mapa por
+     cada lado y lo dejaba deshaciéndose en la página en vez de parecer un mapa;
+     ahora que es una celda con su sitio, el borde limpio dice lo mismo mejor y
+     con el mismo lenguaje que las tarjetas del resto de la aplicación. */
+  /* Forma propia, no la que le imponga la lista de al lado. Estirándolo a lo alto
+     de la fila volvía a deformarse: apaisado cuando la columna era corta y
+     estrecho y alto cuando la lista crecía. Con proporción fija siempre se lee
+     como un mapa. */
+  .map-wrap{position:relative;align-self:start;aspect-ratio:4/3;min-height:300px;overflow:hidden;border-radius:var(--r-lg);border:1px solid var(--border)}
+  .nearby{margin-top:24px}
   .nearby-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin-bottom:8px}
   .nearby-head h3{font-size:14px;font-weight:650;color:var(--ink)}
   .nearby-head span{font-size:11px;color:var(--faint)}
-  .poi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 8px}
+  /* En columna estrecha, uno debajo de otro: en tres columnas los nombres se
+     cortaban a la mitad. */
+  .poi-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:2px}
   .poi{min-width:0;display:flex;align-items:center;gap:9px;text-align:left;padding:8px;border-radius:var(--r-md);transition:background .12s}
   .poi:hover,.poi.selected{background:var(--card)}
   .poi-icon{display:grid;place-items:center;width:31px;height:31px;flex:none;border-radius:var(--r-md);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent-2)}
@@ -126,8 +138,15 @@
   .poi-copy small{font-size:10.5px;color:var(--muted)}
   .nearby-empty{color:var(--muted);font-size:12.5px;padding:9px 0}
   .selected-info{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px;padding:8px 4px 0}
-  @media(max-width:720px){
-    .geo{width:100%;min-height:440px;grid-template-columns:1fr}.geo-copy{align-self:start;padding:16px 24px}.map-wrap{inset:145px 0 0}
-    .nearby{padding:0 24px 18px}.poi-grid{grid-template-columns:1fr}
+  /* Dos columnas solo cuando hay sitio: por debajo de esto quedan dos columnas
+     flacas, el mapa se queda diminuto y los nombres de los sitios se parten. */
+  @media(max-width:980px){
+    /* Apilado, y el mapa primero: es el ancla visual, y detrás de una lista de
+       seis sitios habría que buscarlo. */
+    .geo{width:100%;grid-template-columns:1fr;gap:18px}
+    .geo-copy{padding:0 24px 18px}
+    /* Alto fijo en vez de proporción: a todo lo ancho, 4:3 son seiscientos y
+       pico píxeles de mapa y el resto de la búsqueda queda fuera de pantalla. */
+    .map-wrap{order:-1;aspect-ratio:auto;height:250px;min-height:0;border-radius:0;border-left:0;border-right:0}
   }
 </style>
