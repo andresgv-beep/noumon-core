@@ -10,7 +10,12 @@
   let lastRequested = 2500;
 
   let result = $derived(locationState?.result);
-  let visiblePois = $derived((result?.pois || []).filter((p) => p.distance <= radiusKm * 1000).slice(0, 6));
+  // Diez, en dos columnas de cinco. El servidor manda hasta 18, asi que quedarse
+  // en seis era recorte nuestro y dejaba media columna vacia.
+  const POI_ROWS = 5;
+  let visiblePois = $derived((result?.pois || [])
+    .filter((p) => p.distance <= radiusKm * 1000)
+    .slice(0, POI_ROWS * 2));
   let mapResult = $derived(result ? { ...result, radius: Math.round(radiusKm * 1000) } : null);
 
   $effect(() => {
@@ -77,7 +82,9 @@
             {#each visiblePois as poi}
               <button class="poi" class:selected={selectedPoi === poi} onclick={() => selectedPoi = poi} aria-pressed={selectedPoi === poi}>
                 <span class="poi-icon"><Icon name="pin" size={15} /></span>
-                <span class="poi-copy"><b>{poi.name}</b><small>{categoryLabel(poi)} · {distanceLabel(poi.distance)}</small></span>
+                <!-- El nombre se recorta con puntos suspensivos si no cabe; el
+                 completo queda al alcance del raton en vez de perderse. -->
+            <span class="poi-copy"><b title={poi.name}>{poi.name}</b><small>{categoryLabel(poi)} · {distanceLabel(poi.distance)}</small></span>
               </button>
             {/each}
           </div>
@@ -126,9 +133,10 @@
   .nearby-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin-bottom:8px}
   .nearby-head h3{font-size:14px;font-weight:650;color:var(--ink)}
   .nearby-head span{font-size:11px;color:var(--faint)}
-  /* En columna estrecha, uno debajo de otro: en tres columnas los nombres se
-     cortaban a la mitad. */
-  .poi-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:2px}
+  /* Cinco por columna y salta a la de al lado. En flujo por columnas y no por
+     filas porque la lista va ordenada por distancia: así se lee hacia abajo,
+     que es como se lee una lista, en vez de en zigzag. */
+  .poi-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(5,auto);grid-auto-columns:minmax(0,1fr);gap:2px 12px}
   .poi{min-width:0;display:flex;align-items:center;gap:9px;text-align:left;padding:8px;border-radius:var(--r-md);transition:background .12s}
   .poi:hover,.poi.selected{background:var(--card)}
   .poi-icon{display:grid;place-items:center;width:31px;height:31px;flex:none;border-radius:var(--r-md);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent-2)}
@@ -138,6 +146,12 @@
   .poi-copy small{font-size:10.5px;color:var(--muted)}
   .nearby-empty{color:var(--muted);font-size:12.5px;padding:9px 0}
   .selected-info{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px;padding:8px 4px 0}
+  /* La lista vuelve a una columna antes que el resto: medido, a 1010px de ancho
+     las dos columnas quedan en 185px y nombres como "Mad Mad Vegan - Barcelona"
+     se cortan. La banda de dos columnas sigue teniendo sentido hasta 980. */
+  @media(max-width:1200px){
+    .poi-grid{grid-auto-flow:row;grid-template-rows:none;grid-template-columns:minmax(0,1fr)}
+  }
   /* Dos columnas solo cuando hay sitio: por debajo de esto quedan dos columnas
      flacas, el mapa se queda diminuto y los nombres de los sitios se parten. */
   @media(max-width:980px){
@@ -148,5 +162,7 @@
     /* Alto fijo en vez de proporción: a todo lo ancho, 4:3 son seiscientos y
        pico píxeles de mapa y el resto de la búsqueda queda fuera de pantalla. */
     .map-wrap{order:-1;aspect-ratio:auto;height:250px;min-height:0;border-radius:0;border-left:0;border-right:0}
+    /* A una columna: en paralelo, con esta anchura, los nombres se parten. */
+    .poi-grid{grid-auto-flow:row;grid-template-rows:none;grid-template-columns:minmax(0,1fr)}
   }
 </style>
