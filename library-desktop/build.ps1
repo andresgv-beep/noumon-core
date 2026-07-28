@@ -35,6 +35,19 @@ function New-IconResource([string]$Icon) {
 
 function New-ClientResource { New-IconResource $ClientIcon }
 
+# El icono del instalador (SetupIconFile) se DERIVA del mismo PNG que llevan los
+# ejecutables, en vez de mantenerse a mano. Guardado aparte se quedaba atrás sin
+# que nadie lo notara: durante meses el .svg de al lado enseñó una marca de otra
+# época y nadie se dio cuenta hasta verla en un móvil.
+function Sync-InstallerIcon {
+  $ico = Join-Path $Desktop 'assets\noumon.ico'
+  Push-Location $Desktop
+  try {
+    go run ./cmd/iconresource -icon $ClientIcon -ico $ico
+    Assert-NativeSuccess 'Icono del instalador'
+  } finally { Pop-Location }
+}
+
 if ($Mode -eq 'remote') {
   Write-Host '[1/1] Cliente de escritorio remoto...' -ForegroundColor Cyan
   New-ClientResource
@@ -51,6 +64,8 @@ if ($Mode -eq 'remote') {
 }
 
 New-Item -ItemType Directory -Force -Path $Bin | Out-Null
+
+Sync-InstallerIcon
 
 Write-Host '[1/10] Cliente PWA...' -ForegroundColor Cyan
 Push-Location (Join-Path $Root 'noumon')

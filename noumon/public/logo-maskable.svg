@@ -1,4 +1,4 @@
-<!-- Generado desde src/lib/Logo.svelte. No editar a mano. -->
+<!-- Generado desde noumon/src/lib/Logo.svelte. No editar a mano. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <rect width="512" height="512" fill="#141018"/>
   <g transform="translate(76.8 76.8) scale(3.584)">
