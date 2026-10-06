@@ -59,6 +59,9 @@ func (s *Server) publishStudioContent(id string, editor *User) (StudioDocument, 
 	if surface == "documents" {
 		return s.store.publishStudioDocument(id, editor)
 	}
+	if !studioTemplateAllowedFor(editor, current.TemplateKey) {
+		return StudioDocument{}, errStudioDepotAdminOnly
+	}
 	return s.publishStudioMediaDocument(current, surface, editor)
 }
 
@@ -144,10 +147,17 @@ func (s *Server) publishStudioMediaDocument(
 		studioRevisionString(current.Revision), now); err != nil {
 		return StudioDocument{}, err
 	}
+	// La primera publicación de un apartado decide su acceso solo si nadie lo ha
+	// decidido antes. Depot nace bloqueado: reparte ejecutables, y que lo vea
+	// alguien más lo decide el admin en el Panel.
+	initialAccess := "login"
+	if surface == "depot" {
+		initialAccess = "blocked"
+	}
 	if _, err := tx.Exec(`
 		INSERT OR IGNORE INTO collection_access
 			(collection_id, access, min_age, allow_download, updated)
-		VALUES (?, 'login', 0, 0, ?)`, firstNonEmpty(surfaceAccessKey(surface), targetCollection), now); err != nil {
+		VALUES (?, ?, 0, 0, ?)`, firstNonEmpty(surfaceAccessKey(surface), targetCollection), initialAccess, now); err != nil {
 		return StudioDocument{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -183,6 +193,12 @@ func (s *Server) studioMediaAssets(
 	}
 	for _, subtitle := range metadata.Subtitles {
 		ids = append(ids, subtitle.AssetID)
+	}
+	for _, file := range metadata.Files {
+		ids = append(ids, file.AssetID)
+	}
+	for _, shot := range metadata.Screenshots {
+		ids = append(ids, shot.AssetID)
 	}
 	assets := map[string]StudioAsset{}
 	for _, id := range ids {
@@ -221,6 +237,19 @@ func validateStudioMediaAssetRoles(
 		if !is(subtitle.AssetID, func(mimeType string) bool { return mimeType == "text/vtt" }) {
 			return errStudioAssetInvalid
 		}
+	}
+	for _, file := range metadata.Files {
+		if !is(file.AssetID, studioIsPackageMIME) {
+			return errStudioAssetInvalid
+		}
+	}
+	for _, shot := range metadata.Screenshots {
+		if !is(shot.AssetID, image) {
+			return errStudioAssetInvalid
+		}
+	}
+	if template == "depot.program" {
+		return nil
 	}
 	if metadata.PrimaryAssetID == "" {
 		return nil
@@ -341,6 +370,32 @@ func (s *Server) materializeStudioMedia(
 		}
 		subtitles = append(subtitles, sidecarSub{Lang: subtitle.Lang, File: file})
 	}
+	files := make([]sidecarFile, 0, len(metadata.Files))
+	for index, file := range metadata.Files {
+		name, copyErr := copyRole(file.AssetID, fmt.Sprintf("file-%03d", index+1))
+		if copyErr != nil {
+			materialized.rollback()
+			return materialized, "", copyErr
+		}
+		asset := assets[file.AssetID]
+		files = append(files, sidecarFile{
+			Media: name, Name: asset.Filename, OS: file.OS, Arch: file.Arch,
+			Label: file.Label, Size: asset.SizeBytes, SHA256: asset.SHA256,
+			Format: strings.TrimPrefix(studioExtensionForMIME(asset.MIMEType), "."),
+		})
+		if primary == "" {
+			primary = name
+		}
+	}
+	shots := make([]sidecarShot, 0, len(metadata.Screenshots))
+	for index, shot := range metadata.Screenshots {
+		name, copyErr := copyRole(shot.AssetID, fmt.Sprintf("shot-%03d", index+1))
+		if copyErr != nil {
+			materialized.rollback()
+			return materialized, "", copyErr
+		}
+		shots = append(shots, sidecarShot{File: name, Caption: shot.Caption})
+	}
 	chapters := make([]sidecarChapter, 0, len(metadata.Chapters))
 	for _, chapter := range metadata.Chapters {
 		chapters = append(chapters, sidecarChapter{
@@ -362,6 +417,18 @@ func (s *Server) materializeStudioMedia(
 		Cover: cover, Tracks: tracks, Duration: metadata.Duration,
 		Subtitles: subtitles, Chapters: chapters,
 		ChannelAvatar: avatar,
+		Version:       metadata.Version, Shelf: metadata.Shelf, Website: metadata.Website,
+		Requirements: metadata.Requirements, Languages: metadata.Languages,
+		Notes: metadata.Notes, Files: files, Screenshots: shots,
+	}
+	if document.TemplateKey == "depot.program" {
+		sc.Published = time.Now().Format("2006-01-02")
+		if materialized.hadSidecar {
+			var previous sidecar
+			if json.Unmarshal(materialized.oldSidecar, &previous) == nil && previous.Published != "" {
+				sc.Published = previous.Published
+			}
+		}
 	}
 	data, err := json.MarshalIndent(sc, "", "  ")
 	if err != nil {
@@ -396,6 +463,8 @@ func studioMediaTemplate(templateKey string) (template, collectionType string) {
 		return "reader", "documents"
 	case "cabinet.gallery":
 		return "gallery", "images"
+	case "depot.program":
+		return "program", "programs"
 	default:
 		return "", ""
 	}
@@ -600,7 +669,7 @@ func studioMediaCollectionPath(target string) (string, bool) {
 	}
 	decoded = filepath.ToSlash(strings.Trim(decoded, "/"))
 	parts := strings.Split(decoded, "/")
-	if len(parts) != 2 || (parts[0] != "Moments" && parts[0] != "Cabinet") ||
+	if len(parts) != 2 || (parts[0] != "Moments" && parts[0] != "Cabinet" && parts[0] != "Depot") ||
 		parts[1] == "" || sanitizeSegment(parts[1]) != parts[1] {
 		return "", false
 	}
@@ -654,7 +723,7 @@ func (s *Server) studioPublishedMediaOwnedBy(userID int64) ([]StudioDocument, er
 	rows, err := s.store.db.Query(`
 		SELECT id FROM studio_documents
 		WHERE owner_user_id=? AND published_revision IS NOT NULL
-		  AND status!='archived' AND publication_kind IN ('moments','cabinet')
+		  AND status!='archived' AND publication_kind IN ('moments','cabinet','depot')
 		ORDER BY id`, userID)
 	if err != nil {
 		return nil, err

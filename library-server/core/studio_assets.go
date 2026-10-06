@@ -278,7 +278,9 @@ func studioAssetPurposeAllowed(template, purpose string) bool {
 	case "image":
 		return template == "document" || template == "technical" || template == "story"
 	case "cover":
-		return strings.HasPrefix(template, "cabinet.") || template == "moments.video"
+		return studioIsMediaTemplate(template)
+	case "package", "screenshot":
+		return template == "depot.program"
 	case "avatar":
 		return template == "moments.video"
 	case "primary":
@@ -294,7 +296,7 @@ func studioAssetPurposeAllowed(template, purpose string) bool {
 
 func studioMaxBytesForPurpose(purpose string) int64 {
 	switch purpose {
-	case "image", "cover", "avatar", "waveform":
+	case "image", "cover", "avatar", "waveform", "screenshot":
 		return studioMaxImageBytes
 	case "subtitle":
 		return studioMaxTextAssetBytes
@@ -305,8 +307,10 @@ func studioMaxBytesForPurpose(purpose string) int64 {
 
 func studioAssetRoleMIMEAllowed(template, purpose, mimeType string) bool {
 	switch purpose {
-	case "image", "cover", "avatar", "waveform":
+	case "image", "cover", "avatar", "waveform", "screenshot":
 		return strings.HasPrefix(mimeType, "image/")
+	case "package":
+		return template == "depot.program" && studioIsPackageMIME(mimeType)
 	case "subtitle":
 		return mimeType == "text/vtt"
 	case "track":
@@ -425,7 +429,7 @@ func (s *Server) persistStudioAssetForPurpose(
 
 func studioAssetPurposeIsRaster(purpose string) bool {
 	switch purpose {
-	case "image", "cover", "avatar", "waveform":
+	case "image", "cover", "avatar", "waveform", "screenshot":
 		return true
 	default:
 		return false
@@ -436,6 +440,13 @@ func studioAssetFormat(purpose, extension string, header []byte) (string, string
 	if studioAssetPurposeIsRaster(purpose) {
 		mimeType, normalizedExtension, err := studioImageFormat(header)
 		if err != nil || !studioImageExtensionMatches(extension, mimeType) {
+			return "", "", errStudioAssetType
+		}
+		return mimeType, normalizedExtension, nil
+	}
+	if purpose == "package" {
+		mimeType, normalizedExtension := studioPackageFormat(extension, header)
+		if mimeType == "" {
 			return "", "", errStudioAssetType
 		}
 		return mimeType, normalizedExtension, nil
@@ -865,6 +876,16 @@ func studioExtensionForMIME(mimeType string) string {
 		return ".md"
 	case "text/vtt":
 		return ".vtt"
+	case studioMIMEExe:
+		return ".exe"
+	case studioMIMEMsi:
+		return ".msi"
+	case studioMIMEDeb:
+		return ".deb"
+	case studioMIMEZip:
+		return ".zip"
+	case studioMIMERar:
+		return ".rar"
 	default:
 		return ""
 	}
@@ -897,4 +918,50 @@ func (s *Server) deleteStudioAsset(w http.ResponseWriter, documentID, assetID st
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Paquetes de Depot. Se reconocen por su firma, no por la extensión (el
+// detector de Go no conoce ninguno de los cinco), y la extensión tiene que
+// casar con la firma: un .exe que por dentro es un zip no entra.
+const (
+	studioMIMEExe = "application/vnd.microsoft.portable-executable"
+	studioMIMEMsi = "application/x-msi"
+	studioMIMEDeb = "application/vnd.debian.binary-package"
+	studioMIMEZip = "application/zip"
+	studioMIMERar = "application/vnd.rar"
+)
+
+func studioIsPackageMIME(mimeType string) bool {
+	switch mimeType {
+	case studioMIMEExe, studioMIMEMsi, studioMIMEDeb, studioMIMEZip, studioMIMERar:
+		return true
+	}
+	return false
+}
+
+func studioPackageFormat(extension string, header []byte) (mimeType, normalizedExtension string) {
+	has := func(prefix []byte) bool { return bytes.HasPrefix(header, prefix) }
+	switch extension {
+	case ".exe":
+		if has([]byte("MZ")) {
+			return studioMIMEExe, ".exe"
+		}
+	case ".msi":
+		if has([]byte{0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1}) {
+			return studioMIMEMsi, ".msi"
+		}
+	case ".deb":
+		if has([]byte("!<arch>\n")) {
+			return studioMIMEDeb, ".deb"
+		}
+	case ".zip":
+		if has([]byte("PK\x03\x04")) || has([]byte("PK\x05\x06")) {
+			return studioMIMEZip, ".zip"
+		}
+	case ".rar":
+		if has([]byte("Rar!\x1a\x07")) {
+			return studioMIMERar, ".rar"
+		}
+	}
+	return "", ""
 }

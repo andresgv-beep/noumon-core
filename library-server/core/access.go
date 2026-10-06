@@ -70,6 +70,7 @@ func (s *Server) collectionAccess(id string) accessCfg {
 const (
 	surfaceAccessCabinet = "surface:cabinet"
 	surfaceAccessMoments = "surface:moments"
+	surfaceAccessDepot   = "surface:depot"
 )
 
 // surfaceAccessKey: la fila de un apartado ("" si no es uno de los gobernados).
@@ -79,6 +80,8 @@ func surfaceAccessKey(surface string) string {
 		return surfaceAccessCabinet
 	case "moments":
 		return surfaceAccessMoments
+	case "depot":
+		return surfaceAccessDepot
 	}
 	return ""
 }

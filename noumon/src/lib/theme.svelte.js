@@ -83,6 +83,13 @@ export const theme = $state({
   homeBackground: savedHomeBackground(),
 });
 
+function onAccent(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return '#ffffff';
+  const n = parseInt(hex.slice(1), 16);
+  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  return lum > 0.55 ? '#16130c' : '#ffffff';
+}
+
 function apply() {
   theme.resolved = resolve(theme.choice);
   try {
@@ -91,9 +98,13 @@ function apply() {
     root.setAttribute('data-skin', theme.skin);
     if (theme.accent) root.style.setProperty('--accent', theme.accent);
     else root.style.removeProperty('--accent');
+    const computed = getComputedStyle(root);
+    // Texto sobre un botón relleno de acento. CSS no sabe decidir el contraste:
+    // con ámbar o el lila claro de la retro oscura el blanco no se lee.
+    root.style.setProperty('--on-accent', onAccent(computed.getPropertyValue('--accent').trim()));
     // La barra PWA/ventana sigue al fondo real del tema activo.
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', getComputedStyle(root).getPropertyValue('--ground').trim() || '#151619');
+    if (meta) meta.setAttribute('content', computed.getPropertyValue('--ground').trim() || '#151619');
   } catch (e) {}
 }
 

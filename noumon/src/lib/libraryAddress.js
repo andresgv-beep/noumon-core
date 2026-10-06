@@ -8,7 +8,7 @@ export function formatLibraryAddress(tab) {
   if (tab.kind === 'item') {
     const provider = tab.source?.provider || tab.open?.provider || 'item';
     const sourceId = tab.source?.providerItemId || tab.itemId || '';
-    if (provider === 'moments' || provider === 'cabinet') {
+    if (provider === 'moments' || provider === 'cabinet' || provider === 'depot') {
       return `library://${provider}/${encodeURIComponent(sourceId)}`;
     }
     const itemAddress = `library://item/${encodeURIComponent(tab.itemId || sourceId)}`;
@@ -29,7 +29,7 @@ export function parseLibraryAddress(raw) {
   if (!head || head === 'home' || head === 'inicio') return { kind: 'home' };
   if (head === 'view') return { kind: 'view', view: decodeURIComponent(parts.join('/') || 'home') };
   if (head === 'zim') return { kind: 'article', lib: decodeURIComponent(parts.shift() || ''), path: decPath(parts.join('/')) };
-  if (head === 'moments' || head === 'cabinet') {
+  if (head === 'moments' || head === 'cabinet' || head === 'depot') {
     return { kind: 'provider', provider: head, sourceId: decodeURIComponent(parts.join('/')) };
   }
   if (head === 'item') {

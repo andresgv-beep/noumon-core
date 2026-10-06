@@ -5,11 +5,11 @@
 // solo se guarda su respuesta.
 import { serverFetch } from './connection.js';
 
-const KEYS = ['documents', 'cabinet', 'moments'];
+const KEYS = ['documents', 'cabinet', 'moments', 'depot'];
 
 // Empiezan ocultas: aparecer y desaparecer al arrancar es peor que tardar un
 // instante en aparecer.
-export const surfaces = $state({ documents: false, cabinet: false, moments: false });
+export const surfaces = $state({ documents: false, cabinet: false, moments: false, depot: false });
 
 export async function refreshSurfaces() {
   try {

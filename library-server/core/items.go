@@ -52,6 +52,36 @@ type Item struct {
 	Subtitles     []ItemSub     `json:"subtitles,omitempty"`
 	Chapters      []ItemChapter `json:"chapters,omitempty"`
 	ChannelAvatar string        `json:"channelAvatar,omitempty"` // /media/… imagen del canal
+	// Programa de Depot: archivos por sistema, capturas y ficha técnica.
+	Program *ItemProgram `json:"program,omitempty"`
+}
+
+type ItemProgram struct {
+	Version      string            `json:"version,omitempty"`
+	Shelf        string            `json:"shelf,omitempty"`
+	Website      string            `json:"website,omitempty"`
+	Requirements string            `json:"requirements,omitempty"`
+	Languages    string            `json:"languages,omitempty"`
+	Notes        string            `json:"notes,omitempty"`
+	Files        []ItemProgramFile `json:"files"`
+	Screenshots  []ItemProgramShot `json:"screenshots,omitempty"`
+	Published    string            `json:"published,omitempty"`
+}
+
+type ItemProgramFile struct {
+	URL    string `json:"url"`
+	Name   string `json:"name"`
+	OS     string `json:"os"`
+	Arch   string `json:"arch"`
+	Label  string `json:"label,omitempty"`
+	Format string `json:"format"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+
+type ItemProgramShot struct {
+	URL     string `json:"url"`
+	Caption string `json:"caption,omitempty"`
 }
 
 // ItemTrack = una pista de audiolibro con URLs locales (audio + onda opcional).
@@ -160,7 +190,7 @@ func (s *Server) handleSurfaces(media *mediaDeps) http.HandlerFunc {
 }
 
 func (s *Server) visibleSurfaces(u *User, media *mediaDeps) map[string]bool {
-	out := map[string]bool{"documents": false, "cabinet": false, "moments": false}
+	out := map[string]bool{"documents": false, "cabinet": false, "moments": false, "depot": false}
 	if u != nil && u.IsAdmin {
 		for key := range out {
 			out[key] = true
@@ -169,7 +199,7 @@ func (s *Server) visibleSurfaces(u *User, media *mediaDeps) map[string]bool {
 	}
 	if catalog, err := media.catalogSnapshot(); err == nil {
 		am := s.accessMap()
-		for _, provider := range []string{"cabinet", "moments"} {
+		for _, provider := range []string{"cabinet", "moments", "depot"} {
 			for _, it := range catalog.providerItems(provider) {
 				if s.canSeeCached(u, am, collectionIDForMedia(it.Collection)) {
 					out[provider] = true
@@ -201,8 +231,8 @@ func (s *Server) handleSurfaceItems(media *mediaDeps) http.HandlerFunc {
 			return
 		}
 		provider := strings.TrimSpace(r.URL.Query().Get("provider"))
-		if provider != "moments" && provider != "cabinet" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider debe ser moments o cabinet"})
+		if provider != "moments" && provider != "cabinet" && provider != "depot" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provider debe ser moments, cabinet o depot"})
 			return
 		}
 		catalog, err := media.catalogSnapshot()
@@ -835,6 +865,21 @@ func mediaToItem(it mediaItem) Item {
 	for _, tr := range it.Tracks {
 		files = append(files, ItemFile{Name: tr.Title, Format: "MP3", URL: tr.URL, Local: true})
 	}
+	var program *ItemProgram
+	if it.Template == "program" {
+		program = &ItemProgram{
+			Version: it.Version, Shelf: it.Shelf, Website: it.Website,
+			Requirements: it.Requirements, Languages: it.Languages, Notes: it.Notes,
+			Files: []ItemProgramFile{}, Published: it.Published,
+		}
+		for _, f := range it.Files {
+			program.Files = append(program.Files, ItemProgramFile(f))
+			files = append(files, ItemFile{Name: f.Name, Format: strings.ToUpper(f.Format), Size: f.Size, URL: f.URL, Local: true})
+		}
+		for _, shot := range it.Screenshots {
+			program.Screenshots = append(program.Screenshots, ItemProgramShot(shot))
+		}
+	}
 	if len(files) == 0 {
 		files = append(files, ItemFile{Name: it.Media, Size: mediaFileSize(it), URL: it.MediaURL, Local: true, Primary: true})
 	}
@@ -891,6 +936,7 @@ func mediaToItem(it mediaItem) Item {
 		Subtitles:     subs,
 		Chapters:      chaps,
 		ChannelAvatar: it.ChannelAvatarURL,
+		Program:       program,
 	}
 }
 
@@ -1025,6 +1071,8 @@ func kindFromTemplate(template string) string {
 		return "image"
 	case "reader":
 		return "document"
+	case "program":
+		return "program"
 	default:
 		return "file"
 	}

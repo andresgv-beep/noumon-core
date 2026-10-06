@@ -11,6 +11,7 @@
   const kindLabel = (doc) => {
     if (doc?.templateKey?.startsWith('cabinet.')) return t('studio.createCabinet');
     if (doc?.templateKey?.startsWith('moments.')) return t('studio.createMoments');
+    if (doc?.templateKey?.startsWith('depot.')) return t('studio.createDepot');
     return t('studio.createDocument');
   };
 </script>

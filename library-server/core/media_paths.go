@@ -10,6 +10,8 @@ func appDirFor(surface string) (dir string, ok bool) {
 		return "Moments", true
 	case "cabinet":
 		return "Cabinet", true
+	case "depot":
+		return "Depot", true
 	default:
 		return "", false
 	}

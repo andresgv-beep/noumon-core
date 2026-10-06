@@ -24,6 +24,17 @@ type StudioCapabilities struct {
 	// salto a ciegas. Publicar no manda nada fuera de esta biblioteca.
 	PublishAccess string `json:"publishAccess,omitempty"`
 	PublishMinAge int    `json:"publishMinAge,omitempty"`
+	// Depot reparte ejecutables: solo el admin crea y publica ahí, aunque otros
+	// tengan permiso de publicar en Documentos, Cabinet o Moments.
+	CanDepot bool `json:"canDepot"`
+	// Lo mismo por apartado: Cabinet, Moments y Depot tienen su propio acceso, y
+	// el pie del editor tiene que anunciar el del apartado que se está editando.
+	SurfaceAccess map[string]StudioSurfaceAccess `json:"surfaceAccess,omitempty"`
+}
+
+type StudioSurfaceAccess struct {
+	Access string `json:"access"`
+	MinAge int    `json:"minAge,omitempty"`
 }
 
 type studioTemplateDescriptor struct {
@@ -55,12 +66,26 @@ func (s *Server) studioCapabilities(user *User) StudioCapabilities {
 	}
 	caps.PublishAccess = access.Access
 	caps.PublishMinAge = access.MinAge
+	caps.SurfaceAccess = map[string]StudioSurfaceAccess{
+		"documents": {Access: access.Access, MinAge: access.MinAge},
+	}
+	// Sin fila aún, se anuncia lo que hará la primera publicación: Cabinet y
+	// Moments nacen para cuentas, Depot bloqueado (publishStudioMediaDocument).
+	am := s.accessMap()
+	for surface, initial := range map[string]string{"cabinet": "login", "moments": "login", "depot": "blocked"} {
+		if cfg, ok := am[surfaceAccessKey(surface)]; ok {
+			caps.SurfaceAccess[surface] = StudioSurfaceAccess{Access: cfg.Access, MinAge: cfg.MinAge}
+		} else {
+			caps.SurfaceAccess[surface] = StudioSurfaceAccess{Access: initial}
+		}
+	}
 	if user == nil {
 		return caps
 	}
 	if user.IsAdmin {
 		caps.CanAuthor = true
 		caps.CanPublish = true
+		caps.CanDepot = true
 		return caps
 	}
 	var author, publish int
@@ -118,7 +143,8 @@ func (s *Server) handleStudioTemplates(w http.ResponseWriter, r *http.Request) {
 		writeStudioError(w, http.StatusMethodNotAllowed, "studio.method_not_allowed", nil)
 		return
 	}
-	if _, ok := s.requireStudioAuthor(w, r); !ok {
+	user, ok := s.requireStudioAuthor(w, r)
+	if !ok {
 		return
 	}
 	templates := []studioTemplateDescriptor{
@@ -131,6 +157,11 @@ func (s *Server) handleStudioTemplates(w http.ResponseWriter, r *http.Request) {
 		{Key: "cabinet.audio", Surface: "cabinet", LabelKey: "studio.template.cabinetAudio", DescriptionKey: "studio.template.cabinetAudioDesc"},
 		{Key: "cabinet.video", Surface: "cabinet", LabelKey: "studio.template.cabinetVideo", DescriptionKey: "studio.template.cabinetVideoDesc"},
 		{Key: "moments.video", Surface: "moments", LabelKey: "studio.template.momentsVideo", DescriptionKey: "studio.template.momentsVideoDesc"},
+	}
+	if user.IsAdmin {
+		templates = append(templates, studioTemplateDescriptor{
+			Key: "depot.program", Surface: "depot", LabelKey: "studio.template.depotProgram", DescriptionKey: "studio.template.depotProgramDesc",
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"templates": templates})
 }
@@ -202,6 +233,10 @@ func (s *Server) handleStudioDocuments(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(valid.Assets) != 0 {
 			writeStudioError(w, http.StatusUnprocessableEntity, "studio.asset_invalid", nil)
+			return
+		}
+		if !studioTemplateAllowedFor(user, valid.Input.TemplateKey) {
+			writeStudioError(w, http.StatusForbidden, "studio.depot_admin_only", nil)
 			return
 		}
 		document, err := s.store.createStudioDocument(user, valid)
@@ -358,6 +393,19 @@ func (s *Server) handleStudioDocumentSub(w http.ResponseWriter, r *http.Request)
 				map[string]any{"reason": err.Error()})
 			return
 		}
+		// Un borrador no cambia de lado de la frontera de Depot: ni otro tipo se
+		// convierte en Depot, ni un Depot en otra cosa. Lo contrario dejaría a quien
+		// no es admin colar un ejecutable por la puerta de Cabinet.
+		current, err := s.store.getStudioDocument(id, user)
+		if err != nil {
+			writeStudioStoreError(w, err, 0)
+			return
+		}
+		if !studioTemplateAllowedFor(user, valid.Input.TemplateKey) ||
+			(current.TemplateKey == "depot.program") != (valid.Input.TemplateKey == "depot.program") {
+			writeStudioError(w, http.StatusForbidden, "studio.depot_admin_only", nil)
+			return
+		}
 		document, currentRevision, err := s.store.updateStudioDocument(id, user, valid)
 		if err != nil {
 			writeStudioStoreError(w, err, currentRevision)
@@ -468,6 +516,8 @@ func writeStudioStoreError(w http.ResponseWriter, err error, currentRevision int
 	switch {
 	case errors.Is(err, errStudioNotFound):
 		writeStudioError(w, http.StatusNotFound, "studio.document_not_found", nil)
+	case errors.Is(err, errStudioDepotAdminOnly):
+		writeStudioError(w, http.StatusForbidden, "studio.depot_admin_only", nil)
 	case errors.Is(err, errStudioForbidden):
 		// Do not reveal whether another user's private draft exists.
 		writeStudioError(w, http.StatusNotFound, "studio.document_not_found", nil)
@@ -527,4 +577,10 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// studioTemplateAllowedFor: Depot es solo del admin; el resto de plantillas
+// dependen de los permisos de autor y publicador de siempre.
+func studioTemplateAllowedFor(user *User, template string) bool {
+	return template != "depot.program" || (user != nil && user.IsAdmin)
 }

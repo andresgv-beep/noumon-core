@@ -60,6 +60,37 @@ type sidecar struct {
 	Subtitles     []sidecarSub     `json:"subtitles,omitempty"`      // pistas .vtt locales
 	Chapters      []sidecarChapter `json:"chapters,omitempty"`       // marcadores de tiempo
 	ChannelAvatar string           `json:"channel_avatar,omitempty"` // imagen del canal/autor (channel.jpg, en la carpeta)
+
+	// Depot: un programa con un archivo por sistema y formato, y sus capturas.
+	// Media apunta al primero para que el escáner lo reconozca como item.
+	Version      string        `json:"version,omitempty"`
+	Shelf        string        `json:"shelf,omitempty"`
+	Website      string        `json:"website,omitempty"`
+	Requirements string        `json:"requirements,omitempty"`
+	Languages    string        `json:"languages,omitempty"`
+	Notes        string        `json:"notes,omitempty"`
+	Files        []sidecarFile `json:"files,omitempty"`
+	Screenshots  []sidecarShot `json:"screenshots,omitempty"`
+	// Published: día de la primera publicación (AAAA-MM-DD). Ordena los
+	// "recién llegados" y no cambia al publicar una versión nueva.
+	Published string `json:"published,omitempty"`
+}
+
+// sidecarFile = un archivo descargable de un programa de Depot.
+type sidecarFile struct {
+	Media  string `json:"media"` // fichero publicado, junto a la ficha
+	Name   string `json:"name"`  // nombre original, el que se ofrece al descargar
+	OS     string `json:"os"`
+	Arch   string `json:"arch"`
+	Label  string `json:"label,omitempty"`
+	Format string `json:"format"` // exe | msi | deb | zip | rar
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+
+type sidecarShot struct {
+	File    string `json:"file"`
+	Caption string `json:"caption,omitempty"`
 }
 
 // sidecarSub = una pista de subtítulos local (fichero .vtt junto al media).

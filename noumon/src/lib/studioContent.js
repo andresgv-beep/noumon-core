@@ -1,8 +1,10 @@
 export const STUDIO_CONTENT_SCHEMA_VERSION = 2;
 
+// Cabinet, Moments y Depot publican fichero + ficha: su contenido no es un
+// documento de páginas y el servidor rechaza el esquema multipágina para ellos.
 export function isDocumentTemplate(templateKey) {
-  return !String(templateKey || '').startsWith('cabinet.')
-    && !String(templateKey || '').startsWith('moments.');
+  const key = String(templateKey || '');
+  return !key.startsWith('cabinet.') && !key.startsWith('moments.') && !key.startsWith('depot.');
 }
 
 export function normalizeStudioContent(content, documentTitle = '', templateKey = 'document') {
@@ -10,9 +12,13 @@ export function normalizeStudioContent(content, documentTitle = '', templateKey 
     ? content
     : {};
   if (!isDocumentTemplate(templateKey)) {
+    // El servidor solo admite el esquema 1 fuera de Documentos. Un borrador que
+    // se quedara en el multipágina (memoria o copia de recuperación) no podría
+    // volver a guardarse nunca: se devuelve siempre al 1.
+    const { pages: _pages, ...rest } = source;
     return {
-      ...source,
-      schemaVersion: Number(source.schemaVersion) || 1,
+      ...rest,
+      schemaVersion: 1,
       blocks: Array.isArray(source.blocks) ? source.blocks : [],
     };
   }

@@ -6,6 +6,8 @@
   import TagsView from './TagsView.svelte';
   import Cabinet from './Cabinet.svelte';
   import Moments from './Moments.svelte';
+  import Depot from './Depot.svelte';
+  import DepotProgram from './DepotProgram.svelte';
   import Documents from './Documents.svelte';
   import DocumentPage from './DocumentPage.svelte';
   import ItemPage from './ItemPage.svelte';
@@ -254,11 +256,15 @@
     <Cabinet {onOpenItem} />
   {:else if tab.kind === 'view' && tab.view === 'moments'}
     <Moments {onOpenItem} />
+  {:else if tab.kind === 'view' && tab.view === 'depot'}
+    <Depot {onOpenItem} />
   {:else if tab.kind === 'view' && tab.view === 'documents'}
     <Documents {onOpenItem} />
   {:else if tab.kind === 'item'}
     {#if tab.open?.provider === 'moments'}
       <MomentsWatch {tab} {onOpenItem} {onOpenView} />
+    {:else if tab.open?.provider === 'depot'}
+      <DepotProgram {tab} {onOpenItem} {onOpenView} />
     {:else if tab.open?.provider === 'studio'}
       <!-- El menú de páginas ya no vive aquí: se pinta dentro de la banda del
            documento, en StudioDocumentView, para que se lea como parte de la

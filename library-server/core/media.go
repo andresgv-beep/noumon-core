@@ -255,6 +255,33 @@ type mediaItem struct {
 	Subtitles        []mediaSub       `json:"subtitles,omitempty"`          // pistas .vtt con URL local
 	Chapters         []sidecarChapter `json:"chapters,omitempty"`           // marcadores de tiempo
 	ChannelAvatarURL string           `json:"channel_avatar_url,omitempty"` // /media/… imagen del canal
+
+	// Depot: ficha de programa, sus archivos descargables y sus capturas.
+	Version      string      `json:"version,omitempty"`
+	Shelf        string      `json:"shelf,omitempty"`
+	Website      string      `json:"website,omitempty"`
+	Requirements string      `json:"requirements,omitempty"`
+	Languages    string      `json:"languages,omitempty"`
+	Notes        string      `json:"notes,omitempty"`
+	Files        []mediaFile `json:"files,omitempty"`
+	Screenshots  []mediaShot `json:"screenshots,omitempty"`
+	Published    string      `json:"published,omitempty"`
+}
+
+type mediaFile struct {
+	URL    string `json:"url"`
+	Name   string `json:"name"`
+	OS     string `json:"os"`
+	Arch   string `json:"arch"`
+	Label  string `json:"label,omitempty"`
+	Format string `json:"format"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+
+type mediaShot struct {
+	URL     string `json:"url"`
+	Caption string `json:"caption,omitempty"`
 }
 
 // mediaSub = una pista de subtítulos con su URL local servible.
@@ -311,7 +338,10 @@ func (s *Server) gateMediaFile(m *mediaDeps) http.HandlerFunc {
 		// cuenta para bajarse el fichero (salvo que el admin marque descarga anónima).
 		// La cerradura vive AQUÍ, en el servidor: el cliente puede pedir dl=1, pero
 		// quien decide es esto, no el botón de la UI.
-		if r.URL.Query().Get("dl") == "1" {
+		//
+		// Los paquetes de Depot (exe, msi, deb, zip, rar) se sirven SIEMPRE como
+		// descarga, pidan dl=1 o no: nunca se abren en el navegador.
+		if r.URL.Query().Get("dl") == "1" || isPackageFile(rel) {
 			if rel != "" && !s.canDownloadMediaPath(u, rel) {
 				writeJSON(w, http.StatusForbidden, map[string]string{
 					"error":           "regístrate para descargar este contenido",
@@ -320,7 +350,7 @@ func (s *Server) gateMediaFile(m *mediaDeps) http.HandlerFunc {
 				return
 			}
 			// Forzar descarga: el navegador guarda en vez de reproducir inline.
-			w.Header().Set("Content-Disposition", "attachment; filename=\""+downloadFilename(rel)+"\"")
+			w.Header().Set("Content-Disposition", attachmentDisposition(rel, r.URL.Query().Get("name")))
 		}
 		// H-2: el token de sesión puede viajar en ?st= (elementos nativos que no
 		// mandan cabecera). no-referrer evita que se filtre por el header Referer
@@ -454,6 +484,17 @@ func (m *mediaDeps) toItem(sidecarPath string, sc sidecar) mediaItem {
 	if sc.Text != "" {
 		textURL = mediaURLFor(sc.Text)
 	}
+	var files []mediaFile
+	for _, f := range sc.Files {
+		files = append(files, mediaFile{
+			URL: mediaURLFor(f.Media), Name: f.Name, OS: f.OS, Arch: f.Arch,
+			Label: f.Label, Format: f.Format, Size: f.Size, SHA256: f.SHA256,
+		})
+	}
+	var shots []mediaShot
+	for _, shot := range sc.Screenshots {
+		shots = append(shots, mediaShot{URL: mediaURLFor(shot.File), Caption: shot.Caption})
+	}
 
 	return mediaItem{
 		ID:               filepath.ToSlash(relSidecar),
@@ -479,6 +520,15 @@ func (m *mediaDeps) toItem(sidecarPath string, sc sidecar) mediaItem {
 		Subtitles:        subs,
 		Chapters:         sc.Chapters,
 		ChannelAvatarURL: channelAvatarURL,
+		Version:          sc.Version,
+		Shelf:            sc.Shelf,
+		Website:          sc.Website,
+		Requirements:     sc.Requirements,
+		Languages:        sc.Languages,
+		Notes:            sc.Notes,
+		Files:            files,
+		Screenshots:      shots,
+		Published:        sc.Published,
 	}
 }
 
@@ -623,6 +673,13 @@ func (s *Server) handleMediaDelete(md *mediaDeps) http.HandlerFunc {
 		for _, sub := range sc.Subtitles {
 			rm(sub.File)
 		}
+		// Programa de Depot: cada archivo descargable y cada captura.
+		for _, f := range sc.Files {
+			rm(f.Media)
+		}
+		for _, shot := range sc.Screenshots {
+			rm(shot.File)
+		}
 		if sc.Media != "" {
 			rm(sc.Media + ".part") // descarga a medias, por si quedó
 		}
@@ -666,4 +723,42 @@ func (m *mediaDeps) surfaceOfCollection(collection string) string {
 		}
 	}
 	return (*surfaces)[collection]
+}
+
+func isPackageFile(rel string) bool {
+	switch strings.ToLower(filepath.Ext(rel)) {
+	case ".exe", ".msi", ".deb", ".zip", ".rar":
+		return true
+	}
+	return false
+}
+
+// attachmentDisposition: el nombre que propone el navegador al guardar. El
+// fichero publicado se llama studio-<id>-r<rev>-…; el cliente puede pedir el
+// nombre original con ?name=, que solo se acepta si es un nombre simple con la
+// misma extensión que el fichero servido.
+func attachmentDisposition(rel, requested string) string {
+	name := downloadFilename(rel)
+	requested = strings.TrimSpace(requested)
+	if requested != "" && requested == filepath.Base(requested) && len(requested) <= 200 &&
+		!strings.ContainsAny(requested, "\"\\/:*?<>|") &&
+		strings.EqualFold(filepath.Ext(requested), filepath.Ext(rel)) {
+		clean := true
+		for _, r := range requested {
+			if r < 0x20 || r == 0x7f {
+				clean = false
+				break
+			}
+		}
+		if clean {
+			name = requested
+		}
+	}
+	ascii := strings.Map(func(r rune) rune {
+		if r < 0x20 || r > 0x7e || r == 0x22 {
+			return 0x5f
+		}
+		return r
+	}, name)
+	return "attachment; filename=\"" + ascii + "\"; filename*=UTF-8''" + url.PathEscape(name)
 }

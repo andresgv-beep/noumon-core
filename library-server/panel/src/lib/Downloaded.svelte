@@ -25,6 +25,7 @@
     { k: 'documents', id: 'col:studio:documents', nameKey: 'media.surfaceDocuments', source: '' },
     { k: 'cabinet', id: 'surface:cabinet', name: 'Cabinet', source: 'cabinet' },
     { k: 'moments', id: 'surface:moments', name: 'Moments', source: 'moments' },
+    { k: 'depot', id: 'surface:depot', name: 'Depot', source: 'depot' },
   ]
   const surface = SURFACES.find((x) => x.k === surfaceKey) || SURFACES[1]
 
@@ -65,7 +66,7 @@
     busy = { ...busy, [it.id]: false }
   }
 
-  const KIND = { video: 'media.kindVideo', audio: 'media.kindAudio', gallery: 'media.kindImage', pdf: 'media.kindText', reader: 'media.kindText' }
+  const KIND = { program: 'media.kindProgram', video: 'media.kindVideo', audio: 'media.kindAudio', gallery: 'media.kindImage', pdf: 'media.kindText', reader: 'media.kindText' }
   const kindLabel = (tpl) => t(KIND[tpl] || 'media.kindDoc')
 
   const matches = (text) => {

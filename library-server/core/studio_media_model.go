@@ -15,6 +15,8 @@ const (
 	studioMaxMediaTracks    = 200
 	studioMaxMediaSubtitles = 32
 	studioMaxMediaChapters  = 500
+	studioMaxDepotFiles     = 64
+	studioMaxDepotShots     = 24
 )
 
 // StudioMediaMetadata is the neutral package contract shared by Cabinet and
@@ -34,7 +36,39 @@ type StudioMediaMetadata struct {
 	Tracks               []StudioMediaTrack    `json:"tracks,omitempty"`
 	Subtitles            []StudioMediaSubtitle `json:"subtitles,omitempty"`
 	Chapters             []StudioMediaChapter  `json:"chapters,omitempty"`
+
+	// Depot (depot.program): la ficha de un programa. El icono es CoverAssetID.
+	Version      string            `json:"version,omitempty"`
+	Shelf        string            `json:"shelf,omitempty"` // estante: multimedia, oficina…
+	Website      string            `json:"website,omitempty"`
+	Requirements string            `json:"requirements,omitempty"`
+	Languages    string            `json:"languages,omitempty"`
+	Notes        string            `json:"notes,omitempty"` // novedades de esta versión
+	Files        []StudioDepotFile `json:"files,omitempty"`
+	Screenshots  []StudioDepotShot `json:"screenshots,omitempty"`
 }
+
+// StudioDepotFile: un archivo descargable del programa. Nombre, tamaño, tipo y
+// SHA-256 salen del asset; aquí solo va lo que el autor decide.
+type StudioDepotFile struct {
+	AssetID string `json:"assetId"`
+	OS      string `json:"os"`   // win | linux | mac
+	Arch    string `json:"arch"` // x64 | arm64 | x86
+	Label   string `json:"label,omitempty"`
+	// Name: el nombre del fichero tal como se subió, solo para enseñarlo en el
+	// editor (como primaryName). Al publicar manda el del asset.
+	Name string `json:"name,omitempty"`
+}
+
+type StudioDepotShot struct {
+	AssetID string `json:"assetId"`
+	Caption string `json:"caption,omitempty"`
+}
+
+var (
+	studioDepotOS   = map[string]bool{"win": true, "linux": true, "mac": true}
+	studioDepotArch = map[string]bool{"x64": true, "arm64": true, "x86": true}
+)
 
 type StudioMediaTrack struct {
 	Title           string `json:"title"`
@@ -53,7 +87,7 @@ type StudioMediaChapter struct {
 }
 
 func validateStudioMediaMetadata(template string, raw json.RawMessage) (StudioMediaMetadata, []string, error) {
-	if !strings.HasPrefix(template, "cabinet.") && template != "moments.video" {
+	if !studioIsMediaTemplate(template) {
 		return StudioMediaMetadata{}, nil, nil
 	}
 	var metadata StudioMediaMetadata
@@ -69,6 +103,8 @@ func validateStudioMediaMetadata(template string, raw json.RawMessage) (StudioMe
 	}
 	metadata.Collection = sanitizeSegment(metadata.Collection)
 	for name, value := range map[string]string{
+		"version": metadata.Version, "shelf": metadata.Shelf, "website": metadata.Website,
+		"requirements": metadata.Requirements, "languages": metadata.Languages,
 		"date": metadata.Date, "contributor": metadata.Contributor, "license": metadata.License,
 		"primaryName": metadata.PrimaryName, "coverName": metadata.CoverName,
 		"channelAvatarName": metadata.ChannelAvatarName,
@@ -76,6 +112,15 @@ func validateStudioMediaMetadata(template string, raw json.RawMessage) (StudioMe
 		if utf8.RuneCountInString(strings.TrimSpace(value)) > 500 {
 			return metadata, nil, fmt.Errorf("metadata.%s: too long", name)
 		}
+	}
+	metadata.Version = strings.TrimSpace(metadata.Version)
+	metadata.Shelf = strings.TrimSpace(metadata.Shelf)
+	metadata.Website = strings.TrimSpace(metadata.Website)
+	metadata.Requirements = strings.TrimSpace(metadata.Requirements)
+	metadata.Languages = strings.TrimSpace(metadata.Languages)
+	metadata.Notes = strings.TrimSpace(metadata.Notes)
+	if utf8.RuneCountInString(metadata.Notes) > 4000 {
+		return metadata, nil, fmt.Errorf("metadata.notes: too long")
 	}
 	metadata.Date = strings.TrimSpace(metadata.Date)
 	metadata.Contributor = strings.TrimSpace(metadata.Contributor)
@@ -116,7 +161,9 @@ func validateStudioMediaMetadata(template string, raw json.RawMessage) (StudioMe
 	}
 	if len(metadata.Tracks) > studioMaxMediaTracks ||
 		len(metadata.Subtitles) > studioMaxMediaSubtitles ||
-		len(metadata.Chapters) > studioMaxMediaChapters {
+		len(metadata.Chapters) > studioMaxMediaChapters ||
+		len(metadata.Files) > studioMaxDepotFiles ||
+		len(metadata.Screenshots) > studioMaxDepotShots {
 		return metadata, nil, fmt.Errorf("metadata: too many entries")
 	}
 
@@ -174,6 +221,42 @@ func validateStudioMediaMetadata(template string, raw json.RawMessage) (StudioMe
 		}
 		previous = chapter.Start
 	}
+	for i := range metadata.Files {
+		file := &metadata.Files[i]
+		file.OS = strings.TrimSpace(file.OS)
+		file.Arch = strings.TrimSpace(file.Arch)
+		file.Label = strings.TrimSpace(file.Label)
+		file.Name = strings.TrimSpace(file.Name)
+		if utf8.RuneCountInString(file.Name) > 255 {
+			return metadata, nil, fmt.Errorf("metadata.files[%d].name: too long", i)
+		}
+		// El sistema puede quedar vacío en el borrador (un zip no dice para qué
+		// es); publicar lo exige. Lo que no se admite es un valor inventado.
+		if (file.OS != "" && !studioDepotOS[file.OS]) || !studioDepotArch[file.Arch] ||
+			utf8.RuneCountInString(file.Label) > 120 {
+			return metadata, nil, fmt.Errorf("metadata.files[%d]: invalid", i)
+		}
+		if err := addAsset(fmt.Sprintf("files[%d].assetId", i), file.AssetID, true); err != nil {
+			return metadata, nil, err
+		}
+	}
+	for i := range metadata.Screenshots {
+		shot := &metadata.Screenshots[i]
+		shot.Caption = strings.TrimSpace(shot.Caption)
+		if utf8.RuneCountInString(shot.Caption) > 240 {
+			return metadata, nil, fmt.Errorf("metadata.screenshots[%d]: invalid", i)
+		}
+		if err := addAsset(fmt.Sprintf("screenshots[%d].assetId", i), shot.AssetID, true); err != nil {
+			return metadata, nil, err
+		}
+	}
+	depot := template == "depot.program"
+	if !depot && (len(metadata.Files) != 0 || len(metadata.Screenshots) != 0) {
+		return metadata, nil, fmt.Errorf("metadata.files: unsupported for template")
+	}
+	if depot && metadata.PrimaryAssetID != "" {
+		return metadata, nil, fmt.Errorf("metadata.primaryAssetId: unsupported for template")
+	}
 	if template != "cabinet.audio" && len(metadata.Tracks) != 0 {
 		return metadata, nil, fmt.Errorf("metadata.tracks: unsupported for template")
 	}
@@ -192,6 +275,17 @@ func validateStudioMediaMetadata(template string, raw json.RawMessage) (StudioMe
 }
 
 func studioMediaReadyForPublication(template string, metadata StudioMediaMetadata) error {
+	if template == "depot.program" {
+		if len(metadata.Files) == 0 {
+			return fmt.Errorf("%w: at least one file required", errStudioMediaIncomplete)
+		}
+		for _, file := range metadata.Files {
+			if file.OS == "" {
+				return fmt.Errorf("%w: every file needs a system", errStudioMediaIncomplete)
+			}
+		}
+		return nil
+	}
 	if metadata.PrimaryAssetID == "" && !(template == "cabinet.audio" && len(metadata.Tracks) > 0) {
 		return fmt.Errorf("%w: primary file required", errStudioMediaIncomplete)
 	}
@@ -199,4 +293,11 @@ func studioMediaReadyForPublication(template string, metadata StudioMediaMetadat
 		return fmt.Errorf("%w: thumbnail required", errStudioMediaIncomplete)
 	}
 	return nil
+}
+
+// studioIsMediaTemplate: plantillas que publican fichero + ficha (Cabinet,
+// Moments, Depot) en lugar de un documento de bloques.
+func studioIsMediaTemplate(template string) bool {
+	return strings.HasPrefix(template, "cabinet.") || template == "moments.video" ||
+		template == "depot.program"
 }

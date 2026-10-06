@@ -35,6 +35,7 @@ const (
 var (
 	errStudioNotFound             = errors.New("studio document not found")
 	errStudioForbidden            = errors.New("studio document forbidden")
+	errStudioDepotAdminOnly       = errors.New("studio depot is admin only")
 	errStudioConflict             = errors.New("studio revision conflict")
 	errStudioRevisionNotFound     = errors.New("studio revision not found")
 	errStudioAssetInvalid         = errors.New("studio asset invalid")
@@ -57,6 +58,7 @@ var studioTemplates = map[string]string{
 	"cabinet.audio":   "cabinet",
 	"cabinet.video":   "cabinet",
 	"moments.video":   "moments",
+	"depot.program":   "depot",
 }
 
 var studioBlockTypes = map[string]bool{
@@ -290,7 +292,7 @@ func validateStudioInput(in StudioDocumentInput) (studioValidatedInput, error) {
 	if err != nil {
 		return studioValidatedInput{}, err
 	}
-	if strings.HasPrefix(in.TemplateKey, "cabinet.") || in.TemplateKey == "moments.video" {
+	if studioIsMediaTemplate(in.TemplateKey) {
 		in.Metadata, err = json.Marshal(mediaMetadata)
 		if err != nil {
 			return studioValidatedInput{}, err

@@ -16,7 +16,7 @@ func firstNonEmpty(vals ...string) string {
 // isOwnMediaSource: los carriles que library-core reconoce como CONTENIDO PROPIO.
 // Cualquier otro carril heredado de un pool compartido se ignora.
 func isOwnMediaSource(source string) bool {
-	return source == "moments" || source == "cabinet"
+	return source == "moments" || source == "cabinet" || source == "depot"
 }
 
 // channelSlug normaliza el nombre de un canal/autor a un identificador seguro para

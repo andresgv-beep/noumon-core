@@ -100,6 +100,18 @@
       <button class="star" class:on={siteShown('moments')} title={siteShown('moments') ? t('side.unpinSite') : t('side.pinSite')} onclick={() => toggleSite('moments')}><Icon name="star" size={15} /></button>
     </div>
     {/if}
+    {#if surfaces.depot}
+    <div class="lib" class:active={activeView === 'depot'}>
+      <button class="libopen" onclick={() => onOpenView?.('depot')} title={t('menu.depot')}>
+        <span class="documents-icon depot-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2.8l8.2 4.6v9.2L12 21.2l-8.2-4.6V7.4z"/><path d="M3.8 7.4L12 12l8.2-4.6M12 12v9.2"/></svg></span>
+        <span class="meta">
+          <span class="nm">{t('menu.depot')}</span>
+          <span class="sub">{t('depot.sidebarSub')}</span>
+        </span>
+      </button>
+      <button class="star" class:on={siteShown('depot')} title={siteShown('depot') ? t('side.unpinSite') : t('side.pinSite')} onclick={() => toggleSite('depot')}><Icon name="star" size={15} /></button>
+    </div>
+    {/if}
     {#each libraries as lib}
       <div class="lib" class:active={activeLib === lib.id}>
         <button class="libopen" onclick={() => onOpenLibrary?.(lib)} title={lib.name}>
@@ -167,6 +179,7 @@
   .create-link b{color:var(--ink);font-size:13.5px;font-weight:550}
   .create-link small{color:var(--muted);font-size:11.5px}
   .studio-icon{width:26px;height:26px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;background:color-mix(in srgb,var(--accent) 18%,var(--panel-2));color:var(--accent-2);border:1px solid var(--accent-line)}
+  .depot-icon.depot-icon{background:color-mix(in srgb,#e8a33d 17%,var(--panel-2));color:#e8a33d;border-color:color-mix(in srgb,#e8a33d 35%,var(--border))}
   .documents-icon{width:26px;height:26px;border-radius:var(--r-md);display:grid;place-items:center;flex:none;background:color-mix(in srgb,#5a92d8 17%,var(--panel-2));color:#79a9e4;border:1px solid color-mix(in srgb,#5a92d8 35%,var(--border))}
   .foot{padding:8px 10px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
   .footbtn{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--r-md);color:var(--ink-dim);font-size:14px;text-align:left;transition:background .12s,color .12s}

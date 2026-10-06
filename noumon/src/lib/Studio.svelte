@@ -5,6 +5,7 @@
   import DocumentContentsMenu from './DocumentContentsMenu.svelte';
   import StudioInfoCard from './StudioInfoCard.svelte';
   import StudioMediaEditor from './StudioMediaEditor.svelte';
+  import StudioDepotEditor from './StudioDepotEditor.svelte';
   import { t, relTime } from './i18n.svelte.js';
   import {
     saveStudioRecovery, loadStudioRecovery, clearStudioRecovery,
@@ -55,6 +56,21 @@
   // documento: se enseña para que publicar no sea un salto a ciegas.
   let publishAccess = $state('');
   let publishMinAge = $state(0);
+  // Cabinet, Moments y Depot tienen cada uno su acceso: el pie anuncia el del
+  // apartado que se edita, no el de Documentos.
+  let surfaceAccess = $state({});
+  // Depot reparte ejecutables: solo el admin lo crea y lo publica.
+  let canDepot = $state(false);
+
+  const SURFACE_GLYPH = { document: '✎', cabinet: '▣', moments: '▶', depot: '⬡' };
+  const SURFACE_LABEL = {
+    document: 'studio.createDocument', cabinet: 'studio.createCabinet',
+    moments: 'studio.createMoments', depot: 'studio.createDepot',
+  };
+  const SURFACE_DESTINATION = {
+    document: 'studio.destinationDocuments', cabinet: 'studio.destinationCabinet',
+    moments: 'studio.destinationMoments', depot: 'studio.destinationDepot',
+  };
   // Negrita y cursiva puestas en lo que hay seleccionado. Lo dice el navegador,
   // no nosotros: ver el boton apagado con el texto en negrita es peor que no
   // tener aviso.
@@ -120,6 +136,7 @@
     if (document?.templateKey === 'cabinet.audio') return 'tracks';
     if (document?.templateKey?.startsWith('cabinet.')) return 'file';
     if (document?.templateKey?.startsWith('moments.')) return 'video';
+    if (document?.templateKey?.startsWith('depot.')) return 'files';
     return 'pages';
   }
 
@@ -284,6 +301,8 @@
       quotaBytes = capabilities.quotaBytes || 0;
       publishAccess = capabilities.publishAccess || '';
       publishMinAge = capabilities.publishMinAge || 0;
+      surfaceAccess = capabilities.surfaceAccess || {};
+      canDepot = !!capabilities.canDepot;
       documents = await listStudioDocuments('all');
     } catch (e) {
       error = e.code || e.message;
@@ -296,7 +315,7 @@
       classification: { workType: 'article', topics: [], audience: [] },
       presentation: { contentWidth: 'reading', fontPreset: 'editorial' },
     };
-    if (templateKey.startsWith('cabinet.') || templateKey.startsWith('moments.')) {
+    if (templateKey.startsWith('cabinet.') || templateKey.startsWith('moments.') || templateKey.startsWith('depot.')) {
       return {
         ...base,
         schemaVersion: 1,
@@ -353,7 +372,9 @@
         ? t('studio.template.cabinetUntitled')
         : template.key.startsWith('moments.')
           ? t('studio.template.momentsUntitled')
-          : t(`studio.template.${template.key}Untitled`);
+          : template.key.startsWith('depot.')
+            ? t('studio.template.depotUntitled')
+            : t(`studio.template.${template.key}Untitled`);
       const doc = normalizeDocument(await createStudioDocument({
         templateKey: template.key,
         title,
@@ -940,12 +961,14 @@
   function surfaceOf(document = selected) {
     if (document?.templateKey?.startsWith('cabinet.')) return 'cabinet';
     if (document?.templateKey?.startsWith('moments.')) return 'moments';
+    if (document?.templateKey?.startsWith('depot.')) return 'depot';
     return 'document';
   }
 
   async function createSurface(surface) {
     const key = surface === 'cabinet' ? 'cabinet.pdf'
-      : surface === 'moments' ? 'moments.video' : 'document';
+      : surface === 'moments' ? 'moments.video'
+      : surface === 'depot' ? 'depot.program' : 'document';
     await newDocument({ key });
   }
 
@@ -1098,10 +1121,13 @@
   // Quien vera lo publicado, en una frase. La edad minima solo se nombra cuando
   // existe: decir "sin edad minima" seria ruido en el caso normal.
   function publishScopeLabel() {
-    const age = publishMinAge > 0 ? t('studio.publishScopeAge', { age: publishMinAge }) : '';
-    if (publishAccess === 'open') return t('studio.publishScopeOpen') + age;
-    if (publishAccess === 'login') return t('studio.publishScopeAccounts') + age;
-    if (publishAccess === 'blocked') return t('studio.publishScopeBlocked');
+    const surface = surfaceOf() === 'document' ? 'documents' : surfaceOf();
+    const scope = surfaceAccess[surface] || { access: publishAccess, minAge: publishMinAge };
+    const minAge = scope.minAge || 0;
+    const age = minAge > 0 ? t('studio.publishScopeAge', { age: minAge }) : '';
+    if (scope.access === 'open') return t('studio.publishScopeOpen') + age;
+    if (scope.access === 'login') return t('studio.publishScopeAccounts') + age;
+    if (scope.access === 'blocked') return t('studio.publishScopeBlocked');
     return t('studio.publishScopeUnknown');
   }
 
@@ -1109,6 +1135,16 @@
     if (!bytes) return t('studio.quotaUnknown');
     const gb = bytes / (1024 ** 3);
     return t('studio.quotaLimit', { size: gb >= 1 ? `${gb.toFixed(gb >= 10 ? 0 : 1)} GB` : `${Math.round(bytes / (1024 ** 2))} MB` });
+  }
+
+  // Lo mismo que exige el servidor antes de publicar un programa: al menos un
+  // archivo y que cada uno diga su sistema (un zip no lo dice solo).
+  function depotPublishProblem() {
+    if (surfaceOf() !== 'depot') return '';
+    const files = selected?.metadata?.files || [];
+    if (!files.length) return 'studio.depot.publishNeedsFile';
+    if (files.some((file) => !file.os)) return 'studio.depot.publishNeedsSystem';
+    return '';
   }
 
   function shellSections() {
@@ -1145,7 +1181,9 @@
   $effect(() => {
     const surface = surfaceOf();
     const unresolvedPageLinks = brokenPageLinks();
-    const publishDisabled = !selected || selected.status === 'archived' || unresolvedPageLinks.length > 0;
+    const depotMissing = depotPublishProblem();
+    const publishDisabled = !selected || selected.status === 'archived' ||
+      unresolvedPageLinks.length > 0 || !!depotMissing;
     // Lo decide el servidor comparando el contenido publicado con el actual. Aquí
     // se restaban revisiones, y como cada guardado sube una, un documento
     // publicado quedaba pendiente para siempre en cuanto lo tocabas.
@@ -1162,7 +1200,7 @@
       publishDisabled,
       publishDisabledReason: unresolvedPageLinks.length
         ? t('studio.pageLinkBrokenPublish')
-        : t('studio.publishUnavailable'),
+        : depotMissing ? t(depotMissing) : t('studio.publishUnavailable'),
       publishLabel: selected?.publishedRevision ? t('studio.updatePublication') : t('studio.publish'),
       // El boton no cabe en una frase, pero publicar no puede ser un salto a
       // ciegas: el destino y quien lo vera van en el pie de herramientas, y la
@@ -1198,11 +1236,10 @@
       restoreRevision,
       currentRevision: selected?.revision || 0,
       publishedRevision: selected?.publishedRevision || 0,
-      kindGlyph: surface === 'cabinet' ? '▣' : surface === 'moments' ? '▶' : '✎',
-      kindLabel: surface === 'cabinet' ? t('studio.createCabinet') : surface === 'moments' ? t('studio.createMoments') : t('studio.createDocument'),
+      kindGlyph: SURFACE_GLYPH[surface],
+      kindLabel: t(SURFACE_LABEL[surface]),
       kindHint: surface === 'document' ? t('studio.blockEditor') : t('studio.publicationForm'),
-      destination: surface === 'cabinet' ? t('studio.destinationCabinet')
-        : surface === 'moments' ? t('studio.destinationMoments') : t('studio.destinationDocuments'),
+      destination: t(SURFACE_DESTINATION[surface]),
       quotaLabel: formatQuota(quotaBytes),
       canArchive: selected?.status !== 'archived',
       canPurge: selected?.status === 'archived',
@@ -1268,6 +1305,13 @@
           <b>{t('studio.createMoments')}</b>
           <small>{t('studio.createMomentsDesc')}</small>
         </button>
+        {#if canDepot}
+          <button class="create-card" onclick={() => createSurface('depot')}>
+            <span class="create-glyph">⬡</span>
+            <b>{t('studio.createDepot')}</b>
+            <small>{t('studio.createDepotDesc')}</small>
+          </button>
+        {/if}
       </div>
 
       <h2>{t('studio.continueCreating')}</h2>
@@ -1275,11 +1319,11 @@
         {#each documents.slice(0, 12) as doc (doc.id)}
           {@const surface = surfaceOf(doc)}
           <button class="recent-item" onclick={() => openDocument(doc.id)}>
-            <span class="recent-glyph">{surface === 'cabinet' ? '▣' : surface === 'moments' ? '▶' : '✎'}</span>
+            <span class="recent-glyph">{SURFACE_GLYPH[surface]}</span>
             <span class="recent-meta">
               <b>{doc.title || t('studio.untitled')}</b>
               <small>
-                {surface === 'cabinet' ? t('studio.createCabinet') : surface === 'moments' ? t('studio.createMoments') : t('studio.createDocument')}
+                {t(SURFACE_LABEL[surface])}
                 · {relTime(doc.updated)}
               </small>
             </span>
@@ -1504,12 +1548,21 @@
   {:else if selected}
     <main class="publication-workspace scroll thin">
       {#if error}<div class="studio-error">{t(error)}</div>{/if}
-      <StudioMediaEditor
-        document={selected}
-        onChange={touch}
-        onUpload={uploadMediaAsset}
-        onError={mediaEditorError}
-      />
+      {#if surfaceOf() === 'depot'}
+        <StudioDepotEditor
+          document={selected}
+          onChange={touch}
+          onUpload={uploadMediaAsset}
+          onError={mediaEditorError}
+        />
+      {:else}
+        <StudioMediaEditor
+          document={selected}
+          onChange={touch}
+          onUpload={uploadMediaAsset}
+          onError={mediaEditorError}
+        />
+      {/if}
     </main>
   {/if}
 </section>
@@ -1522,7 +1575,7 @@
   .studio-home>h2{margin:0 0 12px;color:var(--faint);font-size:9px;font-weight:650;letter-spacing:.14em;text-transform:uppercase}
   .studio-home>h2{margin-left:auto;margin-right:auto}
   .studio-home>h2:not(:first-child){margin-top:32px}
-  .create-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;max-width:780px}
+  .create-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;max-width:780px}
   .create-card{min-height:150px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:20px 17px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);color:var(--ink);text-align:left;box-shadow:var(--shadow-soft);transition:border-color .14s,transform .14s}
   .create-card:hover{border-color:var(--accent-line);transform:translateY(-2px)}
   .create-glyph,.recent-glyph{display:grid;place-items:center;border-radius:var(--r-md);background:var(--accent-weak);color:var(--accent-2)}

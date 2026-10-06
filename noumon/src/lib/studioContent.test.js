@@ -169,16 +169,18 @@ test('adopts the legacy document info card as the first card of the first page',
   assert.equal(document.content.pages[0].id, 'p1');
 });
 
-test('does not migrate Cabinet or Moments payloads to the document schema', () => {
-  const media = normalizeStudioContent(
-    { schemaVersion: 1, blocks: [] },
-    'Audio',
-    'cabinet.audio',
-  );
-
-  assert.equal(media.schemaVersion, 1);
-  assert.deepEqual(media.blocks, []);
-  assert.equal(media.pages, undefined);
+test('does not migrate Cabinet, Moments or Depot payloads to the document schema', () => {
+  for (const templateKey of ['cabinet.audio', 'moments.video', 'depot.program']) {
+    const media = normalizeStudioContent({ schemaVersion: 1, blocks: [] }, 'Ficha', templateKey);
+    assert.equal(media.schemaVersion, 1, templateKey);
+    assert.deepEqual(media.blocks, [], templateKey);
+    assert.equal(media.pages, undefined, templateKey);
+  }
+  // Un borrador que ya se hubiera pasado al multipágina vuelve al esquema 1.
+  const stuck = normalizeStudioContent(
+    { schemaVersion: 2, pages: [{ id: 'p1', title: 'Ficha', blocks: [] }] }, 'Ficha', 'depot.program');
+  assert.equal(stuck.schemaVersion, 1);
+  assert.equal(stuck.pages, undefined);
 });
 
 test('does not downgrade an unknown future document schema', () => {

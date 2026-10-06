@@ -17,7 +17,7 @@
   const TYPE_KEY = { article: 'tab.article', video: 'cabinet.kind.video', pdf: 'cabinet.kind.text', document: 'cabinet.kind.text', image: 'cabinet.kind.image', audio: 'cabinet.kind.audio' };
   const kindLabel = (kind) => t(TYPE_KEY[kind] || 'cabinet.kind.doc');
   // Sitios visibles en el launcher (los que el usuario mantiene con la estrella).
-  let anySite = $derived((surfaces.documents && siteShown('documents')) || (surfaces.moments && siteShown('moments')) || (surfaces.cabinet && siteShown('cabinet')) || libraries.some((l) => siteShown(l.id)));
+  let anySite = $derived((surfaces.documents && siteShown('documents')) || (surfaces.moments && siteShown('moments')) || (surfaces.cabinet && siteShown('cabinet')) || (surfaces.depot && siteShown('depot')) || libraries.some((l) => siteShown(l.id)));
 
   // El estado de búsqueda vive en la pestaña → se conserva al volver atrás.
   let s = $derived(tab.search);
@@ -216,6 +216,12 @@
               <span class="sname">{t('menu.moments')}</span>
             </button>
           {/if}
+          {#if surfaces.depot && siteShown('depot')}
+            <button class="site" onclick={() => onOpenView?.('depot')} title={t('home.openSite', { name: t('menu.depot') })}>
+              <span class="docsite depotsite"><svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2.8l8.2 4.6v9.2L12 21.2l-8.2-4.6V7.4z"/><path d="M3.8 7.4L12 12l8.2-4.6M12 12v9.2"/></svg></span>
+              <span class="sname">{t('menu.depot')}</span>
+            </button>
+          {/if}
           {#if surfaces.cabinet && siteShown('cabinet')}
             <button class="site" onclick={() => onOpenView?.('cabinet')} title={t('home.openSite', { name: t('menu.cabinet') })}>
               <BrandIcon kind="cabinet" size={42} radius={21} />
@@ -383,6 +389,7 @@
   .site:hover{background:var(--raise)}
   .site :global(.zt),.site :global(.bi){transition:transform .12s,box-shadow .12s}
   .site:hover :global(.zt),.site:hover :global(.bi){transform:translateY(-2px);box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 22%,transparent)}
+  .depotsite.depotsite{background:color-mix(in srgb,#e8a33d 18%,var(--panel));border-color:color-mix(in srgb,#e8a33d 38%,var(--border));color:#e8a33d}
   .docsite{width:42px;height:42px;border-radius:var(--r-round);display:grid;place-items:center;background:color-mix(in srgb,#5a92d8 18%,var(--panel));border:1px solid color-mix(in srgb,#5a92d8 38%,var(--border));color:#79a9e4;transition:transform .12s,box-shadow .12s}
   .site:hover .docsite{transform:translateY(-2px);box-shadow:0 6px 16px color-mix(in srgb,#5a92d8 22%,transparent)}
   .sname{font-size:12.5px;color:var(--ink-dim);text-align:center;line-height:1.3;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
