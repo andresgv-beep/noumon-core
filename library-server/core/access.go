@@ -54,10 +54,52 @@ func validAccess(a string) bool {
 // Range, y antes eso era una consulta SQLite por Range serializada en una
 // única conexión (RENDIMIENTO-STREAMING §3, fix B).
 func (s *Server) collectionAccess(id string) accessCfg {
-	if cfg, ok := s.accessMap()[id]; ok {
+	if cfg, ok := s.accessMap()[s.accessKeyFor(id)]; ok {
 		return cfg
 	}
 	return accessCfg{Access: "blocked"}
+}
+
+// Cabinet y Moments se gobiernan enteros, no carpeta a carpeta: quien decide si
+// los anónimos ven Cabinet lo decide una vez, y lo que se publique después en
+// cualquier colección suya hereda esa decisión. Su fila en collection_access es
+// la del apartado; las filas antiguas por carpeta quedan sin efecto.
+//
+// El apartado de una carpeta lo dicen las fichas de lo que contiene (source),
+// no su nombre: Noumon DL guarda Moments en YouTube/ y Cabinet en Archives/.
+const (
+	surfaceAccessCabinet = "surface:cabinet"
+	surfaceAccessMoments = "surface:moments"
+)
+
+// surfaceAccessKey: la fila de un apartado ("" si no es uno de los gobernados).
+func surfaceAccessKey(surface string) string {
+	switch surface {
+	case "cabinet":
+		return surfaceAccessCabinet
+	case "moments":
+		return surfaceAccessMoments
+	}
+	return ""
+}
+
+// accessKeyFor: qué fila de collection_access manda sobre una colección. Las
+// carpetas de medios responden a su apartado; ZIM, Documentos y las carpetas
+// que mezclan apartados o aún no se han leído conservan su fila propia (sin
+// fila, bloqueadas).
+func (s *Server) accessKeyFor(collectionID string) string {
+	encoded, ok := strings.CutPrefix(collectionID, "col:media:")
+	if !ok || s.media == nil {
+		return collectionID
+	}
+	rel, ok := decodeOpaque(encoded)
+	if !ok {
+		return collectionID
+	}
+	if key := surfaceAccessKey(s.media.surfaceOfCollection(rel)); key != "" {
+		return key
+	}
+	return collectionID
 }
 
 // accessMap carga TODA la config de acceso de una vez (una query). Los filtros de
@@ -142,8 +184,8 @@ func (s *Server) invalidateAccessCache() {
 
 // canSeeCached resuelve el acceso contra un mapa ya cargado (sin tocar SQLite).
 // Sin fila en el mapa → blocked, igual que collectionAccess/canSee.
-func canSeeCached(u *User, m map[string]accessCfg, collectionID string) bool {
-	cfg, ok := m[collectionID]
+func (s *Server) canSeeCached(u *User, m map[string]accessCfg, collectionID string) bool {
+	cfg, ok := m[s.accessKeyFor(collectionID)]
 	if !ok {
 		cfg = accessCfg{Access: "blocked"}
 	}
@@ -201,7 +243,7 @@ func (s *Server) filterCollections(u *User, cols []Collection) []Collection {
 	am := s.accessMap()
 	out := make([]Collection, 0, len(cols))
 	for _, c := range cols {
-		if canSeeCached(u, am, c.ID) {
+		if s.canSeeCached(u, am, c.ID) {
 			out = append(out, c)
 		}
 	}
@@ -254,7 +296,7 @@ func (s *Server) filterMediaItems(u *User, items []mediaItem) []mediaItem {
 	am := s.accessMap()
 	out := make([]mediaItem, 0, len(items))
 	for _, it := range items {
-		if canSeeCached(u, am, collectionIDForMedia(it.Collection)) {
+		if s.canSeeCached(u, am, collectionIDForMedia(it.Collection)) {
 			out = append(out, it)
 		}
 	}
@@ -267,7 +309,7 @@ func (s *Server) filterSearchResults(u *User, res []FederatedSearchResult) []Fed
 	am := s.accessMap()
 	out := make([]FederatedSearchResult, 0, len(res))
 	for _, r := range res {
-		if r.CollectionID == "" || canSeeCached(u, am, r.CollectionID) {
+		if r.CollectionID == "" || s.canSeeCached(u, am, r.CollectionID) {
 			out = append(out, r)
 		}
 	}
@@ -283,7 +325,7 @@ func (s *Server) visibleLibs(u *User) ([]Library, error) {
 	am := s.accessMap()
 	out := make([]Library, 0, len(libs))
 	for _, lib := range libs {
-		if canSeeCached(u, am, collectionIDForZIM(lib.ID)) {
+		if s.canSeeCached(u, am, collectionIDForZIM(lib.ID)) {
 			out = append(out, lib)
 		}
 	}
@@ -352,4 +394,71 @@ func (s *Server) handleCollectionsAccess(w http.ResponseWriter, r *http.Request)
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "método no permitido"})
 	}
+}
+
+// migrateSurfaceAccess: al pasar de un acceso por carpeta a uno por apartado,
+// cada apartado hereda la primera vez el nivel MÁS restrictivo de sus carpetas
+// (edad mínima la mayor, descarga anónima solo si todas la permitían). Así el
+// cambio no abre nada que estuviera cerrado. Si el apartado ya tiene fila no se
+// toca: desde entonces lo decide el admin. Necesita el catálogo de medios para
+// saber de qué apartado es cada carpeta, por eso corre al arrancar el servidor.
+func (s *Server) migrateSurfaceAccess() error {
+	rows, err := s.store.db.Query(`
+		SELECT collection_id, access, min_age, allow_download
+		FROM collection_access WHERE collection_id LIKE 'col:media:%'`)
+	if err != nil {
+		return err
+	}
+	type row struct {
+		id  string
+		cfg accessCfg
+	}
+	var found []row
+	for rows.Next() {
+		var r row
+		var dl int
+		if err := rows.Scan(&r.id, &r.cfg.Access, &r.cfg.MinAge, &dl); err != nil {
+			rows.Close()
+			return err
+		}
+		r.cfg.AllowDownload = dl == 1
+		found = append(found, r)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+
+	rank := map[string]int{"open": 0, "login": 1, "blocked": 2}
+	merged := map[string]accessCfg{}
+	for _, r := range found {
+		key := s.accessKeyFor(r.id)
+		if key == r.id {
+			continue // carpeta sin apartado claro: conserva su fila
+		}
+		cfg := r.cfg
+		if _, known := rank[cfg.Access]; !known {
+			cfg.Access = "blocked"
+		}
+		prev, seen := merged[key]
+		if !seen {
+			merged[key] = cfg
+			continue
+		}
+		if rank[cfg.Access] > rank[prev.Access] {
+			prev.Access = cfg.Access
+		}
+		prev.MinAge = max(prev.MinAge, cfg.MinAge)
+		prev.AllowDownload = prev.AllowDownload && cfg.AllowDownload
+		merged[key] = prev
+	}
+	now := time.Now().Unix()
+	for key, cfg := range merged {
+		if _, err := s.store.db.Exec(`
+			INSERT OR IGNORE INTO collection_access (collection_id, access, min_age, allow_download, updated)
+			VALUES (?,?,?,?,?)`, key, cfg.Access, cfg.MinAge, boolInt(cfg.AllowDownload), now); err != nil {
+			return err
+		}
+	}
+	s.invalidateAccessCache()
+	return nil
 }

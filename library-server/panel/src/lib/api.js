@@ -153,6 +153,9 @@ export const installDep = (id) => postJSON('/api/admin/deps/install', { id })
 export const getMedia = () =>
   getJSON('/api/media').then((d) => d.items || []).catch(() => [])
 export const deleteMedia = (id) => postJSON('/api/admin/media/delete', { id })
+// Páginas publicadas de Documentos (se retiran desde Studio, no desde aquí)
+export const getDocumentItems = () =>
+  getJSON('/api/collections/' + encodeURIComponent('col:studio:documents') + '/items').then((d) => d.items || []).catch(() => [])
 
 // Importar · Cola de descargas administrativas
 export const listDownloads = () =>

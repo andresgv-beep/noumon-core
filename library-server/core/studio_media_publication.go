@@ -147,7 +147,7 @@ func (s *Server) publishStudioMediaDocument(
 	if _, err := tx.Exec(`
 		INSERT OR IGNORE INTO collection_access
 			(collection_id, access, min_age, allow_download, updated)
-		VALUES (?, 'login', 0, 0, ?)`, targetCollection, now); err != nil {
+		VALUES (?, 'login', 0, 0, ?)`, firstNonEmpty(surfaceAccessKey(surface), targetCollection), now); err != nil {
 		return StudioDocument{}, err
 	}
 	if err := tx.Commit(); err != nil {

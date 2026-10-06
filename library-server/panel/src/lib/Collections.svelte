@@ -7,7 +7,14 @@
 
   let { onImport } = $props()
 
-  let sub = $state('kiwix')    // 'kiwix' (ZIM) | 'media' (medios locales del pool)
+  let sub = $state('kiwix')    // 'kiwix' (ZIM) | un apartado: 'documents' | 'cabinet' | 'moments'
+  // Cada apartado con su pestaña: juntos en una sola página eran una lista sin
+  // fin en cuanto crece el catálogo.
+  const SURFACE_TABS = [
+    { k: 'documents', key: 'media.surfaceDocuments' },
+    { k: 'cabinet', name: 'Cabinet' },
+    { k: 'moments', name: 'Moments' },
+  ]
   let zim = $state(null)       // /api/admin/zim
   let rich = $state({})        // providerItemId → {id, itemCount, description}
   let accessMap = $state({})   // collectionId → {access, minAge, allowDownload}
@@ -247,11 +254,13 @@
 
 <div class="stabs">
   <button class="stab" class:on={sub === 'kiwix'} onclick={() => (sub = 'kiwix')}>{t('col.tabZim')}</button>
-  <button class="stab" class:on={sub === 'media'} onclick={() => (sub = 'media')}>{t('col.tabMedia')}</button>
+  {#each SURFACE_TABS as tab (tab.k)}
+    <button class="stab" class:on={sub === tab.k} onclick={() => (sub = tab.k)}>{tab.key ? t(tab.key) : tab.name}</button>
+  {/each}
 </div>
 
-{#if sub === 'media'}
-  <Downloaded />
+{#if sub !== 'kiwix'}
+  {#key sub}<Downloaded surface={sub} />{/key}
 {:else}
 <div class="toolbar">
   <div class="search" style="max-width:340px">

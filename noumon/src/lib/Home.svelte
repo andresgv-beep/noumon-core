@@ -6,6 +6,7 @@
   import BrandIcon from './BrandIcon.svelte';
   import LocationSearchResult from './LocationSearchResult.svelte';
   import { siteShown } from './sites.svelte.js';
+  import { surfaces } from './surfaces.svelte.js';
   import { itemSearch, globalImages, mapSearch } from './libraryApi.js';
   import { t, tn, i18n } from './i18n.svelte.js';
   import { theme } from './theme.svelte.js';
@@ -16,7 +17,7 @@
   const TYPE_KEY = { article: 'tab.article', video: 'cabinet.kind.video', pdf: 'cabinet.kind.text', document: 'cabinet.kind.text', image: 'cabinet.kind.image', audio: 'cabinet.kind.audio' };
   const kindLabel = (kind) => t(TYPE_KEY[kind] || 'cabinet.kind.doc');
   // Sitios visibles en el launcher (los que el usuario mantiene con la estrella).
-  let anySite = $derived(siteShown('documents') || siteShown('moments') || siteShown('cabinet') || libraries.some((l) => siteShown(l.id)));
+  let anySite = $derived((surfaces.documents && siteShown('documents')) || (surfaces.moments && siteShown('moments')) || (surfaces.cabinet && siteShown('cabinet')) || libraries.some((l) => siteShown(l.id)));
 
   // El estado de búsqueda vive en la pestaña → se conserva al volver atrás.
   let s = $derived(tab.search);
@@ -203,19 +204,19 @@
       <div class="blabel">{t('home.sites')}</div>
       {#if anySite}
         <div class="sitegrid">
-          {#if siteShown('documents')}
+          {#if surfaces.documents && siteShown('documents')}
             <button class="site" onclick={() => onOpenView?.('documents')} title={t('home.openSite', { name: t('menu.documents') })}>
               <span class="docsite"><Icon name="note" size={21} /></span>
               <span class="sname">{t('menu.documents')}</span>
             </button>
           {/if}
-          {#if siteShown('moments')}
+          {#if surfaces.moments && siteShown('moments')}
             <button class="site" onclick={() => onOpenView?.('moments')} title={t('home.openSite', { name: t('menu.moments') })}>
               <BrandIcon kind="moments" size={42} radius={21} />
               <span class="sname">{t('menu.moments')}</span>
             </button>
           {/if}
-          {#if siteShown('cabinet')}
+          {#if surfaces.cabinet && siteShown('cabinet')}
             <button class="site" onclick={() => onOpenView?.('cabinet')} title={t('home.openSite', { name: t('menu.cabinet') })}>
               <BrandIcon kind="cabinet" size={42} radius={21} />
               <span class="sname">{t('menu.cabinet')}</span>

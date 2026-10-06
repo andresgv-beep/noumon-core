@@ -399,6 +399,9 @@ func main() {
 	md := &mediaDeps{root: downloadRoot}
 	s.mediaRoot = downloadRoot
 	s.media = md
+	if err := s.migrateSurfaceAccess(); err != nil {
+		log.Printf("acceso por apartado: no se pudo migrar (%v)", err)
+	}
 	s.registerMediaRoutes(mux, md)                                            // /api/media + /media/* — detrás del gate de acceso
 	mux.HandleFunc("/api/images", s.handleImageSearch(md))                    // imágenes: ZIM + portadas/logos de vídeos
 	adminMux.HandleFunc("/api/admin/media/delete", s.handleMediaDelete(md))   // borrar item del pool (admin)

@@ -60,7 +60,6 @@ export const messages = {
 
     // colecciones — pestañas, filtros y toolbar
     'col.tabZim': 'Kiwix / ZIM',
-    'col.tabMedia': 'Medios locales',
     'col.search': 'Buscar colecciones…',
     'col.fAccess': 'Acceso',
     'col.fScripts': 'Scripts',
@@ -247,6 +246,10 @@ export const messages = {
     'media.noMatch': 'Ningún contenido coincide con el filtro.',
     'media.emptyTitle': 'Sin medios locales',
     'media.emptyBody': 'Añade contenido propio al pool y aparecerá aquí para gestionarlo.',
+    'media.items': '{n} elementos',
+    'media.surfaceDocuments': 'Documentos',
+    'media.sectionEmpty': 'Aún no hay nada publicado.',
+    'media.documentsHint': 'Las páginas se retiran desde Studio.',
 
     // importar
     'import.tabKiwix': 'Catálogo Kiwix',
@@ -466,7 +469,6 @@ export const messages = {
 
     // collections — tabs, filters, toolbar
     'col.tabZim': 'Kiwix / ZIM',
-    'col.tabMedia': 'Local media',
     'col.search': 'Search collections…',
     'col.fAccess': 'Access',
     'col.fScripts': 'Scripts',
@@ -653,6 +655,10 @@ export const messages = {
     'media.noMatch': 'No content matches the filter.',
     'media.emptyTitle': 'No local media',
     'media.emptyBody': 'Add your own content to the pool and it will appear here for you to manage.',
+    'media.items': '{n} items',
+    'media.surfaceDocuments': 'Documents',
+    'media.sectionEmpty': 'Nothing published yet.',
+    'media.documentsHint': 'Pages are withdrawn from Studio.',
 
     // import
     'import.tabKiwix': 'Kiwix catalog',

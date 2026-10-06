@@ -122,7 +122,7 @@ func (s *Server) imageSearch(media *mediaDeps, w http.ResponseWriter, r *http.Re
 	if media != nil {
 		access := s.accessMap()
 		visible := func(it mediaItem) bool {
-			return canSeeCached(user, access, collectionIDForMedia(it.Collection))
+			return s.canSeeCached(user, access, collectionIDForMedia(it.Collection))
 		}
 		if mi, mErr := media.searchImages(q, visible); mErr == nil {
 			out = append(out, mi...)

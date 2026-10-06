@@ -49,7 +49,7 @@ func TestAccessCacheExpiryBuildsOnceForConcurrentReaders(t *testing.T) {
 	s, _ := accessTestServer(t, t.TempDir())
 	setAccess(t, s, "Publica", "open", 0)
 	id := collectionIDForMedia("Publica")
-	if !canSeeCached(nil, s.accessMap(), id) { // primera construcción
+	if !s.canSeeCached(nil, s.accessMap(), id) { // primera construcción
 		t.Fatal("la colección abierta no se cargó")
 	}
 	before := s.accessBuilds.Load()
@@ -65,7 +65,7 @@ func TestAccessCacheExpiryBuildsOnceForConcurrentReaders(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			if !canSeeCached(nil, s.accessMap(), id) {
+			if !s.canSeeCached(nil, s.accessMap(), id) {
 				errs <- "lector no vio la colección abierta"
 			}
 		}()
@@ -296,5 +296,75 @@ func TestMediaCollectionForRelMatchesToItem(t *testing.T) {
 		if got := mediaCollectionForRel(rel); got != want {
 			t.Fatalf("mediaCollectionForRel(%q) = %q, quiero %q", rel, got, want)
 		}
+	}
+}
+
+// Cabinet y Moments se deciden enteros: el apartado lo dice la ficha, no la
+// carpeta (Noumon DL guarda en YouTube/ y Archives/). Una fila vieja de carpeta
+// no abre nada si el apartado está cerrado, y lo que mezcla apartados sigue
+// por carpeta.
+func surfaceTestServer(t *testing.T) *Server {
+	t.Helper()
+	root := t.TempDir()
+	writeSidecar(t, root, "Archives/cdl/libro.json", "Libro", "cabinet")
+	writeSidecar(t, root, "Archives/otro/libro.json", "Otro", "cabinet")
+	writeSidecar(t, root, "YouTube/Canal/video.json", "Video", "moments")
+	writeSidecar(t, root, "Mezcla/a.json", "A", "cabinet")
+	writeSidecar(t, root, "Mezcla/b.json", "B", "moments")
+	s, media := accessTestServer(t, root)
+	s.media = media
+	return s
+}
+
+func insertAccess(t *testing.T, s *Server, id, access string, age, dl int) {
+	t.Helper()
+	if _, err := s.store.db.Exec(`INSERT INTO collection_access (collection_id, access, min_age, allow_download, updated) VALUES (?,?,?,?,?)`,
+		id, access, age, dl, time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	s.invalidateAccessCache()
+}
+
+func TestSurfaceAccessGovernsItsFolders(t *testing.T) {
+	s := surfaceTestServer(t)
+	insertAccess(t, s, surfaceAccessCabinet, "blocked", 0, 0)
+	insertAccess(t, s, collectionIDForMedia("Archives/cdl"), "open", 0, 0) // fila antigua: ya no manda
+	insertAccess(t, s, collectionIDForMedia("Mezcla"), "open", 0, 0)
+
+	if s.canSeeCollectionID(nil, collectionIDForMedia("Archives/cdl")) {
+		t.Fatal("una fila de carpeta abrió una colección de un Cabinet bloqueado")
+	}
+	if s.canSeeMediaPath(nil, "Archives/otro/libro.pdf") {
+		t.Fatal("otra colección de Cabinet no heredó el bloqueo del apartado")
+	}
+	if s.canSeeMediaPath(nil, "YouTube/Canal/video.mp4") {
+		t.Fatal("Moments sin fila debe estar bloqueado")
+	}
+	if !s.canSeeCollectionID(nil, collectionIDForMedia("Mezcla")) {
+		t.Fatal("una carpeta que mezcla apartados perdió su propio acceso")
+	}
+
+	insertAccess(t, s, surfaceAccessMoments, "open", 0, 0)
+	if !s.canSeeMediaPath(nil, "YouTube/Canal/video.mp4") {
+		t.Fatal("abrir Moments no abrió sus colecciones")
+	}
+}
+
+func TestMigrateSurfaceAccessTakesMostRestrictive(t *testing.T) {
+	s := surfaceTestServer(t)
+	insertAccess(t, s, collectionIDForMedia("Archives/cdl"), "open", 0, 1)
+	insertAccess(t, s, collectionIDForMedia("Archives/otro"), "login", 12, 1)
+	insertAccess(t, s, collectionIDForMedia("YouTube/Canal"), "open", 0, 1)
+	insertAccess(t, s, surfaceAccessMoments, "blocked", 0, 0) // ya decidido: no se toca
+
+	if err := s.migrateSurfaceAccess(); err != nil {
+		t.Fatal(err)
+	}
+	got := s.accessMap()
+	if c := got[surfaceAccessCabinet]; c.Access != "login" || c.MinAge != 12 || !c.AllowDownload {
+		t.Fatalf("Cabinet migrado = %+v, quiero login/12/descarga", c)
+	}
+	if c := got[surfaceAccessMoments]; c.Access != "blocked" {
+		t.Fatalf("la migración pisó el acceso ya decidido de Moments: %+v", c)
 	}
 }

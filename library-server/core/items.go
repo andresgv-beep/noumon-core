@@ -142,6 +142,51 @@ func (s *Server) registerItemRoutes(mux *http.ServeMux, media *mediaDeps) {
 	mux.HandleFunc("/api/items/resolve", s.handleItemResolve(media))
 	mux.HandleFunc("/api/items/surface", s.handleSurfaceItems(media))
 	mux.HandleFunc("/api/items/", s.handleItemSub(media))
+	mux.HandleFunc("/api/surfaces", s.handleSurfaces(media))
+}
+
+// handleSurfaces: qué superficies tienen algo que este usuario pueda ver. El
+// cliente las usa para no ofrecer una entrada que abre una página vacía: un
+// anónimo con Moments en "solo cuentas" no debe ver Moments en el lateral.
+// El admin las ve siempre, que es quien las llena y las administra.
+func (s *Server) handleSurfaces(media *mediaDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "metodo no permitido"})
+			return
+		}
+		writeJSON(w, http.StatusOK, s.visibleSurfaces(s.currentUser(r), media))
+	}
+}
+
+func (s *Server) visibleSurfaces(u *User, media *mediaDeps) map[string]bool {
+	out := map[string]bool{"documents": false, "cabinet": false, "moments": false}
+	if u != nil && u.IsAdmin {
+		for key := range out {
+			out[key] = true
+		}
+		return out
+	}
+	if catalog, err := media.catalogSnapshot(); err == nil {
+		am := s.accessMap()
+		for _, provider := range []string{"cabinet", "moments"} {
+			for _, it := range catalog.providerItems(provider) {
+				if s.canSeeCached(u, am, collectionIDForMedia(it.Collection)) {
+					out[provider] = true
+					break
+				}
+			}
+		}
+	}
+	if s.canSeeCollectionID(u, studioDocumentsCollectionID) {
+		var published int
+		if err := s.store.db.QueryRow(`
+			SELECT COUNT(*) FROM studio_documents
+			WHERE published_revision IS NOT NULL AND status!='archived'`).Scan(&published); err == nil {
+			out["documents"] = published > 0
+		}
+	}
+	return out
 }
 
 // handleSurfaceItems: los items de una superficie completa (Moments o Cabinet)

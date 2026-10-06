@@ -203,3 +203,37 @@ func TestSurfaceItemsUsesMediaSnapshotWithoutZIMCatalog(t *testing.T) {
 		t.Fatalf("respuesta inesperada: %+v", payload.Items)
 	}
 }
+
+// Un anónimo no debe ver en el lateral una superficie cuyo contenido no puede
+// abrir; con sesión aparece lo que su nivel permite; el admin lo ve todo.
+func TestVisibleSurfacesFollowCollectionAccess(t *testing.T) {
+	root := t.TempDir()
+	writeSidecar(t, root, "Cabinet/Libros/b.json", "Libro", "cabinet")
+	writeSidecar(t, root, "Moments/Canal/v.json", "Video", "moments")
+	s, media := accessTestServer(t, root)
+	setAccess(t, s, "Cabinet/Libros", "open", 0)
+	setAccess(t, s, "Moments/Canal", "login", 0)
+
+	cases := []struct {
+		name string
+		user *User
+		want map[string]bool
+	}{
+		{"anonimo", nil, map[string]bool{"documents": false, "cabinet": true, "moments": false}},
+		{"cuenta", &User{ID: 7}, map[string]bool{"documents": false, "cabinet": true, "moments": true}},
+		{"admin", &User{ID: 1, IsAdmin: true}, map[string]bool{"documents": true, "cabinet": true, "moments": true}},
+	}
+	for _, tc := range cases {
+		got := s.visibleSurfaces(tc.user, media)
+		for key, want := range tc.want {
+			if got[key] != want {
+				t.Fatalf("%s: %s=%v, quiero %v", tc.name, key, got[key], want)
+			}
+		}
+	}
+
+	setAccess(t, s, "Cabinet/Libros", "blocked", 0)
+	if s.visibleSurfaces(nil, media)["cabinet"] {
+		t.Fatal("anonimo: Cabinet bloqueado sigue visible")
+	}
+}

@@ -5,6 +5,7 @@
   import BrandIcon from './BrandIcon.svelte';
   import { fmtSize } from './libraryApi.js';
   import { siteShown, toggleSite } from './sites.svelte.js';
+  import { surfaces } from './surfaces.svelte.js';
   import { t } from './i18n.svelte.js';
   import { profile, profileInitials, profileGradient } from './profile.svelte.js';
 
@@ -63,6 +64,7 @@
   </div>
 
   <div class="libs scroll thin">
+    {#if surfaces.documents}
     <div class="lib" class:active={activeView === 'documents'}>
       <button class="libopen" onclick={() => onOpenView?.('documents')} title={t('menu.documents')}>
         <span class="documents-icon"><Icon name="note" size={16} /></span>
@@ -73,6 +75,8 @@
       </button>
       <button class="star" class:on={siteShown('documents')} title={siteShown('documents') ? t('side.unpinSite') : t('side.pinSite')} onclick={() => toggleSite('documents')}><Icon name="star" size={15} /></button>
     </div>
+    {/if}
+    {#if surfaces.cabinet}
     <div class="lib" class:active={activeView === 'cabinet'}>
       <button class="libopen" onclick={() => onOpenView?.('cabinet')} title={t('menu.cabinet')}>
         <BrandIcon kind="cabinet" size={26} radius={7} />
@@ -83,6 +87,8 @@
       </button>
       <button class="star" class:on={siteShown('cabinet')} title={siteShown('cabinet') ? t('side.unpinSite') : t('side.pinSite')} onclick={() => toggleSite('cabinet')}><Icon name="star" size={15} /></button>
     </div>
+    {/if}
+    {#if surfaces.moments}
     <div class="lib" class:active={activeView === 'moments'}>
       <button class="libopen" onclick={() => onOpenView?.('moments')} title={t('menu.moments')}>
         <BrandIcon kind="moments" size={26} radius={7} />
@@ -93,6 +99,7 @@
       </button>
       <button class="star" class:on={siteShown('moments')} title={siteShown('moments') ? t('side.unpinSite') : t('side.pinSite')} onclick={() => toggleSite('moments')}><Icon name="star" size={15} /></button>
     </div>
+    {/if}
     {#each libraries as lib}
       <div class="lib" class:active={activeLib === lib.id}>
         <button class="libopen" onclick={() => onOpenLibrary?.(lib)} title={lib.name}>

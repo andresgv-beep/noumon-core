@@ -19,6 +19,7 @@
   import { serverPath } from './lib/connection.js';
   import { initShell } from './lib/shell.svelte.js';
   import { getStudioCapabilities } from './lib/studioApi.js';
+  import { refreshSurfaces } from './lib/surfaces.svelte.js';
   import './lib/theme.svelte.js'; // inicializa el tema (data-theme) + listener del sistema
 
   const loadBool = (k, def) => { try { const v = localStorage.getItem(k); return v === null ? def : v === '1'; } catch (e) { return def; } };
@@ -47,7 +48,7 @@
     try { studioCapabilities = await getStudioCapabilities(); }
     catch (e) { studioCapabilities = { available: false, canAuthor: false, canPublish: false }; }
   }
-  async function onAuthChanged() { await reloadLibraries(); await reloadPersonal(); await refreshStudio(); }
+  async function onAuthChanged() { await reloadLibraries(); await reloadPersonal(); await refreshStudio(); await refreshSurfaces(); }
   let indexOpen = $state(loadBool('noumon-index', true));
   let tabs = $state([]);
   let activeId = $state(null);
@@ -120,7 +121,9 @@
     if (i >= 0) { const f = favorites[i]; favorites.splice(i, 1); readerState.deleteFavorite(f.lib, f.path, f.itemId); }
   }
   function openFav(fav) { if (fav.itemId) openItemById(fav.itemId); else openArticle(fav.lib, fav.path); }
-  function toggleSidebar() { sidebarOpen = !sidebarOpen; } // no se guarda: cada arranque empieza cerrado
+  // Al abrirlo se vuelve a preguntar qué superficies hay: lo recién publicado
+  // aparece sin tener que recargar la aplicación.
+  function toggleSidebar() { sidebarOpen = !sidebarOpen; if (sidebarOpen) refreshSurfaces(); } // no se guarda: cada arranque empieza cerrado
   function toggleIndex() { indexOpen = !indexOpen; saveBool('noumon-index', indexOpen); }
 
   // ── Vistas del sidebar (Favoritos/Reciente/Historial/Notas/…) ────────────────
@@ -186,6 +189,7 @@
     newTab();
     await refreshAuth(); // fija identidad antes de cargar estado personal
     await refreshStudio();
+    refreshSurfaces();
     try { libraries = await getLibraries(); } catch (e) { /* motor caído: home vacío */ }
     // Favoritos desde el shim (SQLite); migra una vez los de localStorage si existían.
     try {

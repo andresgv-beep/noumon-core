@@ -36,6 +36,9 @@ type mediaCatalog struct {
 	byProvider   map[string][]int
 	byCollection map[string][]int
 	collections  map[string]collectionMeta
+	// surfaceOf: apartado (cabinet|moments) de cada carpeta según las fichas que
+	// contiene; "" si mezcla apartados.
+	surfaceOf map[string]string
 }
 
 func (c *mediaCatalog) providerItems(provider string) []mediaItem {
@@ -68,6 +71,10 @@ type mediaDeps struct {
 	// Hook de sincronización para pruebas: producción siempre lo deja nil.
 	afterScan func()
 
+	// Apartado de cada carpeta del último catálogo publicado. El gate de acceso
+	// lo lee en cada petición de /media sin esperar a que se reconstruya.
+	surfaces atomic.Pointer[map[string]string]
+
 	catalogHits       atomic.Uint64
 	catalogMisses     atomic.Uint64
 	catalogBuilds     atomic.Uint64
@@ -95,12 +102,18 @@ func (m *mediaDeps) buildCatalog() (*mediaCatalog, error) {
 		byProvider:   make(map[string][]int),
 		byCollection: make(map[string][]int),
 		collections:  make(map[string]collectionMeta),
+		surfaceOf:    make(map[string]string),
 	}
 	for i, it := range items {
 		relMedia := strings.Trim(strings.TrimPrefix(it.MediaURL, "/media/"), "/")
 		c.byID[itemIDForMedia(relMedia)] = i
 		c.byProvider[it.Source] = append(c.byProvider[it.Source], i)
 		c.byCollection[it.Collection] = append(c.byCollection[it.Collection], i)
+		if prev, seen := c.surfaceOf[it.Collection]; !seen {
+			c.surfaceOf[it.Collection] = it.Source
+		} else if prev != it.Source {
+			c.surfaceOf[it.Collection] = ""
+		}
 		if _, ok := c.collections[it.Collection]; !ok {
 			c.collections[it.Collection] = m.collectionMetadata(it.Collection)
 		}
@@ -157,6 +170,7 @@ func (m *mediaDeps) catalogSnapshot() (*mediaCatalog, error) {
 			continue
 		}
 		m.catalog = catalog
+		m.surfaces.Store(&catalog.surfaceOf)
 		m.builtAt = time.Now()
 		m.building = false
 		m.wakeCatalogWaitersLocked()
@@ -635,4 +649,21 @@ func cleanEmptyCollectionDir(dir string) {
 	_ = os.Remove(filepath.Join(dir, "collection.json"))
 	_ = os.Remove(filepath.Join(dir, "channel.jpg")) // imagen del canal/autor, compartida
 	_ = os.Remove(dir)                               // solo tiene efecto si la carpeta queda vacía
+}
+
+// surfaceOfCollection: a qué apartado pertenece una carpeta, según el último
+// catálogo. Solo lo construye si aún no existe ninguno: el gate de /media lo
+// llama en cada Range y no puede quedarse esperando a recorrer el disco cada
+// vez que caduca la caché.
+func (m *mediaDeps) surfaceOfCollection(collection string) string {
+	surfaces := m.surfaces.Load()
+	if surfaces == nil {
+		if _, err := m.catalogSnapshot(); err != nil {
+			return ""
+		}
+		if surfaces = m.surfaces.Load(); surfaces == nil {
+			return ""
+		}
+	}
+	return (*surfaces)[collection]
 }
