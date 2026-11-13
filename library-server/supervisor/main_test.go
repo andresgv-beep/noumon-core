@@ -1,13 +1,47 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestAdministrativeStopEndsSupervisorAndTranslation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixtures de procesos shell en Unix")
+	}
+	base := t.TempDir()
+	t.Setenv("NOUMON_LIBRARY_DATA", base)
+	t.Setenv("NOUMON_STOP_TEST_DIR", base)
+	core := "#!/bin/sh\nwhile [ ! -f \"$NOUMON_STOP_TEST_DIR/translate-started\" ]; do sleep 0.01; done\necho core >> \"$NOUMON_STOP_TEST_DIR/starts\"\nexit 76\n"
+	translate := "#!/bin/sh\ntouch \"$NOUMON_STOP_TEST_DIR/translate-started\"\nexec sleep 60\n"
+	for name, body := range map[string]string{"core": core, "translate-wrap": translate} {
+		if err := os.WriteFile(filepath.Join(base, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s := &supervisor{binDir: base, logDir: base, children: map[string]*exec.Cmd{}}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("el supervisor no termino por la parada administrativa")
+	}
+	starts, err := os.ReadFile(filepath.Join(base, "starts"))
+	if err != nil || string(starts) != "core\n" {
+		t.Fatalf("Core se reinicio o no arranco: %q, %v", starts, err)
+	}
+	if len(s.children) != 0 {
+		t.Fatalf("quedan procesos hijos: %v", s.children)
+	}
+}
 
 func TestMergeEnvReplacesValues(t *testing.T) {
 	result := mergeEnv([]string{"A=one", "B=two"}, map[string]string{"a": "changed", "C": "three"})

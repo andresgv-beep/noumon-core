@@ -36,5 +36,10 @@ con:
 El supervisor, no el lector, controla Core. Cerrar Noumon o el navegador
 del Panel no detiene el servidor.
 
+En Linux, el acceso **Noumon Panel de Control** del menu de aplicaciones
+inicia el servicio con systemd si esta detenido y despues abre la ventana
+nativa, o el navegador si no esta instalada. Asi se puede recuperar el Panel
+despues de detener el servidor por completo.
+
 En ambos modos la SPA usa rutas relativas. El shell reescribe `Host` hacia el
 destino, conserva streaming y Range, y no necesita CORS.

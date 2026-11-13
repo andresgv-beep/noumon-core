@@ -399,6 +399,14 @@ func main() {
 	md := &mediaDeps{root: downloadRoot}
 	s.mediaRoot = downloadRoot
 	s.media = md
+	if err := s.loadMomentsFolders(md); err != nil {
+		log.Fatalf("carpetas de Moments: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(downloadRoot, "Moments"), 0o755); err != nil {
+		log.Printf("carpeta de Moments: %v", err)
+	}
+	adminMux.HandleFunc("/api/admin/moments/folders", s.handleMomentsFolders(md))
+	adminMux.HandleFunc("/api/admin/moments/rescan", s.handleMomentsRescan(md))
 	if err := s.migrateSurfaceAccess(); err != nil {
 		log.Printf("acceso por apartado: no se pudo migrar (%v)", err)
 	}

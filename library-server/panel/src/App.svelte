@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { authMe, authLogout, authLogoutAll, authRefresh, getHealth, getServiceStatus, restartLibraryServer } from './lib/api.js'
+  import { authMe, authLogout, authLogoutAll, authRefresh, getHealth, getServiceStatus, restartLibraryServer, stopLibraryServer } from './lib/api.js'
   import { i18n, t, setLocale, LANGS } from './lib/i18n.svelte.js'
   import { theme, toggleTheme } from './lib/theme.svelte.js'
   import Login from './lib/Login.svelte'
@@ -11,6 +11,7 @@
   import Users from './lib/Users.svelte'
   import Maps from './lib/Maps.svelte'
   import Network from './lib/Network.svelte'
+  import MomentsFolders from './lib/MomentsFolders.svelte'
 
   let tab = $state('storage')
   let health = $state({ shim: '…', engine: '…' })
@@ -18,9 +19,13 @@
   let loading = $state(true)
   let service = $state({ supervised: false })
   let restarting = $state(false)
+  let stopping = $state(false)
+  let stopped = $state(false)
+  let serviceError = $state('')
   let desktop = $state(false)
 
   const TABS = [
+    { id: 'momentsFolders', key: 'folders.title', icon: 'M3 7h7l2 2h9v11H3zM3 7V4h7l2 3M10 12l5 3-5 3z' },
     { id: 'storage', key: 'nav.storage', icon: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3' },
     { id: 'collections', key: 'nav.collections', icon: 'M4 5h5v14H4zM10 5h4v14h-4zM16 6l4 13' },
     { id: 'translation', key: 'nav.translation', icon: 'M4 5h8M8 3v2M6 5c0 4-1.5 7-4 9M5 9c1.5 3 4 4 6 4M13 20l4-9 4 9M14.5 17h5' },
@@ -32,7 +37,10 @@
   const tabKey = $derived((TABS.find((x) => x.id === tab) || TABS[0]).key)
 
   async function loadHealth() {
-    health = await getHealth()
+    const next = await getHealth()
+    if (stopping) return
+    if (stopped && next.shim === 'up') { location.reload(); return }
+    health = next
     if (health.shim === 'up') service = await getServiceStatus()
   }
 
@@ -45,7 +53,8 @@
   async function logoutAll() { await authLogoutAll(); await refreshAuth() }
 
   async function restartServer() {
-    if (restarting || !confirm(t('head.confirmRestart'))) return
+    if (restarting || stopping || !confirm(t('head.confirmRestart'))) return
+    serviceError = ''
     restarting = true
     try {
       await restartLibraryServer()
@@ -56,14 +65,36 @@
         if (next.shim === 'up') { location.reload(); return }
         await new Promise((resolve) => setTimeout(resolve, 1000))
       }
-    } catch (e) {}
+      serviceError = t('head.restartSlow')
+    } catch (e) { serviceError = e.message || t('head.controlFailed') }
     restarting = false
+  }
+
+  async function stopServer() {
+    if (restarting || stopping || !confirm(t('head.confirmStop'))) return
+    stopping = true
+    serviceError = ''
+    try {
+      await stopLibraryServer()
+      // Confirmar que Core deja de responder antes de anunciar la parada.
+      for (let attempt = 0; attempt < 15; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        const next = await getHealth()
+        if (next.shim === 'down') {
+          stopped = true
+          health = next
+          return
+        }
+      }
+      serviceError = t('head.stopSlow')
+    } catch (e) { serviceError = e.message || t('head.controlFailed') }
+    finally { stopping = false }
   }
 
   onMount(() => {
     desktop = typeof window.runtime?.WindowMinimise === 'function'
     refreshAuth().finally(() => (loading = false))
-    const timer = setInterval(() => { if (me?.user?.isAdmin && !restarting) loadHealth() }, 5000)
+    const timer = setInterval(() => { if (me?.user?.isAdmin && !restarting && !stopping) loadHealth() }, 5000)
     return () => clearInterval(timer)
   })
 
@@ -106,6 +137,11 @@
 
   {#if loading}
     <div class="empty" style="flex:1;display:grid;place-items:center">{t('common.loading')}</div>
+  {:else if stopped}
+    <div class="empty" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+      <div class="big">{t('head.stopped')}</div>
+      <div>{t('head.stoppedHint')}</div>
+    </div>
   {:else if me.setupNeeded}
     <Login setupNeeded onDone={refreshAuth} />
   {:else if !me.user}
@@ -151,16 +187,22 @@
             <span class="head-dot" class:off={status.tone === 'down'} class:warn={status.tone === 'warn'}></span>{t(status.key)}
           </span>
           {#if service.supervised}
-            <button class="btn restart" disabled={restarting} onclick={restartServer}>{restarting ? t('head.restarting') : t('head.restart')}</button>
+            <button class="btn restart" disabled={restarting || stopping} onclick={restartServer}>{restarting ? t('head.restarting') : t('head.restart')}</button>
+            {#if service.stopSupported}
+              <button class="btn stop" disabled={restarting || stopping} onclick={stopServer}>{stopping ? t('head.stopping') : t('head.stop')}</button>
+            {/if}
           {/if}
-          <button class="btn" title={t('head.logoutAllTitle')} onclick={logoutAll}>{t('head.logoutAll')}</button>
-          <button class="btn" onclick={logout}>{t('head.logout')}</button>
+          <button class="btn" disabled={stopping || restarting} title={t('head.logoutAllTitle')} onclick={logoutAll}>{t('head.logoutAll')}</button>
+          <button class="btn" disabled={stopping || restarting} onclick={logout}>{t('head.logout')}</button>
         </div>
 
+        {#if serviceError}<div class="service-error" role="alert">{serviceError}</div>{/if}
         <div class="content scroll">
           <div class="section scroll">
             {#if tab === 'storage'}
               <Storage />
+            {:else if tab === 'momentsFolders'}
+              <MomentsFolders />
             {:else if tab === 'collections'}
               <Collections onImport={() => (tab = 'import')} />
             {:else if tab === 'translation'}
@@ -194,6 +236,8 @@
   .window-button.close:hover { background: #e5484d; color: #fff; }
 
   .mhead .restart { color: var(--warn); border-color: var(--warn-border); }
+  .mhead .stop { color: var(--crit); border-color: var(--crit-border); }
+  .service-error { padding: 10px 20px; color: var(--crit); background: var(--crit-dim); }
   .mhead .btn { padding: 6px 12px; font-size: 12px; }
 
   .langs { display: flex; gap: 5px; margin-bottom: 9px; }

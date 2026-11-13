@@ -124,7 +124,9 @@
             </div>
           {/if}
         </div>
-        {#if surface.source}
+        {#if it.auto_indexed}
+          <span class="badge b-mute">{t('folders.indexed')}</span>
+        {:else if surface.source}
           <button class="btn btn-danger" title={t('media.deleteTitle')} onclick={() => del(it)} disabled={busy[it.id]}>
             {busy[it.id] ? '…' : '🗑 ' + t('media.delete')}
           </button>

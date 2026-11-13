@@ -628,6 +628,9 @@ func (m *mediaDeps) collections() ([]Collection, error) {
 }
 
 func (m *mediaDeps) collectionMetadata(collection string) collectionMeta {
+	if folder, _, ok := m.momentsFolderForRel(collection + "/"); ok {
+		return collectionMeta{Type: "video", Template: "video", Title: folder.Name, Source: "moments"}
+	}
 	path, err := m.safeResolve(filepath.ToSlash(filepath.Join(collection, "collection.json")))
 	if err != nil {
 		return collectionMeta{}

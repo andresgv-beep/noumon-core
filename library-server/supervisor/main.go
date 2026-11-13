@@ -18,6 +18,7 @@ import (
 const (
 	serviceName     = "NoumonServer"
 	restartExitCode = 75
+	stopExitCode    = 76
 )
 
 type supervisor struct {
@@ -153,7 +154,13 @@ func (s *supervisor) runLoop(ctx context.Context, name, executable string, proce
 			case err := <-wait:
 				s.clearChild(name, cmd)
 				exitCode := commandExitCode(err)
-				if core && exitCode == restartExitCode {
+				if core && exitCode == stopExitCode {
+					log.Print("parada administrativa solicitada")
+					if output != nil {
+						output.Close()
+					}
+					return // run cancela los demas hijos y termina sin error.
+				} else if core && exitCode == restartExitCode {
 					log.Print("reinicio administrativo solicitado")
 					adminRestart = true
 				} else {
@@ -211,7 +218,7 @@ func (s *supervisor) processLog(name string) (*os.File, error) {
 }
 
 func (s *supervisor) coreEnv() []string {
-	extra := map[string]string{"LIBRARY_SUPERVISED": "1"}
+	extra := map[string]string{"LIBRARY_SUPERVISED": "1", "LIBRARY_CAN_STOP": "1"}
 	stateRoot, stateErr := supervisorDataDir("data")
 	configPath, configErr := supervisorConfigPath()
 	var cfg supervisorConfig

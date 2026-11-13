@@ -10,6 +10,7 @@
   import { downloadMedia } from './auth.svelte.js';
   import Icon from './Icon.svelte';
   import MomentsHeader from './MomentsHeader.svelte';
+  import CreatorAvatar from './CreatorAvatar.svelte';
   import { untrack } from 'svelte';
   import { tstate, targetLang, nativeLang, norm2, detectLang } from './translate.svelte.js';
 
@@ -128,7 +129,6 @@
   const sourceURL = $derived(item?.source?.originalUrl || '');
   const channelAvatar = $derived(item?.channelAvatar || '');
 
-  const initials = (s) => (s || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
   function hms(s) {
     s = Math.max(0, Math.floor(s || 0));
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = String(s % 60).padStart(2, '0');
@@ -318,7 +318,7 @@
         <div class="v-bar">
           <div class="chan">
             <div class="av" class:img={channelAvatar}>
-              {#if channelAvatar}<img src={channelAvatar} alt={author} />{:else}{initials(author || 'Moments')}{/if}
+              <CreatorAvatar src={channelAvatar} name={author} size={30} />
             </div>
             <div>
               <div class="cn">{author || 'Moments'}</div>
@@ -429,7 +429,6 @@
   .chan { display: flex; align-items: center; gap: 11px; }
   .chan .av { width: 42px; height: 42px; flex: none; border-radius:var(--r-pill); display: grid; place-items: center; color: #fff; font-weight: 650; font-size: 15px; background: linear-gradient(150deg, var(--accent), var(--accent-2)); overflow: hidden; }
   .chan .av.img { background: none; }
-  .chan .av img { width: 100%; height: 100%; object-fit: cover; }
   .chan .cn { font-size: 14px; font-weight: 620; }
   .chan .cs { font-size: 12px; color: var(--muted); }
   .chan .chfav { margin-left: 6px; width: 36px; height: 36px; flex: none; border-radius:var(--r-pill); display: grid; place-items: center; background: none; border: 0; color: var(--muted); cursor: pointer; transition: color .14s, background .14s; }

@@ -86,6 +86,16 @@ foreach ($a in $arches) {
   New-Item -ItemType Directory -Force -Path $unitDir | Out-Null
   Copy-AsLF (Join-Path $LinuxAssets 'noumon.service') (Join-Path $unitDir 'noumon.service')
 
+  $launcherDir = Join-Path $staging 'usr\bin'
+  $applicationsDir = Join-Path $staging 'usr\share\applications'
+  $pixmapsDir = Join-Path $staging 'usr\share\pixmaps'
+  foreach ($directory in @($launcherDir, $applicationsDir, $pixmapsDir)) {
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+  }
+  Copy-AsLF (Join-Path $LinuxAssets 'noumon-open-panel') (Join-Path $launcherDir 'noumon-open-panel')
+  Copy-AsLF (Join-Path $LinuxAssets 'noumon-panel.desktop') (Join-Path $applicationsDir 'noumon-panel.desktop')
+  Copy-Item -LiteralPath (Join-Path $Root 'icons\noumon-control-panel.png') -Destination (Join-Path $pixmapsDir 'noumon-panel.png')
+
   $sizeKB = [int](((Get-ChildItem -LiteralPath $staging -Recurse -File | Measure-Object Length -Sum).Sum) / 1024)
   $controlText = @(
     'Package: noumon',

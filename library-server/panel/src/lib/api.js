@@ -24,6 +24,23 @@ export const setStorageRoot = (root) =>
   })
 
 // Red local — publicar la biblioteca en la LAN (network.go)
+async function momentsFoldersJSON(url, opts) {
+  const response = await fetch(url, opts)
+  const data = await response.json()
+  if (!response.ok) {
+    const error = new Error(data.errorCode || 'folders.failed')
+    error.code = data.errorCode || 'folders.failed'
+    throw error
+  }
+  return data
+}
+export const getMomentsFolders = () => momentsFoldersJSON('/api/admin/moments/folders')
+export const addMomentsFolder = (path, name) => momentsFoldersJSON('/api/admin/moments/folders', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, name }),
+})
+export const removeMomentsFolder = (id) => momentsFoldersJSON('/api/admin/moments/folders?id=' + encodeURIComponent(id), { method: 'DELETE' })
+export const rescanMoments = () => momentsFoldersJSON('/api/admin/moments/rescan', { method: 'POST' })
+
 export const getNetwork = () => getJSON('/api/admin/network')
 export const setLanAccess = (lanAccess) =>
   getJSON('/api/admin/network', {
@@ -41,11 +58,13 @@ export const getLanguages = () =>
   getJSON('/api/translate/languages').catch(() => ({ available: false }))
 
 // Salud del Core + motor
-export const getHealth = () => getJSON('/api/health').catch(() => ({ shim: 'down', engine: 'down' }))
+export const getHealth = () => getJSON('/api/health', { signal: AbortSignal.timeout(5000) }).catch(() => ({ shim: 'down', engine: 'down' }))
 export const getServiceStatus = () =>
   getJSON('/api/admin/service').catch(() => ({ supervised: false }))
 export const restartLibraryServer = () =>
-  postJSON('/api/admin/service', {})
+  getJSON('/api/admin/service', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'restart' }) })
+export const stopLibraryServer = () =>
+  getJSON('/api/admin/service', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stop' }) })
 
 // Mapas offline: catalogo regional, extraccion PMTiles y mapa activo.
 export const getMaps = () => getJSON('/api/admin/maps')

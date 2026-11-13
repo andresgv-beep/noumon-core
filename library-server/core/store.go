@@ -15,6 +15,11 @@ import (
 type Store struct{ db *sql.DB }
 
 const schema = `
+CREATE TABLE IF NOT EXISTS moments_folders (
+  id TEXT PRIMARY KEY,
+  path TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS favorites (
   item_id TEXT NOT NULL DEFAULT '',
   lib     TEXT NOT NULL,

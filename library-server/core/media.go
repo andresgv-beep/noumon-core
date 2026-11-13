@@ -52,7 +52,10 @@ func (c *mediaCatalog) providerItems(provider string) []mediaItem {
 
 // mediaDeps: raíz de descargas (misma que el download handler). Se inyecta desde main.
 type mediaDeps struct {
-	root string // DOWNLOAD_ROOT, absoluta y resuelta
+	root            string // DOWNLOAD_ROOT, absoluta y resuelta
+	foldersMu       sync.RWMutex
+	foldersConfigMu sync.Mutex
+	folders         []momentsFolder
 
 	// Caché GLOBAL del catálogo (solo metadatos), compartida entre usuarios.
 	// Antes cada petición recorría DOWNLOAD_ROOT entero releyendo sidecars:
@@ -232,6 +235,7 @@ func (m *mediaDeps) invalidate() {
 // mediaItem = lo que ve el lector por cada item del pool. Espejo del
 // sidecar + las rutas que la UI necesita para pintarlo y abrirlo.
 type mediaItem struct {
+	AutoIndexed      bool             `json:"auto_indexed,omitempty"`
 	ID               string           `json:"id"`         // ruta relativa del sidecar (estable, única)
 	Collection       string           `json:"collection"` // carpeta relativa ("Libros/Clásicos")
 	Template         string           `json:"template"`   // video | pdf | gallery | audio | reader (por TIPO, no por superficie)
@@ -402,6 +406,7 @@ func (m *mediaDeps) scan(collection string) ([]mediaItem, error) {
 	collection = filepath.ToSlash(strings.Trim(collection, "/"))
 
 	var out []mediaItem
+	represented := map[string]bool{}
 	err := filepath.WalkDir(m.root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // carpeta ilegible: sáltala, no abortes todo el escaneo
@@ -422,6 +427,7 @@ func (m *mediaDeps) scan(collection string) ([]mediaItem, error) {
 		if json.Unmarshal(raw, &sc) != nil || sc.Media == "" {
 			return nil // no es un sidecar válido (o le falta el fichero de media)
 		}
+		represented[filepath.Clean(filepath.Join(filepath.Dir(path), sc.Media))] = true
 		// library-core solo gestiona SU propio contenido (Moments/Cabinet).
 		// Los carriles heredados de un pool compartido se ignoran por completo.
 		if !isOwnMediaSource(sc.Source) {
@@ -436,7 +442,20 @@ func (m *mediaDeps) scan(collection string) ([]mediaItem, error) {
 		out = append(out, item)
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, m.scanLooseMoments(represented)...)
+	if collection != "" {
+		filtered := out[:0]
+		for _, it := range out {
+			if it.Collection == collection || strings.HasPrefix(it.Collection, collection+"/") {
+				filtered = append(filtered, it)
+			}
+		}
+		out = filtered
+	}
+	return out, nil
 }
 
 // toItem construye el mediaItem a partir de la ruta del sidecar y su contenido.
@@ -583,6 +602,9 @@ func (m *mediaDeps) handleMediaFile(w http.ResponseWriter, r *http.Request) {
 // safeResolve ancla `rel` a DOWNLOAD_ROOT y garantiza que no escapa ni por
 // segmentos .. ni siguiendo symlinks/junctions creados dentro del pool.
 func (m *mediaDeps) safeResolve(rel string) (string, error) {
+	if strings.HasPrefix(rel, momentsFolderPrefix) {
+		return m.resolveMomentsVideo(rel)
+	}
 	if m.root == "" {
 		return "", fmt.Errorf("DOWNLOAD_ROOT no configurado")
 	}
@@ -635,6 +657,10 @@ func (s *Server) handleMediaDelete(md *mediaDeps) http.HandlerFunc {
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.ID) == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "falta id"})
+			return
+		}
+		if strings.HasPrefix(req.ID, momentsFolderPrefix) || strings.HasSuffix(req.ID, looseMomentsSuffix) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "retira el video de su carpeta o desconecta la carpeta de Moments"})
 			return
 		}
 		sidecarAbs, err := md.safeResolve(req.ID)

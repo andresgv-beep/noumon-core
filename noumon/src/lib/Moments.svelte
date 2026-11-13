@@ -13,6 +13,7 @@
   import { t } from './i18n.svelte.js';
   import { videoSearch } from './videoSearch.svelte.js';
   import MomentsHeader from './MomentsHeader.svelte';
+  import CreatorAvatar from './CreatorAvatar.svelte';
 
   let { onOpenItem } = $props();
 
@@ -22,19 +23,24 @@
   let channel = $state('');        // canal filtrado ('' = todos)
   let channelsView = $state(false); // true = cuadrícula de todos los canales
 
-  async function load() {
-    loading = true; errMsg = '';
+  async function load(background = false) {
+    if (!background) loading = true;
+    errMsg = '';
     try {
       // UNA petición por superficie: el servidor sirve del catálogo cacheado,
       // ya filtrado por proveedor y permisos, sin duplicados y con sectionName.
       items = await getSurfaceItems('moments');
     } catch (e) {
-      errMsg = e.message || t('moments.error');
+      if (!background) errMsg = e.message || t('moments.error');
     } finally {
       loading = false;
     }
   }
-  onMount(load);
+  onMount(() => {
+    load();
+    const timer = setInterval(() => load(true), 30000);
+    return () => clearInterval(timer);
+  });
 
   const chanOf = (it) => ((it.authors || []).join(', ') || it.sectionName || '');
   const channels = $derived([...new Set(items.map(chanOf).filter(Boolean))]);
@@ -57,7 +63,6 @@
       .sort((a, b) => (videoProgress.map[b.id]?.at || 0) - (videoProgress.map[a.id]?.at || 0))
   );
 
-  const initials = (s) => (s || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
   function hms(s) {
     s = Math.max(0, Math.floor(s || 0));
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = String(s % 60).padStart(2, '0');
@@ -67,6 +72,17 @@
   const avatar = (it) => it?.channelAvatar || '';
   const prog = (it) => videoProgress.map[it.id];
   const pct = (p) => (p && p.d ? Math.min(100, Math.max(2, (p.t / p.d) * 100)) : 0);
+
+  // En una biblioteca masiva, pedir solo las miniaturas proximas a la vista.
+  function videoThumbnail(node, url) {
+    const load = () => { node.preload = 'metadata'; node.src = url + '#t=0.1'; };
+    if (typeof IntersectionObserver === 'undefined') { load(); return; }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) { load(); observer.disconnect(); }
+    }, { rootMargin: '200px' });
+    observer.observe(node);
+    return { destroy() { observer.disconnect(); } };
+  }
 
   const chanAvatars = $derived(
     Object.fromEntries(items.map((it) => [chanOf(it), it.channelAvatar]).filter(([k, v]) => k && v))
@@ -124,7 +140,7 @@
         <img src={cover(it)} alt={it.title} loading="lazy" />
       {:else if it.open?.url}
         <!-- Sin miniatura: primer frame del vídeo (fragmento #t=) en vez de un placeholder. -->
-        <video class="vframe" src="{it.open.url}#t=0.1" preload="metadata" muted playsinline aria-hidden="true"></video>
+        <video class="vframe" use:videoThumbnail={it.open.url} preload="none" muted playsinline aria-hidden="true"></video>
       {/if}
       {#if it.duration}<div class="dur">{hms(it.duration)}</div>{/if}
       <div class="play"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M8 6l10 6-10 6z"/></svg></span></div>
@@ -132,7 +148,7 @@
     </div>
     <div class="cmeta">
       <div class="av" class:img={avatar(it)}>
-        {#if avatar(it)}<img src={avatar(it)} alt="" />{:else}{initials(chanOf(it) || '?')}{/if}
+        <CreatorAvatar src={avatar(it)} name={chanOf(it)} size={26} />
       </div>
       <div class="ct">
         <h3>{it.title}</h3>
@@ -183,7 +199,7 @@
                 <div class="mset" bind:this={firstSetEl}>
                   {#each channels as c (c)}
                     <button class="creator" class:dim={channel && channel !== c} onclick={() => (channel === c ? clearChannel() : pickChannel(c))} title={c}>
-                      <span class="cav">{#if chanAvatar(c)}<img src={chanAvatar(c)} alt={c} />{:else}<span class="ci">{initials(c)}</span>{/if}</span>
+                      <span class="cav"><CreatorAvatar src={chanAvatar(c)} name={c} size={36} /></span>
                       <span class="cname" class:strong={channel === c}>{c}</span>
                     </button>
                   {/each}
@@ -192,7 +208,7 @@
                   <div class="mset" aria-hidden="true">
                     {#each channels as c (c + '#dup')}
                       <button class="creator" class:dim={channel && channel !== c} tabindex="-1" onclick={() => (channel === c ? clearChannel() : pickChannel(c))}>
-                        <span class="cav">{#if chanAvatar(c)}<img src={chanAvatar(c)} alt="" />{:else}<span class="ci">{initials(c)}</span>{/if}</span>
+                        <span class="cav"><CreatorAvatar src={chanAvatar(c)} size={36} /></span>
                         <span class="cname" class:strong={channel === c}>{c}</span>
                       </button>
                     {/each}
@@ -212,7 +228,7 @@
               <div class="chwrap">
                 <button class="chcard" onclick={() => pickChannel(c.name)}>
                   <span class="chav">
-                    {#if c.avatar}<img src={c.avatar} alt={c.name} loading="lazy" />{:else}<span class="chi">{initials(c.name)}</span>{/if}
+                    <CreatorAvatar src={c.avatar} name={c.name} size={48} />
                   </span>
                   <span class="chn">{c.name}</span>
                   <span class="chc">{c.count} {c.count === 1 ? t('moments.count.one') : t('moments.count.other')}</span>
@@ -260,7 +276,7 @@
                 <div class="favlist">
                   {#each favedChannels as f (f.name)}
                     <button class="favrow" onclick={() => pickChannel(f.name)}>
-                      <span class="favav">{#if f.avatar}<img src={f.avatar} alt="" />{:else}<span class="favi">{initials(f.name)}</span>{/if}</span>
+                      <span class="favav"><CreatorAvatar src={f.avatar} name={f.name} size={26} /></span>
                       <span class="favname">{f.name}</span>
                     </button>
                   {/each}
@@ -312,8 +328,6 @@
   .creator:hover { transform: translateY(-2px); }
   .creator.dim { opacity: .45; }
   .cav { width: 54px; height: 54px; border-radius:var(--r-pill); overflow: hidden; display: grid; place-items: center; background: linear-gradient(150deg, var(--accent), var(--accent-2)); }
-  .cav img { width: 100%; height: 100%; object-fit: cover; }
-  .ci { color: #fff; font-weight: 650; font-size: 17px; }
   .cname { max-width: 66px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
   .cname.strong { color: var(--ink); font-weight: 600; }
 
@@ -334,8 +348,6 @@
   .favrow { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius:var(--r-md); background: none; border: 0; color: inherit; cursor: pointer; text-align: left; }
   .favrow:hover { background: var(--raise); }
   .favav { width: 30px; height: 30px; flex: none; border-radius:var(--r-pill); overflow: hidden; display: grid; place-items: center; background: linear-gradient(150deg, var(--accent), var(--accent-2)); }
-  .favav img { width: 100%; height: 100%; object-fit: cover; }
-  .favi { color: #fff; font-weight: 650; font-size: 12px; }
   .favname { font-size: 13px; color: var(--ink-dim); font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .favhint { font-size: 12px; color: var(--muted); line-height: 1.5; padding: 2px 4px 8px; }
   .clearbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border-radius:var(--r-lg); background: var(--card); border: 1px solid var(--border); color: var(--ink-dim); font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .14s, color .14s; }
@@ -357,8 +369,6 @@
   .chcard { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 10px; border-radius:var(--r-lg); background: none; border: 0; color: inherit; cursor: pointer; transition: background .14s, transform .14s; }
   .chcard:hover { background: var(--card); transform: translateY(-3px); }
   .chav { width: 76px; height: 76px; border-radius:var(--r-pill); overflow: hidden; display: grid; place-items: center; background: linear-gradient(150deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow); }
-  .chav img { width: 100%; height: 100%; object-fit: cover; }
-  .chi { color: #fff; font-weight: 650; font-size: 26px; }
   .chn { font-size: 13.5px; font-weight: 620; color: var(--ink); text-align: center; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chc { font-size: 11.5px; color: var(--muted); }
 
@@ -378,7 +388,6 @@
   .cmeta { display: flex; gap: 11px; }
   .av { width: 34px; height: 34px; flex: none; border-radius:var(--r-pill); display: grid; place-items: center; color: #fff; font-weight: 650; font-size: 13px; background: linear-gradient(150deg, var(--accent), var(--accent-2)); overflow: hidden; }
   .av.img { background: none; }
-  .av img { width: 100%; height: 100%; object-fit: cover; }
   .ct h3 { font-size: 14.5px; font-weight: 600; line-height: 1.33; letter-spacing: -.15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .ct .by { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
   .ct .st { color: var(--faint); font-size: 12px; margin-top: 1px; }

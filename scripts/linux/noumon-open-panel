@@ -1,0 +1,53 @@
+#!/bin/sh
+# El lanzador sigue disponible aunque Core y su interfaz web esten apagados.
+# Solo arranca el servicio por una apertura explicita del Panel desde el menu.
+set -eu
+
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}" in
+  es*)
+    failure='No se pudo iniciar Noumon. Puedes intentarlo desde una terminal con: sudo systemctl start noumon'
+    waiting='Noumon sigue arrancando. Espera unos segundos y vuelve a abrir el Panel de Control.'
+    ;;
+  *)
+    failure='Could not start Noumon. You can try from a terminal with: sudo systemctl start noumon'
+    waiting='Noumon is still starting. Wait a few seconds and open the Control Panel again.'
+    ;;
+esac
+
+show_error() {
+  if command -v zenity >/dev/null 2>&1; then
+    zenity --error --title=Noumon --text="$1" || true
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send Noumon "$1" || true
+  else
+    printf '%s\n' "$1" >&2
+  fi
+}
+
+if ! /usr/bin/systemctl is-active --quiet noumon.service; then
+  if ! /usr/bin/pkexec --disable-internal-agent /usr/bin/systemctl start noumon.service; then
+    show_error "$failure"
+    exit 1
+  fi
+fi
+
+if command -v noumon-panel >/dev/null 2>&1; then
+  exec noumon-panel
+fi
+
+# El navegador no tiene la pantalla de reconexion del shell nativo: esperar a
+# Core antes de abrirlo evita una pagina de conexion rechazada al arrancar.
+if command -v curl >/dev/null 2>&1; then
+  attempt=0
+  until curl --noproxy '*' --silent --fail --max-time 1 http://127.0.0.1:8090/api/health >/dev/null; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge 30 ]; then
+      show_error "$waiting"
+      exit 1
+    fi
+    sleep 1
+  done
+else
+  sleep 2
+fi
+exec xdg-open http://localhost:8090/panel/

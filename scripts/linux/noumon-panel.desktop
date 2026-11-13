@@ -1,9 +1,11 @@
 [Desktop Entry]
 Type=Application
 Name=Noumon Panel de Control
-Comment=Administracion del servidor Noumon
-Comment[es]=Administracion del servidor Noumon
-Exec=sh -c "command -v noumon-panel >/dev/null 2>&1 && exec noumon-panel || exec xdg-open http://localhost:8090/panel/"
+Name[en]=Noumon Control Panel
+Comment=Iniciar el servidor local y abrir el panel de Noumon
+Comment[es]=Iniciar el servidor local y abrir el panel de Noumon
+Comment[en]=Start the local server and open the Noumon control panel
+Exec=/usr/bin/noumon-open-panel
 Icon=noumon-panel
 Terminal=false
 Categories=Settings;

@@ -88,6 +88,9 @@ for a in $ARCHES; do
   mkdir -p "$STAGING/usr/share/applications" "$STAGING/usr/share/pixmaps"
   cp "$LINUX_ASSETS/noumon-panel.desktop" "$STAGING/usr/share/applications/noumon-panel.desktop"
   cp "$ROOT/icons/noumon-control-panel.png" "$STAGING/usr/share/pixmaps/noumon-panel.png"
+  mkdir -p "$STAGING/usr/bin"
+  tr -d '\r' < "$LINUX_ASSETS/noumon-open-panel" > "$STAGING/usr/bin/noumon-open-panel"
+  chmod 755 "$STAGING/usr/bin/noumon-open-panel"
 
   # 5. control + scripts de mantenimiento.
   SIZE_KB=$(du -sk "$STAGING" | cut -f1)

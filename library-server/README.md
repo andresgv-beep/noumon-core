@@ -42,6 +42,20 @@ traduccion. Reinicia Core si cae y atiende el codigo de reinicio controlado que
 puede solicitar un administrador desde el Panel. Ni el Panel ni Noumon
 inician, detienen o manipulan procesos directamente.
 
+El Panel permite **Detener servidor** a los administradores. Core solicita la
+parada con el codigo 76; el supervisor deja de relanzarlo, cierra traduccion y
+termina correctamente. La biblioteca deja de responder tanto en localhost como
+en la red. La opcion requiere actualizar Core y supervisor juntos.
+
+Para volver a arrancar desde Linux, abre **Noumon Panel de Control** desde el
+menu de aplicaciones del equipo servidor: el lanzador inicia el servicio si
+esta detenido (con autenticacion de administrador) y abre el Panel cuando
+responde. Tambien puedes ejecutar `sudo systemctl start noumon`. En Windows,
+inicia el servicio `NoumonServer` desde Servicios o
+ejecuta `library-supervisor.exe start` como administrador. El Panel se reconecta
+cuando el servidor vuelve a estar disponible. El arranque automatico del servicio
+al encender el equipo se conserva.
+
 Para clientes en otro origen, declare una lista exacta separada por comas:
 
 ```text
