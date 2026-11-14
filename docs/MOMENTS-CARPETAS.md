@@ -10,6 +10,13 @@ de Moments**. Deben ser carpetas del servidor, legibles por la cuenta que ejecut
 Noumon. Los archivos permanecen en el disco seleccionado. No se admite la raíz
 completa de un disco ni carpetas que se solapen con el pool u otra fuente.
 
+**Elegir carpeta…** abre un selector con los discos, carpetas montadas y fuentes
+existentes. Permite navegar, subir al directorio padre y filtrar subcarpetas.
+Enumera directorios del servidor mediante una ruta de solo lectura protegida
+por administración. Funciona también desde un cliente remoto y no sube ni copia
+archivos del ordenador desde el que se abre el Panel. La selección se registra
+únicamente al pulsar **Añadir carpeta**.
+
 La configuración vive en `moments_folders` dentro de `library.db`. Las URLs
 virtuales usan un identificador persistente de la fuente y la ruta relativa del
 vídeo. Se conservan al reiniciar o desconectar físicamente el disco. Retirar la

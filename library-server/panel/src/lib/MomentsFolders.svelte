@@ -2,12 +2,14 @@
   import { onMount } from 'svelte'
   import { getMomentsFolders, addMomentsFolder, removeMomentsFolder, rescanMoments } from './api.js'
   import { t } from './i18n.svelte.js'
+  import FolderPicker from './FolderPicker.svelte'
 
   let data = $state(null)
   let path = $state('')
   let name = $state('')
   let busy = $state(false)
   let error = $state('')
+  let picking = $state(false)
 
   async function load() { data = await getMomentsFolders() }
   async function run(action) {
@@ -43,7 +45,10 @@
     <h4>{t('folders.add')}</h4>
     <p>{t('folders.externalHint')}</p>
     <form onsubmit={add}>
-      <label>{t('folders.path')}<input required bind:value={path} placeholder={data.defaultPath.startsWith('/') ? '/mnt/videos' : 'D:\\Videos'} disabled={busy} /></label>
+      <div class="folder-selection">
+        <span class="selection-label">{t('folders.path')}</span>
+        <div class="selection-row"><div class="selected-path" class:placeholder={!path}>{path || t('picker.none')}</div><button type="button" class="btn" disabled={busy} onclick={() => { picking = true }}>{t('picker.browse')}</button></div>
+      </div>
       <label>{t('folders.name')}<input bind:value={name} maxlength="200" disabled={busy} /></label>
       <button class="btn btn-primary" disabled={busy || !path.trim()}>{t('folders.addButton')}</button>
     </form>
@@ -60,7 +65,13 @@
   <div class="empty">{t('common.loading')}</div>
 {/if}
 
+{#if picking}<FolderPicker initialPath={path} onClose={() => { picking = false }} onChoose={(chosen) => { path = chosen; picking = false }} />{/if}
+
 <style>
+  .selection-label { font-size: 12px; } .selection-row { display: flex; align-items: center; gap: 12px; margin-top: 7px; }
+  .selected-path { flex: 1; min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; font-size: 12px; }
+  .selected-path.placeholder { color: var(--ink-faint); } .selection-row .btn { flex-shrink: 0; }
+  @media(max-width: 540px) { .selection-row { align-items: stretch; flex-direction: column; } }
   p, .folder-note { color: var(--ink-faint); font-size: 12px; line-height: 1.6; }
   .folder-path { display: block; overflow-wrap: anywhere; padding: 10px 0; }
   form { display: grid; gap: 14px; margin-top: 16px; }

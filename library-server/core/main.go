@@ -406,6 +406,7 @@ func main() {
 		log.Printf("carpeta de Moments: %v", err)
 	}
 	adminMux.HandleFunc("/api/admin/moments/folders", s.handleMomentsFolders(md))
+	adminMux.HandleFunc("/api/admin/moments/directories", s.handleMomentsDirectories(md))
 	adminMux.HandleFunc("/api/admin/moments/rescan", s.handleMomentsRescan(md))
 	if err := s.migrateSurfaceAccess(); err != nil {
 		log.Printf("acceso por apartado: no se pudo migrar (%v)", err)

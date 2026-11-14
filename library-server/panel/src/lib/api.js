@@ -35,6 +35,7 @@ async function momentsFoldersJSON(url, opts) {
   return data
 }
 export const getMomentsFolders = () => momentsFoldersJSON('/api/admin/moments/folders')
+export const browseMomentsDirectories = (path = '') => momentsFoldersJSON('/api/admin/moments/directories?path=' + encodeURIComponent(path))
 export const addMomentsFolder = (path, name) => momentsFoldersJSON('/api/admin/moments/folders', {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, name }),
 })
