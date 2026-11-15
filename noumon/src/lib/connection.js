@@ -92,20 +92,30 @@ export function serverUrl(path) {
   if (!value || /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
     return value;
   }
-  if (!serverBase) return value;
+  const resourcePath = value.startsWith('/') ? value : `/${value}`;
+  if (!serverBase) return withMediaToken(value, resourcePath);
   const full = `${serverBase}${value.startsWith('/') ? '' : '/'}${value}`;
-  return withMediaToken(full, value.startsWith('/') ? value : `/${value}`);
+  return withMediaToken(full, resourcePath);
 }
 
-// withMediaToken añade el token de sesión (?st=) a las URLs de /media y /content:
+// withMediaToken añade el token multimedia efímero (?st=) a /media/ y /content/:
 // esas se cargan como src de <video>/<embed>/<img>/<iframe>, que no pueden mandar
 // la cabecera Authorization y, cross-origin, tampoco siempre la cookie. Solo esas
 // dos rutas (no /api, que va por Bearer) para no filtrar el token de más.
+// También es necesario con base relativa: el esquema interno de Wails puede
+// omitir la cookie aunque la API siga autenticada mediante Bearer.
 function withMediaToken(fullUrl, path) {
-	const token = mediaToken;
+  const token = mediaToken;
   if (!token) return fullUrl;
-  if (!path.startsWith('/media') && !path.startsWith('/content')) return fullUrl;
-  return `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}st=${encodeURIComponent(token)}`;
+  if (!path.startsWith('/media/') && !path.startsWith('/content/')) return fullUrl;
+  const hashAt = fullUrl.indexOf('#');
+  const resource = hashAt < 0 ? fullUrl : fullUrl.slice(0, hashAt);
+  const fragment = hashAt < 0 ? '' : fullUrl.slice(hashAt);
+  const queryAt = resource.indexOf('?');
+  const base = queryAt < 0 ? resource : resource.slice(0, queryAt);
+  const query = new URLSearchParams(queryAt < 0 ? '' : resource.slice(queryAt + 1));
+  query.set('st', token);
+  return `${base}?${query}${fragment}`;
 }
 
 export function setMediaToken(token) {

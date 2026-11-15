@@ -2,6 +2,11 @@
 
 Shell Wails que mantiene la SPA y todo el contenido bajo el mismo origen.
 
+En Linux se habilita expresamente la aceleracion grafica del WebView para
+mejorar el scroll y el redimensionado. Si un controlador presenta problemas,
+se puede arrancar con `NOUMON_DISABLE_GPU=1 noumon-client` para usar el modo
+de compatibilidad sin aceleracion. Esta opcion afecta solo a la ventana.
+
 ## Cliente remoto
 
 ```powershell

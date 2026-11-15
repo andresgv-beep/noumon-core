@@ -10,6 +10,7 @@
   import { getItem, getCollectionItems, fmtSize, translateSegments } from './libraryApi.js';
   import { t } from './i18n.svelte.js';
   import { downloadMedia } from './auth.svelte.js';
+  import { mediaFileMode, mediaFileName } from './mediaFileMode.js';
   import { tstate, targetLang, nativeLang, norm2, detectLang } from './translate.svelte.js';
 
   let { tab, onOpenItem } = $props();
@@ -58,14 +59,7 @@
   // exigiría internet (y el lector pdf.js además choca con CORS). Lo que existe en la
   // fuente sigue accesible por "Ver fuente" en Procedencia.
   const files = $derived((item?.files || []).filter((f) => f.local));
-  const fileMode = (f) => {
-    const name = ((f?.name || '') + ' ' + (f?.url || '')).toLowerCase();
-    if (/\.(mp4|webm|m4v|mov)$/.test(name)) return 'video';
-    if (/\.(mp3|ogg|oga|flac|m4a|wav)$/.test(name)) return 'audio';
-    if (/\.(jpe?g|png|gif|webp)$/.test(name)) return 'image';
-    if (/\.pdf$/.test(name)) return 'pdf';
-    return 'unsupported';
-  };
+  const fileMode = mediaFileMode;
   const mode = $derived(selectedFile ? fileMode(selectedFile) : baseMode);
   const url = $derived(selectedFile?.url || open.url || '');
   const title = $derived(item?.title || open.title || tab.title || '');
@@ -135,7 +129,7 @@
 
   const KIND_KEY = { video: 'cabinet.kind.video', audio: 'cabinet.kind.audio', image: 'item.kind.image', pdf: 'item.kind.text', document: 'item.kind.text' };
   const kindLabel = (k) => t(KIND_KEY[k] || 'cabinet.kind.doc');
-  const fileName = $derived(selectedFile?.name || decodeURIComponent((url.split('/').pop() || '').replace(/\+/g, ' ')));
+  const fileName = $derived(selectedFile?.name || mediaFileName(url));
   const viewable = (f) => fileMode(f) !== 'unsupported';
   const sourceLabel = $derived(source === 'cabinet' || source === 'local' || source === 'manual' ? '' : source);
   const summary = $derived([kindLabel(kind), language, sourceLabel].filter(Boolean).join(' · '));

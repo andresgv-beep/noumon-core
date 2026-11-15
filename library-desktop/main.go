@@ -11,10 +11,12 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 )
 
 // interfaceMode se fija a "panel" en el segundo ejecutable del todo-en-uno.
@@ -30,6 +32,13 @@ func main() {
 	if interfaceMode == "panel" {
 		title, width, height, minWidth, minHeight = "Library Control Panel", 1040, 760, 760, 520
 	}
+	// Linux nil hace que Wails fuerce WebviewGpuPolicyNever. Activar la
+	// composicion acelerada para scroll y redimensionado; conservar una salida
+	// de compatibilidad para equipos con problemas de controlador grafico.
+	gpuPolicy := linux.WebviewGpuPolicyAlways
+	if os.Getenv("NOUMON_DISABLE_GPU") == "1" {
+		gpuPolicy = linux.WebviewGpuPolicyNever
+	}
 
 	err = wails.Run(&options.App{
 		Title:     title,
@@ -42,6 +51,7 @@ func main() {
 		Frameless:  true,
 		OnStartup:  sh.onStartup,
 		OnShutdown: sh.onShutdown,
+		Linux:      &linux.Options{WebviewGpuPolicy: gpuPolicy},
 		// AssetServer.Handler recibe TODAS las peticiones de la webview: splash
 		// mientras arranca, reverse-proxy al core una vez listo.
 		AssetServer: &assetserver.Options{
