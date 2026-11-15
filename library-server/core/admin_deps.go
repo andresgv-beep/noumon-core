@@ -22,6 +22,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -40,15 +41,27 @@ type depTool struct {
 	// SHA256 esperado del binario. Vacío = aún sin fijar: la primera descarga
 	// verificada registra el hash real en el log para fijarlo aquí (TOFU
 	// consciente; el tamaño exacto sí se exige siempre).
-	SHA256 string `json:"-"`
-	File   string `json:"-"` // nombre de destino junto al ejecutable del Core
+	SHA256        string `json:"-"`
+	File          string `json:"-"` // nombre de destino junto al ejecutable del Core
+	ArchiveMember string `json:"-"` // miembro del .deb; vacio para ejecutables directos
 }
 
-// depManifest: versión y origen fijados por plataforma. Linux/ARM no tiene
-// binario oficial de translateLocally (plan §6): allí la traducción se
-// configura remota (TRANSLATE_URL) y la lista queda vacía.
+// depManifest: version, tamaño y SHA256 del upstream oficial por plataforma.
 func depManifest() []depTool {
-	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
+	return depManifestFor(runtime.GOOS, runtime.GOARCH)
+}
+
+func depManifestFor(goos, arch string) []depTool {
+	if goos == "linux" && arch == "amd64" {
+		return []depTool{{
+			ID: "translateLocally", Label: "translateLocally (motor Bergamot)",
+			Version: "v0.0.2+8e31cff", License: "MIT", Source: "github.com/XapaJIaMnu/translateLocally",
+			URL:   "https://github.com/XapaJIaMnu/translateLocally/releases/download/latest/translateLocally-v0.0.2%2B8e31cff-Ubuntu-20.04.x86-64.deb",
+			Bytes: 10882730, SHA256: "4e949b3478f7e01aea13cf01ccf2ffbb46883a287423c8b4ce1f9c5e01751256",
+			File: "translateLocally", ArchiveMember: "usr/bin/translateLocally",
+		}}
+	}
+	if goos == "windows" && arch == "amd64" {
 		return []depTool{{
 			ID:      "translateLocally",
 			Label:   "translateLocally (motor Bergamot)",
@@ -84,6 +97,40 @@ func depSiblingPath(name string) string {
 	return filepath.Join(filepath.Dir(exe), name)
 }
 
+// En Linux el servicio no escribe en /opt: las herramientas opcionales viven
+// en su directorio de estado. La configuracion y la biblioteca siguen aparte.
+func depInstallPath(name string) string {
+	if runtime.GOOS != "linux" {
+		return depSiblingPath(name)
+	}
+	root := strings.TrimSpace(os.Getenv("NOUMON_LIBRARY_DATA"))
+	if root == "" {
+		config, err := os.UserConfigDir()
+		if err != nil {
+			return depSiblingPath(name)
+		}
+		root = filepath.Join(config, "noumon")
+	}
+	return filepath.Join(root, "tools", name)
+}
+
+func depInstalledPath(tool depTool) string {
+	path := depInstallPath(tool.File)
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		return path
+	}
+	if runtime.GOOS == "linux" {
+		legacy := depSiblingPath(tool.File)
+		if info, err := os.Stat(legacy); err == nil && !info.IsDir() {
+			return legacy
+		}
+		if path, err := exec.LookPath(tool.File); err == nil {
+			return path
+		}
+	}
+	return path
+}
+
 func (s *Server) registerAdminDepsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/admin/deps", s.handleAdminDeps)
 	mux.HandleFunc("/api/admin/deps/install", s.handleAdminDepsInstall)
@@ -109,7 +156,7 @@ func (s *Server) handleAdminDeps(w http.ResponseWriter, r *http.Request) {
 		if st == nil {
 			st = &depState{}
 		}
-		info, err := os.Stat(depSiblingPath(tool.File))
+		info, err := os.Stat(depInstalledPath(tool))
 		out = append(out, toolStatus{
 			depTool:    tool,
 			Installed:  err == nil && !info.IsDir(),
@@ -172,7 +219,11 @@ func installDepTool(tool depTool, st *depState) {
 		depMu.Unlock()
 	}
 
-	dest := depSiblingPath(tool.File)
+	dest := depInstallPath(tool.File)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		fail(err)
+		return
+	}
 	part := dest + ".part"
 	defer os.Remove(part)
 
@@ -236,11 +287,26 @@ func installDepTool(tool depTool, st *depState) {
 		log.Printf("deps: %s %s instalado con SHA256=%s — fijarlo en depManifest para futuras verificaciones", tool.ID, tool.Version, sum)
 	}
 
-	if err := os.Chmod(part, 0o755); err != nil {
+	ready := part
+	if tool.ArchiveMember != "" {
+		ready = dest + ".ready"
+		defer os.Remove(ready)
+		if err := extractDepDeb(part, ready, tool.ArchiveMember); err != nil {
+			fail(err)
+			return
+		}
+	}
+	if err := os.Chmod(ready, 0o755); err != nil {
 		fail(err)
 		return
 	}
-	if err := os.Rename(part, dest); err != nil {
+	if runtime.GOOS == "linux" {
+		if err := checkDepExecutable(ready); err != nil {
+			fail(err)
+			return
+		}
+	}
+	if err := os.Rename(ready, dest); err != nil {
 		fail(err)
 		return
 	}

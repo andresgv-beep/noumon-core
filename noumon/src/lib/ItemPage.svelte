@@ -1,4 +1,5 @@
 <script>
+  import { createTranslationRequest } from './articleTranslation.js';
   // Ficha de contenido de CABINET (archivo documental) — maquetación editorial
   // (readerpage / videopage / audiopage): CABECERA a lo
   // ancho (título serif + autor + resumen + descargar) → REJILLA visor | sideinfo
@@ -6,7 +7,7 @@
   // banda propia (portada + motor con onda + lista de pistas). Identidad editorial
   // propia (serif + paleta cálida). Moments es OTRA app; aquí NO se mezcla.
   import Icon from './Icon.svelte';
-  import { tick, untrack } from 'svelte';
+  import { tick, untrack, onDestroy } from 'svelte';
   import { getItem, getCollectionItems, fmtSize, translateSegments } from './libraryApi.js';
   import { t } from './i18n.svelte.js';
   import { downloadMedia } from './auth.svelte.js';
@@ -143,7 +144,8 @@
   // ── Traducción del contenido (título + descripción) ──
   let tActive = $state(false), tBusy = $state(false), badgeOn = $state(false);
   let tTitle = $state(''), tDesc = $state('');
-  let tCtrl = null, badgeTimer = null, lastRun = 0, lastOrig = 0, lastTid = '';
+  const translationRequest = createTranslationRequest();
+  let badgeTimer = null, lastRun = 0, lastOrig = 0, lastTid = '';
   const displayTitle = $derived(tActive && tTitle ? tTitle : title);
   const displayDesc = $derived(tActive && tDesc ? tDesc : description);
   function langHint(v) {
@@ -159,27 +161,30 @@
     if (description) segs.push({ id: 'desc', text: description });
     if (!to || !segs.length) return;
     const src = langHint(language) || detectLang(`${title} ${description}`);
+    showOriginal();
     if (src && src === to) return;
     if (auto && !src) return;
-    tCtrl?.abort(); tCtrl = new AbortController();
+    const request = translationRequest.start();
     tBusy = true;
     try {
-      const out = await translateSegments({ lib: '', path: item?.id || '', to, sourceHint: src, html: false, segments: segs }, { signal: tCtrl.signal });
+      const out = await translateSegments({ lib: '', path: item?.id || '', to, sourceHint: src, html: false, segments: segs }, { signal: request.signal });
+      if (!request.isCurrent()) return;
       const by = new Map(out.map((x) => [x.id, x.text]));
       tTitle = by.get('title') || ''; tDesc = by.get('desc') || '';
       tActive = true; flashBadge();
     } catch (e) { /* abortada o error */ }
-    tBusy = false;
+    finally { if (request.isCurrent()) tBusy = false; }
   }
-  function showOriginal() { tCtrl?.abort(); tActive = false; }
+  function showOriginal() { translationRequest.cancel(); tActive = false; tBusy = false; badgeOn = false; clearTimeout(badgeTimer); }
   $effect(() => {
     const id = item?.id || '';
     untrack(() => {
       if (id === lastTid) return; lastTid = id;
-      tActive = false; tTitle = ''; tDesc = ''; tBusy = false;
+      showOriginal(); tTitle = ''; tDesc = '';
       if (id && tstate.auto) runTranslate(nativeLang(), true);
     });
   });
+  onDestroy(() => { translationRequest.cancel(); clearTimeout(badgeTimer); });
   $effect(() => { const r = tstate.run; untrack(() => { if (r === lastRun) return; lastRun = r; runTranslate(targetLang()); }); });
   $effect(() => { const o = tstate.original; untrack(() => { if (o === lastOrig) return; lastOrig = o; showOriginal(); }); });
 </script>

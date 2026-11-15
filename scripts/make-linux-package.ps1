@@ -97,10 +97,15 @@ foreach ($a in $arches) {
   Copy-Item -LiteralPath (Join-Path $Root 'icons\noumon-control-panel.png') -Destination (Join-Path $pixmapsDir 'noumon-panel.png')
 
   $sizeKB = [int](((Get-ChildItem -LiteralPath $staging -Recurse -File | Measure-Object Length -Sum).Sum) / 1024)
+  $runtimeDeps = 'ca-certificates'
+  if ($a -eq 'amd64') {
+    $runtimeDeps += ', libc6 (>= 2.29), libarchive13 | libarchive13t64, libqt5core5a | libqt5core5t64, libqt5gui5 | libqt5gui5t64 | libqt5gui5-gles, libqt5network5 | libqt5network5t64, libqt5svg5, libqt5widgets5 | libqt5widgets5t64'
+  }
   $controlText = @(
     'Package: noumon',
     "Version: $Version",
     "Architecture: $a",
+    "Depends: $runtimeDeps",
     'Maintainer: Noumon <andresgv7455@gmail.com>',
     'Section: web',
     'Priority: optional',

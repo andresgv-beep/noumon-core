@@ -13,13 +13,15 @@
   import ItemPage from './ItemPage.svelte';
   import MomentsWatch from './MomentsWatch.svelte';
   import Icon from './Icon.svelte';
-  import { untrack } from 'svelte';
+  import { untrack, onDestroy } from 'svelte';
+  import { collectArticleSegments, createTranslationRequest } from './articleTranslation.js';
   import { fade } from 'svelte/transition';
   import { t, i18n } from './i18n.svelte.js';
   import { theme } from './theme.svelte.js';
   import { translateSegments } from './libraryApi.js';
   import { tstate, targetLang, nativeLang, norm2 } from './translate.svelte.js';
   import { serverUrl } from './connection.js';
+  import { articleLinkTarget } from './articleNavigation.js';
 
   let { tab, libraries = [], favorites = [], indexOpen = false, notesVersion = 0, tagsVersion = 0,
         onNavigate, onOpenItem, onOpenView, onOpenMapAt, onToggleHome, onFrameNav, onRemoveFav, onOpenNote, onDeleteNote,
@@ -47,7 +49,8 @@
   let translated = $state(false);
   let badgeOn = $state(false); // "Traducido" visible; se desvanece a los 3s
   let badgeTimer = null;
-  let translateCtrl = null;
+  const translationRequest = createTranslationRequest();
+  let articleSource = null, articleDocument = null;
   let lastRun = 0, lastOrig = 0;
 
   function flashBadge() {
@@ -56,73 +59,44 @@
     badgeTimer = setTimeout(() => { badgeOn = false; }, 3000);
   }
 
-  const SEG_SEL = 'p, li, h1, h2, h3, h4, blockquote, figcaption, caption, dd, dt';
   let srcLang = $derived(norm2(libraries.find((l) => l.id === tab.lib)?.lang || ''));
-
-  // Limpia el ruido antes de traducir (TRANSLATE.md §8): fuera marcadores de
-  // referencia [1], enlaces [editar] y nodos no-prosa. Devuelve HTML (no texto
-  // pelado) para conservar los enlaces `<a>` al traducir con --html; si no, el
-  // reemplazo destruiría la navegación interna del artículo.
-  function cleanSource(el) {
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll('sup, .reference, .mw-editsection, .noprint, style, script').forEach((n) => n.remove());
-    return (clone.innerHTML || '')
-      .replace(/\[\s*\d+\s*\]/g, '')
-      .replace(/\[\s*(edit|editar|cita requerida|citation needed)\s*\]/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  // Recoge bloques de prosa con un id estable (índice de documento) para cachear.
-  function collectSegments(doc) {
-    const segs = [], map = [];
-    doc.querySelectorAll(SEG_SEL).forEach((el, i) => {
-      if (el.closest('table, style, script')) return; // fuera infoboxes/navboxes
-      const text = cleanSource(el);
-      if (text.length < 2) return;
-      const id = 's' + i;
-      segs.push({ id, text });
-      map.push({ id, el });
-    });
-    return { segs, map };
-  }
 
   async function translateArticle(to) {
     const doc = frameEl?.contentDocument;
-    if (!doc || !tab.lib || !to || to === srcLang) return;
-    const { segs, map } = collectSegments(doc);
-    if (!segs.length) return;
-    translateCtrl?.abort();
-    translateCtrl = new AbortController();
+    if (!doc || !tab.lib || !to) return;
+    showOriginal();
+    if (to === srcLang) return;
+    if (articleDocument !== doc) {
+      articleDocument = doc;
+      articleSource = collectArticleSegments(doc);
+    }
+    const source = articleSource;
+    if (!source.segments.length) return;
+    const request = translationRequest.start();
     translating = true;
     try {
       const out = await translateSegments(
-        { lib: tab.lib, path: tab.path, to, sourceHint: srcLang, html: true, segments: segs },
-        { signal: translateCtrl.signal });
-      const byId = new Map(out.map((s) => [s.id, s.text]));
-      for (const m of map) {
-        const tx = byId.get(m.id);
-        if (tx == null) continue;
-        // Guarda el HTML original (con enlaces) y pon el traducido conservándolos.
-        if (m.el.dataset.torig == null) m.el.dataset.torig = m.el.innerHTML;
-        m.el.innerHTML = tx;
-      }
+        { lib: tab.lib, path: tab.path, to, sourceHint: srcLang, html: true, segments: source.segments },
+        { signal: request.signal });
+      if (!request.isCurrent() || frameEl?.contentDocument !== doc) return;
+      source.apply(out);
       translated = true;
+      toc = extractToc(doc);
       flashBadge();
     } catch (e) { /* abortada o error → se queda el original */ }
-    translating = false;
+    finally { if (request.isCurrent()) translating = false; }
   }
 
   function showOriginal() {
-    const doc = frameEl?.contentDocument;
-    if (!doc) return;
-    translateCtrl?.abort();
-    doc.querySelectorAll('[data-torig]').forEach((el) => {
-      el.innerHTML = el.dataset.torig;
-      delete el.dataset.torig;
-    });
+    translationRequest.cancel();
+    if (articleDocument === frameEl?.contentDocument) articleSource?.restore();
+    translating = false;
     translated = false;
+    badgeOn = false;
+    clearTimeout(badgeTimer);
+    if (frameEl?.contentDocument) toc = extractToc(frameEl.contentDocument);
   }
+  onDestroy(() => { translationRequest.cancel(); clearTimeout(badgeTimer); });
 
   // Comandos del dropdown (nonces): traducir al destino elegido / ver original.
   $effect(() => {
@@ -190,8 +164,11 @@
   // sube el contador tab.nav). La ruta se lee con untrack para que onFrameNav
   // (sync desde dentro del iframe) NO re-fije el src → sin recargas en bucle.
   let frameSrc = $state('');
+  let initialFrameLoad = true;
   $effect(() => {
     tab.id; tab.nav; // deps de navegación intencionada
+    initialFrameLoad = true;
+    translationRequest.cancel();
     frameSrc = untrack(() => serverUrl('/content/' + tab.lib + '/' + encodeURI(tab.path || '')));
   });
 
@@ -203,8 +180,15 @@
     if (!a) return;
     let url;
     try { url = new URL(a.href); } catch (err) { return; }
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return; // mailto/tel/#…
-    if (url.origin === location.origin) return; // enlace interno del ZIM
+    if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || a.hasAttribute('download')) return;
+    const internal = articleLinkTarget(a.href, frameEl.contentWindow.location.href);
+    if (internal && onNavigate) {
+      e.preventDefault();
+      onNavigate(internal.lib, internal.path);
+      return;
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+    if (url.origin === location.origin) return;
     e.preventDefault();
     window.open(url.href, '_blank', 'noopener');
   }
@@ -212,8 +196,12 @@
   // El iframe navegó (carga inicial o link interno): sincroniza ruta/título/historial.
   function onFrameLoad(e) {
     const frame = e.target;
+    if (frame !== frameEl || tab.kind !== 'article') return;
     // Documento nuevo → el original ya está en pantalla; se reinicia el estado.
-    translated = false;
+    translationRequest.cancel();
+    articleSource = null; articleDocument = null;
+    translating = false; translated = false; badgeOn = false;
+    clearTimeout(badgeTimer);
     try { frame.contentDocument.addEventListener('click', onFrameClick); } catch (err) {}
     try { toc = extractToc(frame.contentDocument); } catch (err) {}
     try {
@@ -222,7 +210,8 @@
       const rest = p.slice('/content/'.length);
       const i = rest.indexOf('/');
       if (i < 0) return;
-      onFrameNav?.(rest.slice(0, i), rest.slice(i + 1), frame.contentDocument?.title || rest);
+      onFrameNav?.(rest.slice(0, i), rest.slice(i + 1) + frame.contentWindow.location.hash, frame.contentDocument?.title || rest, initialFrameLoad);
+      initialFrameLoad = false;
     } catch (err) { /* mismo origen: no debería fallar */ }
     // Modo auto: si el artículo está en otro idioma, se traduce al nativo. Si el
     // catálogo aún no cargó (srcLang vacío), se intenta igual y el shim deduce el

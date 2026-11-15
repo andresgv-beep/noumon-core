@@ -54,7 +54,7 @@ func env(k, def string) string {
 }
 
 // defaultTranslateBin resuelve el binario translateLocally SIN rutas de máquina.
-// Orden: TRANSLATE_BIN explícito > junto a este ejecutable (siblingDir, donde el
+// Orden: TRANSLATE_BIN explicito > tools del estado en Linux > junto al ejecutable (siblingDir, donde el
 // aprovisionamiento del Panel coloca la herramienta, igual que pmtiles con el Core)
 // > en el PATH del sistema. Como último recurso devuelve el nombre a secas para que
 // exec falle con un error legible. Antes había aquí una ruta absoluta del equipo de
@@ -66,6 +66,20 @@ func defaultTranslateBin() string {
 	}
 	if v := strings.TrimSpace(os.Getenv("TRANSLATE_BIN")); v != "" {
 		return v
+	}
+	if runtime.GOOS == "linux" {
+		root := strings.TrimSpace(os.Getenv("NOUMON_LIBRARY_DATA"))
+		if root == "" {
+			if config, err := os.UserConfigDir(); err == nil {
+				root = filepath.Join(config, "noumon")
+			}
+		}
+		if root != "" {
+			candidate := filepath.Join(root, "tools", name)
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+				return candidate
+			}
+		}
 	}
 	if exe, err := os.Executable(); err == nil {
 		cand := filepath.Join(filepath.Dir(exe), name)
@@ -84,11 +98,14 @@ func engineCommand(args ...string) *exec.Cmd {
 	current := bin
 	mu.RUnlock()
 	cmd := exec.Command(current, args...)
+	cmd.Env = append([]string(nil), os.Environ()...)
+	if runtime.GOOS == "linux" {
+		cmd.Env = replaceEnv(cmd.Env, "QT_QPA_PLATFORM", "offscreen")
+	}
 	if modelsDir == "" {
 		return cmd
 	}
 	cmd.Dir = modelsDir
-	cmd.Env = append([]string(nil), os.Environ()...)
 	if runtime.GOOS == "windows" {
 		cmd.Env = replaceEnv(cmd.Env, "APPDATA", modelsDir)
 	} else {

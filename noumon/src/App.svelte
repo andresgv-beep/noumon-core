@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { getLibraries, getItem, resolveProviderItem, itemSearch, mapSearch } from './lib/libraryApi.js';
   import { parseLibraryAddress } from './lib/libraryAddress.js';
+  import { navigationSnapshot, recordFrameNavigation } from './lib/articleNavigation.js';
   import * as readerState from './lib/readerStateApi.js';
   import Tabs from './lib/Tabs.svelte';
   import NavBar from './lib/NavBar.svelte';
@@ -271,7 +272,7 @@
   }
 
   // ── Historial por pestaña (back/fwd), incluye el inicio y las vistas ─────────
-  const snapshot = (tb) => ({ kind: tb.kind, view: tb.view, lib: tb.lib, path: tb.path, itemId: tb.itemId, pageId: tb.pageId, open: tb.open, source: tb.source, title: tb.title });
+  const snapshot = navigationSnapshot;
   function pushHistory(tab) { tab.back.push(snapshot(tab)); tab.fwd = []; }
   function setHome(tab) {
     tab.kind = 'home'; tab.titleKey = 'tab.home'; tab.title = 'Inicio'; tab.article = null; tab.error = null; tab.toc = []; tab.pageId = '';
@@ -428,15 +429,9 @@
   }
   // El iframe navegó por dentro → sincroniza la ruta actual para que estrella,
   // dirección y título reflejen la página real.
-  function frameNav(lib, path, title) {
-    if (!active) return;
-    const sameItemTarget = active.itemId && active.lib === lib && active.path === path;
-    const itemId = sameItemTarget ? active.itemId : '';
-    active.lib = lib;
-    active.path = path;
-    active.itemId = itemId;
-    if (title) active.title = title;
-    readerState.addHistory({ itemId, lib, path, title: title || path, book: bookOf(lib) }); // registrar visita
+  function frameNav(lib, path, title, initial = true) {
+    if (!recordFrameNavigation(active, lib, path, title, initial)) return;
+    readerState.addHistory({ itemId: active.itemId, lib, path, title: title || path, book: bookOf(lib) });
   }
   function goHome() {
     if (!active || active.kind === 'home') return;
@@ -487,11 +482,13 @@
     {/each}
     {#if active && !studioMode}
       <div class="r-reader">
+        {#key active.id}
         <Reader tab={active} {libraries} {favorites} {indexOpen} {notesVersion} {tagsVersion} onNavigate={navigate}
           onOpenItem={openItemById} onOpenView={openView} onOpenMapAt={openMapAt} onToggleHome={toggleHome} onFrameNav={frameNav}
           onOpenDocumentPage={openDocumentPage} onResolveDocumentPage={resolveDocumentPage}
           onRemoveFav={removeFav} onOpenNote={openNoteItem} onDeleteNote={deleteNoteItem}
         />
+        {/key}
       </div>
     {/if}
   </div>

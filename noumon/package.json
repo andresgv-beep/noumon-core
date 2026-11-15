@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test:studio-content": "node --test src/lib/studioContent.test.js src/lib/studioBlocks.test.js src/lib/studioSaver.test.js src/lib/studioEditable.test.js src/lib/libraryAddress.test.js src/lib/messages.test.js src/lib/connection.test.js src/lib/mediaFileMode.test.js",
+    "test:studio-content": "node --test src/lib/studioContent.test.js src/lib/studioBlocks.test.js src/lib/studioSaver.test.js src/lib/studioEditable.test.js src/lib/libraryAddress.test.js src/lib/messages.test.js src/lib/connection.test.js src/lib/mediaFileMode.test.js src/lib/articleTranslation.test.js src/lib/articleNavigation.test.js",
     "preview": "vite preview"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "linkedom": "^0.18.15",
     "svelte": "^5.56.4",
     "vite": "^8.1.1"
   },

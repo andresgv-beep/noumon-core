@@ -77,3 +77,15 @@ NOUMON_SETUP_TOKEN=un-codigo-largo-y-aleatorio
 `X-Forwarded-For` solo se usa para limitar intentos de acceso cuando se declara
 `TRUST_PROXY=1`. Actívelo únicamente detrás de un proxy que reemplace esa
 cabecera; nunca cuando el cliente pueda escribirla directamente.
+
+## Traduccion en Linux amd64
+
+El Panel puede instalar `translateLocally` desde el paquete oficial Linux
+v0.0.2+8e31cff, verificado por tamaño y SHA256. Se extrae solo el ejecutable a
+`NOUMON_LIBRARY_DATA/tools` (normalmente `/var/lib/noumon/tools`), escribible por
+el servicio; no se necesitan permisos de escritura en `/opt/noumon/bin`.
+Los paquetes de Noumon para amd64 declaran las bibliotecas Qt5 y libarchive
+necesarias. `translate-wrap` ejecuta el motor sin pantalla mediante
+`QT_QPA_PLATFORM=offscreen`, y conserva los modelos dentro del pool configurado.
+Windows mantiene su instalacion anterior. Para Linux arm64 sigue siendo
+necesario un motor compilado para esa arquitectura o `TRANSLATE_URL` remoto.

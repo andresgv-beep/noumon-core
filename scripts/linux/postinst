@@ -4,7 +4,7 @@ set -e
 if ! getent passwd noumon >/dev/null 2>&1; then
   useradd --system --home-dir /var/lib/noumon --shell /usr/sbin/nologin noumon
 fi
-mkdir -p /var/lib/noumon
+mkdir -p /var/lib/noumon/tools
 
 # Un paquete de servidor Linux existe para servir a la red (Pi headless, aula):
 # se siembra "publicado en LAN" SOLO en la primera instalación (si no hay

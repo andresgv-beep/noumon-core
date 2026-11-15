@@ -94,10 +94,15 @@ for a in $ARCHES; do
 
   # 5. control + scripts de mantenimiento.
   SIZE_KB=$(du -sk "$STAGING" | cut -f1)
+  RUNTIME_DEPS='ca-certificates'
+  if [ "$a" = amd64 ]; then
+    RUNTIME_DEPS="$RUNTIME_DEPS, libc6 (>= 2.29), libarchive13 | libarchive13t64, libqt5core5a | libqt5core5t64, libqt5gui5 | libqt5gui5t64 | libqt5gui5-gles, libqt5network5 | libqt5network5t64, libqt5svg5, libqt5widgets5 | libqt5widgets5t64"
+  fi
   cat > "$CONTROL/control" <<EOF
 Package: noumon
 Version: $VERSION
 Architecture: $a
+Depends: $RUNTIME_DEPS
 Maintainer: Noumon <andresgv7455@gmail.com>
 Section: web
 Priority: optional
