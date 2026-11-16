@@ -1,4 +1,5 @@
 <script>
+  import BrandIcon from './BrandIcon.svelte';
   import Icon from './Icon.svelte';
   import StudioDocumentInspector from './StudioDocumentInspector.svelte';
   import StudioRevisions from './StudioRevisions.svelte';
@@ -38,7 +39,7 @@
     <span class="side-item"><i class="published"></i>{t('studio.publishedCount', { count: publishedCount() })}</span>
   {:else}
     <div class="section-kind">
-      <span class="glyph">{state.kindGlyph || '✎'}</span>
+      <span class="glyph art">{#if state.kindMark}<BrandIcon kind={state.kindMark} size={29} />{:else}{state.kindGlyph || '✎'}{/if}</span>
       <span><b>{state.kindLabel || t('studio.createDocument')}</b><small>{state.kindHint || t('studio.blockEditor')}</small></span>
     </div>
     <!-- El historial ocupa la zona de herramientas mientras esté abierto: es una
@@ -101,6 +102,7 @@
 </aside>
 
 <style>
+  .glyph.art{background:none}
   .studio-side{height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:4px;padding:18px 12px;background:var(--panel);border-right:1px solid var(--border);color:var(--ink)}
   .side-title{margin:10px 7px 5px;color:var(--faint);font-size:9px;font-weight:650;letter-spacing:.14em;text-transform:uppercase}
   .side-title:first-child{margin-top:0}

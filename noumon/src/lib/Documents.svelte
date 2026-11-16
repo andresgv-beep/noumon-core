@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
+  import BrandIcon from './BrandIcon.svelte';
   import { t, relTime } from './i18n.svelte.js';
   import { listPublishedDocuments } from './studioApi.js';
   import { serverUrl } from './connection.js';
@@ -67,7 +68,7 @@
 
 <section class="documents scroll thin">
   <header class="hero">
-    <div class="mark"><Icon name="note" size={25} /></div>
+    <BrandIcon kind="documents" size={64} />
     <div>
       <span>{t('documents.knowledgeBase')}</span>
       <h1>{t('menu.documents')}</h1>
@@ -185,7 +186,6 @@
      izquierda y con su propia barra de desplazamiento a media pantalla. */
   .documents{flex:1;min-width:0;height:100%;overflow:auto;padding:clamp(28px,5vw,64px);background:var(--ground)}
   .hero{max-width:1050px;margin:0 auto 28px;display:flex;align-items:center;gap:18px}
-  .mark{width:52px;height:52px;display:grid;place-items:center;border-radius:var(--r-lg);color:var(--accent-2);background:color-mix(in srgb,var(--accent) 18%,var(--panel));border:1px solid var(--accent-line)}
   .hero span{font-size:11px;color:var(--accent-2);font-weight:700;letter-spacing:.12em;text-transform:uppercase}
   h1{margin:2px 0 0;font-size:clamp(28px,4vw,44px);line-height:1}
   .hero p{margin:8px 0 0;color:var(--muted)}

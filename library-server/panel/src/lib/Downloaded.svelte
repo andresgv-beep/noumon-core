@@ -25,7 +25,7 @@
     { k: 'documents', id: 'col:studio:documents', nameKey: 'media.surfaceDocuments', source: '' },
     { k: 'cabinet', id: 'surface:cabinet', name: 'Cabinet', source: 'cabinet' },
     { k: 'moments', id: 'surface:moments', name: 'Moments', source: 'moments' },
-    { k: 'depot', id: 'surface:depot', name: 'Depot', source: 'depot' },
+    { k: 'depot', id: 'surface:depot', name: 'Programas', source: 'depot' },
   ]
   const surface = SURFACES.find((x) => x.k === surfaceKey) || SURFACES[1]
 

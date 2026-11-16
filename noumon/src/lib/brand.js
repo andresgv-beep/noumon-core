@@ -11,5 +11,6 @@ export function sourceOfItemId(id) {
   catch (e) { try { path = atob(b); } catch (e2) { return ''; } }
   if (path.startsWith('Moments/')) return 'moments';
   if (path.startsWith('Cabinet/')) return 'cabinet';
+  if (path.startsWith('Depot/')) return 'depot';
   return '';
 }

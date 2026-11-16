@@ -9,6 +9,7 @@
   // navegador anidado. Importar/gestionar cola vive en el Panel de Control.
 
   import { onMount } from 'svelte';
+  import BrandIcon from './BrandIcon.svelte';
   import { getSurfaceItems } from './libraryApi.js';
   import { getRecent } from './readerStateApi.js';
   import { t } from './i18n.svelte.js';
@@ -279,7 +280,7 @@
     <!-- Masthead editorial (identidad, sin controles de navegación: esos viven en
          el navbar del lector para no anidar chrome) -->
     <header class="amast">
-      <button class="brand" onclick={toHome}><i>Noumon</i> {t('cabinet.brand')}</button>
+      <button class="brand" onclick={toHome}><span class="cabinet-mark"><BrandIcon kind="cabinet" size={52} /></span><span><i>Noumon</i> {t('cabinet.brand')}</span></button>
       <span class="crumb">{t('cabinet.localLibrary')} · {pieces(items.length)}</span>
     </header>
 
@@ -516,8 +517,9 @@
   .empty .eb { font-size: 13.5px; max-width: 440px; margin: 0 auto; line-height: 1.6; color: var(--a-faint); }
 
   /* Masthead */
-  .amast { height: 54px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--a-line); margin-bottom: 26px; }
-  .brand { font-family: var(--a-serif); font-size: 19px; letter-spacing: .02em; color: var(--a-ink); background: none; border: 0; padding: 0; cursor: pointer; }
+  .amast { min-height: 76px; padding: 10px 0; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--a-line); margin-bottom: 26px; }
+  .brand { display:flex;align-items:center;gap:10px;font-family: var(--a-serif); font-size: 19px; letter-spacing: .02em; color: var(--a-ink); background: none; border: 0; padding: 0; cursor: pointer; }
+  .cabinet-mark{color:var(--a-accent);display:flex}
   .brand i { font-style: normal; color: var(--a-accent); }
   .crumb { color: var(--a-faint); font-size: 12px; }
 

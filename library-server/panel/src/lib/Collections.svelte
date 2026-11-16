@@ -14,7 +14,7 @@
     { k: 'documents', key: 'media.surfaceDocuments' },
     { k: 'cabinet', name: 'Cabinet' },
     { k: 'moments', name: 'Moments' },
-    { k: 'depot', name: 'Depot' },
+    { k: 'depot', name: 'Programas' },
   ]
   let zim = $state(null)       // /api/admin/zim
   let rich = $state({})        // providerItemId → {id, itemCount, description}

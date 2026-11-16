@@ -1,4 +1,5 @@
 <script>
+  import BrandIcon from './BrandIcon.svelte';
   // Ficha de un programa de Depot, tal como el mockup aprobado: la descarga que
   // le toca a este equipo (ticket), capturas, qué hace, la matriz sistema ×
   // arquitectura que filtra los archivos, ficha técnica y versiones. Descargar
@@ -89,8 +90,8 @@
   <header class="bar">
     <div class="bar-in">
       <button class="brand" onclick={() => onOpenView?.('depot')}>
-        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 2.8l8.2 4.6v9.2L12 21.2l-8.2-4.6V7.4z"/><path d="M3.8 7.4L12 12l8.2-4.6M12 12v9.2"/><path d="M7.9 5.1l8.2 4.6" stroke-dasharray="2 2"/></svg>
-        <span>depot</span>
+        <BrandIcon kind="depot" size={48} />
+        <span>{t('menu.depot')}</span>
       </button>
       {#if program.shelf}<span class="sep" aria-hidden="true">/</span><span class="crumb">{shelfLabel(program.shelf).toLowerCase()}</span>{/if}
       {#if item}<span class="sep" aria-hidden="true">/</span><span class="crumb here">{item.title.toLowerCase()}</span>{/if}
@@ -294,9 +295,10 @@
   .head{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px}
 
   .bar{background:color-mix(in srgb,var(--ground) 94%,transparent);border-bottom:1px solid var(--border-soft)}
-  .bar-in{max-width:1240px;margin:0 auto;padding:0 28px;min-height:60px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;box-sizing:border-box}
+  .bar-in{max-width:1240px;margin:0 auto;padding:0 28px;min-height:72px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;box-sizing:border-box}
   .brand{display:flex;align-items:center;gap:10px;min-height:44px;font:700 17px var(--mono);letter-spacing:.6px;color:var(--ink)}
-  .brand svg{fill:none;stroke:var(--logo);stroke-width:1.7;stroke-linejoin:round}
+  .brand{color:var(--link)}
+  .brand span{color:var(--ink)}
   .sep{color:var(--faint);font-family:var(--mono)}
   .crumb{font:13px var(--mono);color:var(--ink-dim)}.crumb.here{color:var(--ink)}
   .state{padding:60px 28px;text-align:center;color:var(--muted);font:13px var(--mono)}
@@ -304,9 +306,9 @@
   .page{max-width:1240px;margin:0 auto;padding:36px 28px 80px;box-sizing:border-box;display:flex;flex-direction:column;gap:40px}
   .hero{display:flex;flex-wrap:wrap;gap:28px;align-items:stretch}
   .identity{flex:999 1 520px;min-width:0;display:flex;gap:24px;align-items:center}
-  .icon{width:104px;height:104px;flex:none;overflow:hidden;display:grid;place-items:center;border-radius:calc(var(--r-lg) * 1.7);background:var(--raise);font-size:46px;font-weight:700;
+  .icon{width:104px;height:104px;flex:none;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:8px;border-radius:calc(var(--r-lg) * 1.7);background:var(--raise);font-size:46px;font-weight:700;
     box-shadow:0 0 0 1px var(--border-soft),0 0 0 7px var(--panel),0 0 0 8px var(--border-soft)}
-  .icon img{width:100%;height:100%;object-fit:contain}
+  .icon img{display:block;width:100%;height:100%;min-width:0;min-height:0;object-fit:contain}
   .titles{min-width:0;display:flex;flex-direction:column;gap:10px}
   h1{margin:0;font-size:36px;font-weight:700;letter-spacing:-.6px;line-height:1.1}
   .lead{margin:0;font-size:15px;color:var(--ink-dim)}
@@ -332,15 +334,16 @@
   .read{margin:0;font-family:var(--font-read);font-size:15px;line-height:1.7;color:var(--ink-dim)}
 
   .stage{position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:var(--r-sm);background:var(--panel-2);border:1px solid var(--border);display:grid;place-items:center}
-  .stage img{width:100%;height:100%;object-fit:contain}
+  /* Keep intrinsic image dimensions out of the aspect-ratio frame sizing. */
+  .stage img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
   .nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;display:grid;place-items:center;border-radius:var(--r-sm);border:1px solid var(--border);background:color-mix(in srgb,var(--ground) 88%,transparent);color:var(--ink)}
   .prev{left:12px}.next{right:12px}
   .counter{position:absolute;left:14px;bottom:12px;font-size:11px;color:var(--muted)}
   .caption{margin:0;font-size:13px;color:var(--ink-dim)}
   .thumbs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-  .thumbs button{aspect-ratio:16/9;overflow:hidden;padding:0;border-radius:min(3px,var(--r-sm));border:1px solid var(--border);background:var(--panel-2)}
+  .thumbs button{position:relative;aspect-ratio:16/9;overflow:hidden;padding:0;border-radius:min(3px,var(--r-sm));border:1px solid var(--border);background:var(--panel-2)}
   .thumbs button.on{border-color:var(--accent-line);box-shadow:inset 0 -2px 0 var(--accent)}
-  .thumbs img{width:100%;height:100%;object-fit:cover}
+  .thumbs img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
 
   .chip{height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--border);font-size:11px;color:var(--ink-dim)}
   .grid{display:grid;gap:6px;align-items:stretch}
@@ -379,6 +382,6 @@
   .rel{display:flex;align-items:center;gap:12px;padding:8px 6px;border-radius:var(--r-sm);text-align:left;color:var(--ink)}
   .rel:hover{background:var(--panel)}
   .rel b{flex:1;min-width:0;font-size:14px;font-weight:600}
-  .rel-icon{width:36px;height:36px;flex:none;overflow:hidden;display:grid;place-items:center;border-radius:var(--r-md);background:var(--raise);font-weight:700}
-  .rel-icon img{width:100%;height:100%;object-fit:contain}
+  .rel-icon{width:36px;height:36px;flex:none;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:4px;border-radius:var(--r-md);background:var(--raise);font-weight:700}
+  .rel-icon img{display:block;width:100%;height:100%;min-width:0;min-height:0;object-fit:contain}
 </style>

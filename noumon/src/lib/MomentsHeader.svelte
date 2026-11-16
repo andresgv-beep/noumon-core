@@ -12,7 +12,7 @@
 
 <div class="phead">
   <button class="phtitle" onclick={() => onHome?.()} title={t('moments.backHome')}>
-    <BrandIcon kind="moments" size={44} radius={12} />
+    <BrandIcon kind="moments" size={56} radius={12} />
     <div class="pttext">
       <h1>{t('menu.moments')}</h1>
       {#if subtitle}<p class="sub">{subtitle}</p>{/if}

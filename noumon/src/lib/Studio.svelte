@@ -1,4 +1,5 @@
 <script>
+  import BrandIcon from './BrandIcon.svelte';
   import { onMount } from 'svelte';
   import StudioCanvasBlock from './StudioCanvasBlock.svelte';
   import StudioDocumentView from './StudioDocumentView.svelte';
@@ -1237,6 +1238,7 @@
       currentRevision: selected?.revision || 0,
       publishedRevision: selected?.publishedRevision || 0,
       kindGlyph: SURFACE_GLYPH[surface],
+      kindMark: surface,
       kindLabel: t(SURFACE_LABEL[surface]),
       kindHint: surface === 'document' ? t('studio.blockEditor') : t('studio.publicationForm'),
       destination: t(SURFACE_DESTINATION[surface]),
@@ -1291,23 +1293,23 @@
       <h2>{t('studio.create')}</h2>
       <div class="create-grid">
         <button class="create-card" onclick={() => createSurface('document')}>
-          <span class="create-glyph">✎</span>
+          <span class="create-art"><BrandIcon kind="documents" size={39} /></span>
           <b>{t('studio.createDocument')}</b>
           <small>{t('studio.createDocumentDesc')}</small>
         </button>
         <button class="create-card" onclick={() => createSurface('cabinet')}>
-          <span class="create-glyph">▣</span>
+          <span class="create-art"><BrandIcon kind="cabinet" size={39} /></span>
           <b>{t('studio.createCabinet')}</b>
           <small>{t('studio.createCabinetDesc')}</small>
         </button>
         <button class="create-card" onclick={() => createSurface('moments')}>
-          <span class="create-glyph">▶</span>
+          <span class="create-art"><BrandIcon kind="moments" size={39} /></span>
           <b>{t('studio.createMoments')}</b>
           <small>{t('studio.createMomentsDesc')}</small>
         </button>
         {#if canDepot}
           <button class="create-card" onclick={() => createSurface('depot')}>
-            <span class="create-glyph">⬡</span>
+            <span class="create-art"><BrandIcon kind="depot" size={39} /></span>
             <b>{t('studio.createDepot')}</b>
             <small>{t('studio.createDepotDesc')}</small>
           </button>
@@ -1319,7 +1321,7 @@
         {#each documents.slice(0, 12) as doc (doc.id)}
           {@const surface = surfaceOf(doc)}
           <button class="recent-item" onclick={() => openDocument(doc.id)}>
-            <span class="recent-glyph">{SURFACE_GLYPH[surface]}</span>
+            <span class="recent-glyph recent-art"><BrandIcon kind={surface} size={31} /></span>
             <span class="recent-meta">
               <b>{doc.title || t('studio.untitled')}</b>
               <small>
@@ -1578,8 +1580,9 @@
   .create-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;max-width:780px}
   .create-card{min-height:150px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:20px 17px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);color:var(--ink);text-align:left;box-shadow:var(--shadow-soft);transition:border-color .14s,transform .14s}
   .create-card:hover{border-color:var(--accent-line);transform:translateY(-2px)}
-  .create-glyph,.recent-glyph{display:grid;place-items:center;border-radius:var(--r-md);background:var(--accent-weak);color:var(--accent-2)}
-  .create-glyph{width:39px;height:39px;margin-bottom:10px;font-size:16px}
+  .recent-glyph{display:grid;place-items:center;border-radius:var(--r-md);background:var(--accent-weak);color:var(--accent-2)}
+  .create-art{display:flex;width:39px;height:39px;margin-bottom:10px}
+  .recent-glyph.recent-art{background:none}
   .create-card b{font-size:13.5px}.create-card small{max-width:210px;color:var(--muted);font-size:11.5px;line-height:1.45}
   .recent-list{display:grid;gap:8px;max-width:780px}
   .recent-item{width:100%;display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card);color:var(--ink);text-align:left}

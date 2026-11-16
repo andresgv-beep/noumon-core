@@ -206,7 +206,7 @@
         <div class="sitegrid">
           {#if surfaces.documents && siteShown('documents')}
             <button class="site" onclick={() => onOpenView?.('documents')} title={t('home.openSite', { name: t('menu.documents') })}>
-              <span class="docsite"><Icon name="note" size={21} /></span>
+              <BrandIcon kind="documents" size={42} />
               <span class="sname">{t('menu.documents')}</span>
             </button>
           {/if}
@@ -218,7 +218,7 @@
           {/if}
           {#if surfaces.depot && siteShown('depot')}
             <button class="site" onclick={() => onOpenView?.('depot')} title={t('home.openSite', { name: t('menu.depot') })}>
-              <span class="docsite depotsite"><svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2.8l8.2 4.6v9.2L12 21.2l-8.2-4.6V7.4z"/><path d="M3.8 7.4L12 12l8.2-4.6M12 12v9.2"/></svg></span>
+              <BrandIcon kind="depot" size={42} radius={12} />
               <span class="sname">{t('menu.depot')}</span>
             </button>
           {/if}
@@ -230,7 +230,7 @@
           {/if}
           {#each libraries.filter((l) => siteShown(l.id)) as lib}
             <button class="site" onclick={() => onNavigate?.(lib.id, '')} title={lib.name}>
-              <ZimIcon icon={lib.icon} name={lib.name} size={42} radius={21} />
+              <span class="site-zim"><ZimIcon icon={lib.icon} name={lib.name} size={40} radius={20} /></span>
               <span class="sname">{lib.name}</span>
             </button>
           {/each}
@@ -389,9 +389,7 @@
   .site:hover{background:var(--raise)}
   .site :global(.zt),.site :global(.bi){transition:transform .12s,box-shadow .12s}
   .site:hover :global(.zt),.site:hover :global(.bi){transform:translateY(-2px);box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 22%,transparent)}
-  .depotsite.depotsite{background:color-mix(in srgb,#e8a33d 18%,var(--panel));border-color:color-mix(in srgb,#e8a33d 38%,var(--border));color:#e8a33d}
-  .docsite{width:42px;height:42px;border-radius:var(--r-round);display:grid;place-items:center;background:color-mix(in srgb,#5a92d8 18%,var(--panel));border:1px solid color-mix(in srgb,#5a92d8 38%,var(--border));color:#79a9e4;transition:transform .12s,box-shadow .12s}
-  .site:hover .docsite{transform:translateY(-2px);box-shadow:0 6px 16px color-mix(in srgb,#5a92d8 22%,transparent)}
+  .site-zim{width:42px;height:42px;display:grid;place-items:center}
   .sname{font-size:12.5px;color:var(--ink-dim);text-align:center;line-height:1.3;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .site:hover .sname{color:var(--ink)}
   .sitesempty{text-align:center;color:var(--muted);font-size:13px;padding:14px 0 4px;line-height:1.55}
