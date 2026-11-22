@@ -4,6 +4,7 @@
   import { bytes } from './fmt.js'
   import { t } from './i18n.svelte.js'
   import KiwixCatalog from './KiwixCatalog.svelte'
+  import LocalImport from './LocalImport.svelte'
 
   let sub = $state('kiwix')
 
@@ -24,11 +25,14 @@
 </script>
 
 <div class="stabs">
+  <button class="stab" class:on={sub === 'local'} onclick={() => (sub = 'local')}>{t('import.local.tab')}</button>
   <button class="stab" class:on={sub === 'kiwix'} onclick={() => (sub = 'kiwix')}>{t('import.tabKiwix')}</button>
   <button class="stab" class:on={sub === 'cola'} onclick={() => (sub = 'cola')}>{t('import.tabQueue')} {#if queueCount}<span class="qn">{queueCount}</span>{/if}</button>
 </div>
 
-{#if sub === 'kiwix'}
+{#if sub === 'local'}
+  <LocalImport />
+{:else if sub === 'kiwix'}
   <KiwixCatalog />
 {:else}
   <div class="toolbar">

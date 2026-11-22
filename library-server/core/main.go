@@ -399,6 +399,7 @@ func main() {
 	md := &mediaDeps{root: downloadRoot}
 	s.mediaRoot = downloadRoot
 	s.media = md
+	s.registerLocalImportRoutes(adminMux)
 	if err := s.loadMomentsFolders(md); err != nil {
 		log.Fatalf("carpetas de Moments: %v", err)
 	}

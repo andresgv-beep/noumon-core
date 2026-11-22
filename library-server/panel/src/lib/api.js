@@ -178,6 +178,15 @@ export const getDocumentItems = () =>
   getJSON('/api/collections/' + encodeURIComponent('col:studio:documents') + '/items').then((d) => d.items || []).catch(() => [])
 
 // Importar · Cola de descargas administrativas
+export async function finishLocalImport(surface, files, createCards = true) {
+  const response = await fetch('/api/admin/import/finish', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ surface, files, createCards }),
+  })
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.errorCode || 'import.local.failed')
+  return data
+}
+
 export const listDownloads = () =>
   getJSON('/api/downloads').then((d) => d.jobs || []).catch(() => [])
 
